@@ -1,0 +1,11 @@
+# Reference repos (not committed)
+reference/
+
+# Runtime
+.runtime/
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
