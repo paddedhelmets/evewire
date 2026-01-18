@@ -1,27 +1,74 @@
+{% load evewire %}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="{{ user.settings.theme|default:'light' }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}evewire{% endblock %}</title>
     <style>
+        :root {
+            --bg-primary: #f5f5f5;
+            --bg-secondary: white;
+            --text-primary: #333;
+            --text-secondary: #666;
+            --border-color: #ddd;
+            --link-color: #0066cc;
+            --link-hover: #0052a3;
+            --header-bg: #2c3e50;
+            --header-text: white;
+            --footer-bg: #2c3e50;
+            --footer-text: #999;
+            --card-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            --alert-error-bg: #fee;
+            --alert-error-text: #c00;
+            --alert-success-bg: #efe;
+            --alert-success-text: #080;
+            --btn-primary: #0066cc;
+            --btn-primary-hover: #0052a3;
+            --table-border: #eee;
+        }
+
+        [data-theme="dark"] {
+            --bg-primary: #1a1a1a;
+            --bg-secondary: #2d2d2d;
+            --text-primary: #e0e0e0;
+            --text-secondary: #aaa;
+            --border-color: #444;
+            --link-color: #4da6ff;
+            --link-hover: #66b3ff;
+            --header-bg: #1a1a2e;
+            --header-text: #e0e0e0;
+            --footer-bg: #1a1a2e;
+            --footer-text: #888;
+            --card-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            --alert-error-bg: #4a2020;
+            --alert-error-text: #ff6b6b;
+            --alert-success-bg: #204a20;
+            --alert-success-text: #6bff6b;
+            --btn-primary: #4da6ff;
+            --btn-primary-hover: #66b3ff;
+            --table-border: #444;
+        }
+
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; background: #f5f5f5; }
-        a { color: #0066cc; text-decoration: none; }
-        a:hover { text-decoration: underline; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: var(--text-primary); background: var(--bg-primary); transition: background 0.3s, color 0.3s; }
+        a { color: var(--link-color); text-decoration: none; }
+        a:hover { color: var(--link-hover); text-decoration: underline; }
         .container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
-        header { background: #2c3e50; color: white; padding: 1rem 0; }
+        header { background: var(--header-bg); color: var(--header-text); padding: 1rem 0; }
         header nav { display: flex; justify-content: space-between; align-items: center; }
         header .logo { font-size: 1.5rem; font-weight: bold; }
-        header nav a { color: white; margin-left: 1rem; }
+        header nav a { color: var(--header-text); margin-left: 1rem; }
         main { padding: 2rem 0; min-height: calc(100vh - 120px); }
-        footer { background: #2c3e50; color: #999; text-align: center; padding: 1rem 0; font-size: 0.9rem; }
-        .btn { display: inline-block; padding: 0.5rem 1rem; background: #0066cc; color: white; border-radius: 4px; }
-        .btn:hover { background: #0052a3; text-decoration: none; }
-        .card { background: white; border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        footer { background: var(--footer-bg); color: var(--footer-text); text-align: center; padding: 1rem 0; font-size: 0.9rem; }
+        .btn { display: inline-block; padding: 0.5rem 1rem; background: var(--btn-primary); color: white; border-radius: 4px; }
+        .btn:hover { background: var(--btn-primary-hover); text-decoration: none; }
+        .card { background: var(--bg-secondary); border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; box-shadow: var(--card-shadow); }
         .alert { padding: 1rem; border-radius: 4px; margin-bottom: 1rem; }
-        .alert-error { background: #fee; color: #c00; }
-        .alert-success { background: #efe; color: #080; }
+        .alert-error { background: var(--alert-error-bg); color: var(--alert-error-text); }
+        .alert-success { background: var(--alert-success-bg); color: var(--alert-success-text); }
+        .theme-toggle { background: transparent; border: 1px solid var(--header-text); color: var(--header-text); padding: 0.25rem 0.75rem; border-radius: 4px; cursor: pointer; font-size: 0.9rem; }
+        .theme-toggle:hover { background: rgba(255,255,255,0.1); }
     </style>
     {% block extra_head %}{% endblock %}
 </head>
@@ -30,9 +77,15 @@
         <div class="container">
             <nav>
                 <div class="logo">evewire</div>
-                <div>
+                <div style="display: flex; align-items: center; gap: 1rem;">
                     {% if user.is_authenticated %}
                         <a href="{% url 'core:dashboard' %}">Dashboard</a>
+                        <form method="post" action="{% url 'core:toggle_theme' %}" style="display: inline;">
+                            {% csrf_token %}
+                            <button type="submit" class="theme-toggle">
+                                {% if user.settings.theme == 'dark' %}☀️ Light{% else %}🌙 Dark{% endif %}
+                            </button>
+                        </form>
                         <a href="{% url 'core:logout' %}">Logout ({{ user.eve_character_name }})</a>
                     {% else %}
                         <a href="{% url 'core:login' %}">Login</a>

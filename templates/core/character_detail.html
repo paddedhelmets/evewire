@@ -1,9 +1,16 @@
 {% extends "base.html" %}
+{% load evewire %}
 
 {% block title %}{{ character.name }} - evewire{% endblock %}
 
 {% block content %}
-<h1>{{ character.name }}</h1>
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+    <h1>{{ character.name }}</h1>
+    <form method="post" action="{% url 'core:sync_character' character.id %}" style="display: inline;">
+        {% csrf_token %}
+        <button type="submit" class="btn">Sync All Data</button>
+    </form>
+</div>
 
 <div class="card">
     <h2>Character Information</h2>
@@ -14,52 +21,158 @@
 
 <div class="card">
     <h2>Wallet</h2>
-    {% if character.wallet_balance %}
+    {% if character.wallet_balance is not None %}
         <p style="font-size: 1.5rem; font-weight: bold;">
             {{ character.wallet_balance|floatformat:2 }} ISK
         </p>
         <p style="color: #666;">Last updated: {{ character.wallet_synced_at|date:"Y-m-d H:i:s" }}</p>
     {% else %}
-        <p>No wallet data. <a href="{% url 'core:sync_character' character.id %}" class="btn">Sync Now</a></p>
+        <p>No wallet data.</p>
     {% endif %}
 </div>
 
 <div class="card">
     <h2>Skills</h2>
-    {% if character.skills_data %}
-        <p><strong>Total SP:</strong> {{ character.skills_data.total_sp|default:"N/A" }}</p>
-        <p><strong>Unallocated SP:</strong> {{ character.skills_data.unallocated_sp|default:"0" }}</p>
-        <p style="color: #666;">Last updated: {{ character.skills_synced_at|date:"Y-m-d H:i:s" }}</p>
+    {% if character.total_sp is not None %}
+        <p><strong>Total SP:</strong> {{ character.total_sp }}</p>
+        <p style="color: #666; margin-bottom: 1rem;">Last updated: {{ character.skills_synced_at|date:"Y-m-d H:i:s" }}</p>
+
+        <h3>Top Skills (by Level)</h3>
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 2px solid #ddd;">
+                    <th style="padding: 0.5rem; text-align: left;">Skill</th>
+                    <th style="padding: 0.5rem; text-align: center;">Level</th>
+                    <th style="padding: 0.5rem; text-align: right;">SP</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for skill in character.skills.all|dictsort:"skill_level"|dictsortreversed:"skill_level"|slice:":20" %}
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 0.5rem;">{{ skill.skill_name }}</td>
+                    <td style="padding: 0.5rem; text-align: center;">
+                        <span style="color: {% if skill.skill_level == 5 %}#c00{% elif skill.skill_level == 4 %}#c60{% else %}#666{% endif %}; font-weight: bold;">
+                            {{ skill.skill_level }}
+                        </span>
+                    </td>
+                    <td style="padding: 0.5rem; text-align: right;">{{ skill.skillpoints_in_skill }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="3" style="padding: 0.5rem; color: #666;">No skills found.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
     {% else %}
-        <p>No skills data. <a href="{% url 'core:sync_character' character.id %}" class="btn">Sync Now</a></p>
+        <p>No skills data.</p>
     {% endif %}
 </div>
 
-<div class="card">
+<div class="card" id="queue">
     <h2>Skill Queue</h2>
-    {% if character.skill_queue_data %}
-        <p><strong>Skills in Queue:</strong> {{ character.skill_queue_data|length }}</p>
-        <p style="color: #666;">Last updated: {{ character.skill_queue_synced_at|date:"Y-m-d H:i:s" }}</p>
-    {% else %}
-        <p>No skill queue data. <a href="{% url 'core:sync_character' character.id %}" class="btn">Sync Now</a></p>
-    {% endif %}
+    {% with queue=character.skill_queue.all %}
+        {% if queue %}
+            <p><strong>{{ queue.count }}</strong> skill{{ queue.count|pluralize }} in queue</p>
+            {% for item in queue %}
+                <div style="border: 1px solid #ddd; border-radius: 4px; padding: 1rem; margin-bottom: 0.5rem; {% if item.is_completed %}opacity: 0.6;{% endif %}">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <div>
+                            <strong>{{ item.skill_name }}</strong> to Level {{ item.finish_level }}
+                            {% if item.is_completed %}<span style="color: #080;">✓ Completed</span>{% endif %}
+                        </div>
+                        <div style="text-align: right; font-size: 0.9rem; color: #666;">
+                            Finishes: {{ item.finish_date|date:"Y-m-d H:i" }}
+                        </div>
+                    </div>
+                    <div style="background: #eee; height: 20px; border-radius: 4px; overflow: hidden;">
+                        <div style="background: {% if item.is_completed %}#080{% else %}#0066cc{% endif %}; height: 100%; width: {{ item.progress_percent }}%;"></div>
+                    </div>
+                    <p style="font-size: 0.9rem; color: #666;">{{ item.progress_percent|floatformat:1 }}% complete ({{ item.level_start_sp }} → {{ item.level_end_sp }} SP)</p>
+                </div>
+            {% endfor %}
+        {% else %}
+            <p style="color: #666;">No skills in queue.</p>
+        {% endif %}
+    {% endwith %}
 </div>
 
-<div class="card">
+<div class="card" id="orders">
     <h2>Market Orders</h2>
-    {% if character.orders_data %}
-        <p><strong>Active Orders:</strong> {{ character.orders_data|length }}</p>
-        <p style="color: #666;">Last updated: {{ character.orders_synced_at|date:"Y-m-d H:i:s" }}</p>
-    {% else %}
-        <p>No orders data. <a href="{% url 'core:sync_character' character.id %}" class="btn">Sync Now</a></p>
-    {% endif %}
+    {% with orders=character.market_orders.all %}
+        {% if orders %}
+            <p><strong>{{ orders.count }}</strong> order{{ orders.count|pluralize }}</p>
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="border-bottom: 2px solid #ddd;">
+                        <th style="padding: 0.5rem; text-align: left;">Type</th>
+                        <th style="padding: 0.5rem; text-align: left;">Item</th>
+                        <th style="padding: 0.5rem; text-align: right;">Price</th>
+                        <th style="padding: 0.5rem; text-align: right;">Remaining</th>
+                        <th style="padding: 0.5rem; text-align: right;">Total</th>
+                        <th style="padding: 0.5rem; text-align: left;">Station</th>
+                        <th style="padding: 0.5rem; text-align: left;">Expires</th>
+                        <th style="padding: 0.5rem; text-align: left;">State</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for order in orders %}
+                    <tr style="border-bottom: 1px solid #eee; {% if not order.is_open %}opacity: 0.6;{% endif %}">
+                        <td style="padding: 0.5rem;">
+                            <span style="color: {% if order.is_buy_order %}#080{% else %}#c00{% endif %}; font-weight: bold;">
+                                {% if order.is_buy_order %}BUY{% else %}SELL{% endif %}
+                            </span>
+                        </td>
+                        <td style="padding: 0.5rem;">{{ order.type_name }}</td>
+                        <td style="padding: 0.5rem; text-align: right;">{{ order.price|floatformat:2 }}</td>
+                        <td style="padding: 0.5rem; text-align: right;">{{ order.volume_remain }}/{{ order.volume_total }}</td>
+                        <td style="padding: 0.5rem; text-align: right;">{{ order.price|multiply:order.volume_remain|floatformat:2 }}</td>
+                        <td style="padding: 0.5rem; font-size: 0.9rem;">{{ order.station_id }}</td>
+                        <td style="padding: 0.5rem;">{{ order.expires_at|date:"M d H:i" }}</td>
+                        <td style="padding: 0.5rem;">
+                            <span style="font-size: 0.9rem; padding: 2px 6px; border-radius: 3px; background: {% if order.state == 'open' %}#e6f7e6{% else %}#f7e6e6{% endif %}; color: {% if order.state == 'open' %}#080{% else %}#c00{% endif %};">
+                                {{ order.state|title }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p style="color: #666;">No market orders.</p>
+        {% endif %}
+    {% endwith %}
 </div>
 
-<div class="card">
-    <h2>Actions</h2>
-    <form method="post" action="{% url 'core:sync_character' character.id %}">
-        {% csrf_token %}
-        <button type="submit" class="btn">Sync All Data</button>
-    </form>
+<div class="card" id="assets">
+    <h2>Assets</h2>
+    {% with assets=character.assets.filter(parent__isnull=True) %}
+        {% if assets %}
+            <p><strong>{{ assets.count }}</strong> top-level asset{{ assets.count|pluralize }}</p>
+            <details>
+                <summary style="cursor: pointer; padding: 0.5rem; background: #f5f5f5; border-radius: 4px; margin-bottom: 1rem;">Show all assets</summary>
+                <ul style="margin-top: 1rem;">
+                    {% for asset in assets %}
+                    <li style="padding: 0.5rem; border-bottom: 1px solid #eee;">
+                        <strong>{{ asset.type_name }}</strong> x{{ asset.quantity }}
+                        <span style="color: #666; font-size: 0.9rem;">@ {{ asset.location_name }}</span>
+                        {% if asset.children.exists %}
+                            <details style="margin-left: 1rem;">
+                                <summary style="cursor: pointer; font-size: 0.9rem; color: #666;">Contents ({{ asset.children.count }} item{{ asset.children.count|pluralize }})</summary>
+                                <ul style="margin-left: 1rem;">
+                                    {% for child in asset.get_descendants %}
+                                    <li style="padding: 0.25rem 0; font-size: 0.9rem;">
+                                        {{ child.type_name }} x{{ child.quantity }}
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                            </details>
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+            </details>
+        {% else %}
+            <p style="color: #666;">No assets found.</p>
+        {% endif %}
+    {% endwith %}
 </div>
 {% endblock %}

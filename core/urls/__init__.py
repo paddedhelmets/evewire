@@ -15,4 +15,5 @@ urlpatterns = [
     path('dashboard/', views.dashboard, name='dashboard'),
     path('character/<int:character_id>/', views.character_detail, name='character_detail'),
     path('character/<int:character_id>/sync/', views.sync_character, name='sync_character'),
+    path('theme/toggle/', views.toggle_theme, name='toggle_theme'),
 ]
