@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load evewire %}
 
 {% block title %}Dashboard - evewire{% endblock %}
 
@@ -8,24 +9,35 @@
 {% if character %}
     <div class="card">
         <h2>{{ character.name }}</h2>
-        <p>Character ID: {{ character.id }}</p>
-        <p>Corporation: {{ character.user.corporation_name|default:"N/A" }}</p>
+        <p><strong>Character ID:</strong> {{ character.id }}</p>
+        <p><strong>Corporation:</strong> {{ character.user.corporation_name|default:"N/A" }}</p>
+        {% if character.user.alliance_name %}
+            <p><strong>Alliance:</strong> {{ character.user.alliance_name }}</p>
+        {% endif %}
 
         <h3>Quick Stats</h3>
         <ul>
-            {% if character.wallet_balance %}
-                <li>Wallet: {{ character.wallet_balance|floatformat:2 }} ISK</li>
+            {% if character.wallet_balance is not None %}
+                <li><strong>Wallet:</strong> {{ character.wallet_balance|floatformat:2 }} ISK</li>
             {% else %}
-                <li>Wallet: <a href="{% url 'core:sync_character' character.id %}" class="btn" style="font-size: 0.9rem;">Sync Now</a></li>
+                <li><strong>Wallet:</strong> <a href="{% url 'core:sync_character' character.id %}" class="btn" style="font-size: 0.9rem;">Sync Now</a></li>
             {% endif %}
 
-            {% if character.skills_data %}
-                <li>Total SP: {{ character.skills_data.total_sp|default:"N/A" }}</li>
+            {% if character.total_sp is not None %}
+                <li><strong>Total SP:</strong> {{ character.total_sp|default:"N/A" }}</li>
             {% endif %}
 
-            {% if character.skill_queue_data %}
-                <li>Skill Queue: {{ character.skill_queue_data|length }} skills training</li>
-            {% endif %}
+            {% with skill_queue_count=character.skill_queue.count %}
+                {% if skill_queue_count > 0 %}
+                    <li><strong>Skill Queue:</strong> {{ skill_queue_count }} skill{{ skill_queue_count|pluralize }} training</li>
+                {% endif %}
+            {% endwith %}
+
+            {% with orders_count=character.market_orders.count %}
+                {% if orders_count > 0 %}
+                    <li><strong>Active Orders:</strong> {{ orders_count }}</li>
+                {% endif %}
+            {% endwith %}
         </ul>
 
         <h3>Last Sync</h3>
@@ -40,6 +52,61 @@
             {% csrf_token %}
             <button type="submit" class="btn">Sync Character Data</button>
         </form>
+    </div>
+
+    <div class="card">
+        <h3>Current Skill Training</h3>
+        {% with current_skill=character.skill_queue.first %}
+            {% if current_skill %}
+                <p><strong>{{ current_skill.skill_name }}</strong> to Level {{ current_skill.finish_level }}</p>
+                <p>Finishes: {{ current_skill.finish_date|date:"Y-m-d H:i" }}</p>
+                <div style="background: #eee; height: 20px; border-radius: 4px; overflow: hidden; margin-top: 0.5rem;">
+                    <div style="background: #0066cc; height: 100%; width: {{ current_skill.progress_percent }}%;"></div>
+                </div>
+                <p style="font-size: 0.9rem; color: #666;">{{ current_skill.progress_percent|floatformat:1 }}% complete</p>
+            {% else %}
+                <p style="color: #666;">No skill training. Queue is empty.</p>
+            {% endif %}
+        {% endwith %}
+    </div>
+
+    <div class="card">
+        <h3>Active Market Orders</h3>
+        {% with open_orders=character.market_orders.all %}
+            {% if open_orders %}
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid #ddd;">
+                            <th style="padding: 0.5rem; text-align: left;">Type</th>
+                            <th style="padding: 0.5rem; text-align: left;">Item</th>
+                            <th style="padding: 0.5rem; text-align: right;">Price</th>
+                            <th style="padding: 0.5rem; text-align: right;">Remaining</th>
+                            <th style="padding: 0.5rem; text-align: left;">Expires</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for order in open_orders|slice:":5" %}
+                        <tr style="border-bottom: 1px solid #eee;">
+                            <td style="padding: 0.5rem;">
+                                <span style="color: {% if order.is_buy_order %}#080{% else %}#c00{% endif %}; font-weight: bold;">
+                                    {% if order.is_buy_order %}BUY{% else %}SELL{% endif %}
+                                </span>
+                            </td>
+                            <td style="padding: 0.5rem;">{{ order.type_name }}</td>
+                            <td style="padding: 0.5rem; text-align: right;">{{ order.price|floatformat:2 }}</td>
+                            <td style="padding: 0.5rem; text-align: right;">{{ order.volume_remain }}/{{ order.volume_total }}</td>
+                            <td style="padding: 0.5rem;">{{ order.expires_at|date:"M d" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% if open_orders.count > 5 %}
+                    <p style="margin-top: 1rem;"><a href="{% url 'core:character_detail' character.id %}#orders">View all {{ open_orders.count }} orders</a></p>
+                {% endif %}
+            {% else %}
+                <p style="color: #666;">No active market orders.</p>
+            {% endif %}
+        {% endwith %}
     </div>
 {% else %}
     <div class="card">
