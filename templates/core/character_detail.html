@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}{{ character.name }} - evewire{% endblock %}
+
+{% block content %}
+<h1>{{ character.name }}</h1>
+
+<div class="card">
+    <h2>Character Information</h2>
+    <p><strong>Character ID:</strong> {{ character.id }}</p>
+    <p><strong>Corporation:</strong> {{ character.user.corporation_name|default:"N/A" }}</p>
+    <p><strong>Alliance:</strong> {{ character.user.alliance_name|default:"None" }}</p>
+</div>
+
+<div class="card">
+    <h2>Wallet</h2>
+    {% if character.wallet_balance %}
+        <p style="font-size: 1.5rem; font-weight: bold;">
+            {{ character.wallet_balance|floatformat:2 }} ISK
+        </p>
+        <p style="color: #666;">Last updated: {{ character.wallet_synced_at|date:"Y-m-d H:i:s" }}</p>
+    {% else %}
+        <p>No wallet data. <a href="{% url 'core:sync_character' character.id %}" class="btn">Sync Now</a></p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2>Skills</h2>
+    {% if character.skills_data %}
+        <p><strong>Total SP:</strong> {{ character.skills_data.total_sp|default:"N/A" }}</p>
+        <p><strong>Unallocated SP:</strong> {{ character.skills_data.unallocated_sp|default:"0" }}</p>
+        <p style="color: #666;">Last updated: {{ character.skills_synced_at|date:"Y-m-d H:i:s" }}</p>
+    {% else %}
+        <p>No skills data. <a href="{% url 'core:sync_character' character.id %}" class="btn">Sync Now</a></p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2>Skill Queue</h2>
+    {% if character.skill_queue_data %}
+        <p><strong>Skills in Queue:</strong> {{ character.skill_queue_data|length }}</p>
+        <p style="color: #666;">Last updated: {{ character.skill_queue_synced_at|date:"Y-m-d H:i:s" }}</p>
+    {% else %}
+        <p>No skill queue data. <a href="{% url 'core:sync_character' character.id %}" class="btn">Sync Now</a></p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2>Market Orders</h2>
+    {% if character.orders_data %}
+        <p><strong>Active Orders:</strong> {{ character.orders_data|length }}</p>
+        <p style="color: #666;">Last updated: {{ character.orders_synced_at|date:"Y-m-d H:i:s" }}</p>
+    {% else %}
+        <p>No orders data. <a href="{% url 'core:sync_character' character.id %}" class="btn">Sync Now</a></p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2>Actions</h2>
+    <form method="post" action="{% url 'core:sync_character' character.id %}">
+        {% csrf_token %}
+        <button type="submit" class="btn">Sync All Data</button>
+    </form>
+</div>
+{% endblock %}
