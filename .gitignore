@@ -1,7 +1,9 @@
-# Reference repos (not committed)
+# Reference repos (cloned for analysis, not committed)
 reference/
 
-# Runtime
+# Gas Town runtime artifacts
+.beads/
+state.json
 .runtime/
 *.log
 
@@ -9,3 +11,11 @@ reference/
 .idea/
 .vscode/
 *.swp
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
