@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}evewire - EVE Online Pilot Management{% endblock %}
+
+{% block content %}
+<div style="text-align: center; padding: 4rem 0;">
+    <h1 style="font-size: 3rem; margin-bottom: 1rem;">evewire</h1>
+    <p style="font-size: 1.25rem; color: #666; margin-bottom: 2rem;">
+        EVE Online pilot management tool - Track skills, assets, wallet, and more
+    </p>
+    <a href="{% url 'core:login' %}" class="btn" style="font-size: 1.2rem; padding: 0.75rem 2rem;">
+        Login with EVE SSO
+    </a>
+</div>
+{% endblock %}
