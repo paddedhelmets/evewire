@@ -3,6 +3,10 @@ Core models for evewire.
 
 Includes custom User model (for EVE SSO authentication only, no passwords)
 and Character model for tracking EVE characters.
+
+Data models are split into sub-modules:
+- core.eve.models: Reference data (ItemType, SolarSystem, Station, etc.)
+- core.character.models: Character data (skills, assets, wallet, orders)
 """
 
 import uuid
@@ -15,6 +19,7 @@ from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, Permis
 from django.core.cache import cache
 from django.db import models
 from django.utils import timezone
+from datetime import timedelta
 from django.utils.translation import gettext_lazy as _
 
 logger = logging.getLogger('evewire')
@@ -22,7 +27,6 @@ logger = logging.getLogger('evewire')
 
 def get_encryption_key() -> bytes:
     """Get or create encryption key for token storage."""
-    from cryptography.fernet import Fernet
     import base64
     import hashlib
 
@@ -163,7 +167,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         """Check if access token needs refresh."""
         if not self.token_expires:
             return True
-        return timezone.now() >= self.token_expires - timezone.timedelta(minutes=5)
+        return timezone.now() >= self.token_expires - timedelta(minutes=5)
 
 
 class EveScope(models.TextChoices):
@@ -202,26 +206,23 @@ class Character(models.Model):
     EVE Character linked to a user.
 
     MVP: 1:1 User-Character relationship. Future: support multiple chars per user.
+
+    This model tracks sync metadata. Actual character data (skills, assets, wallet)
+    is stored in relational models in core.character.models.
     """
 
     id = models.BigIntegerField(primary_key=True)
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='character')
 
-    skills_data = models.JSONField(null=True, blank=True)
-    skills_synced_at = models.DateTimeField(null=True, blank=True)
-
-    skill_queue_data = models.JSONField(null=True, blank=True)
-    skill_queue_synced_at = models.DateTimeField(null=True, blank=True)
-
+    # Wallet balance (cached for quick display)
     wallet_balance = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
     wallet_synced_at = models.DateTimeField(null=True, blank=True)
 
-    assets_data = models.JSONField(null=True, blank=True)
-    assets_synced_at = models.DateTimeField(null=True, blank=True)
+    # Total SP (cached for quick display)
+    total_sp = models.IntegerField(null=True, blank=True)
+    skills_synced_at = models.DateTimeField(null=True, blank=True)
 
-    orders_data = models.JSONField(null=True, blank=True)
-    orders_synced_at = models.DateTimeField(null=True, blank=True)
-
+    # Sync status
     last_sync_status = models.CharField(
         max_length=20,
         choices=SyncStatus.choices,
@@ -246,17 +247,21 @@ class Character(models.Model):
 
     def get_access_token(self) -> Optional[str]:
         """Get a valid access token for ESI requests."""
-        # This will be implemented in services.py
         from core.services import TokenManager
         return TokenManager.get_access_token(self.user)
 
-    def is_data_stale(self, data_type: str, max_age_seconds: int = 3600) -> bool:
-        """Check if cached data is stale."""
-        field_name = f'{data_type}_synced_at'
-        sync_time = getattr(self, field_name, None)
-        if not sync_time:
+    def is_wallet_stale(self, max_age_seconds: int = 3600) -> bool:
+        """Check if wallet balance is stale."""
+        if not self.wallet_synced_at:
             return True
-        age = timezone.now() - sync_time
+        age = timezone.now() - self.wallet_synced_at
+        return age.total_seconds() > max_age_seconds
+
+    def is_skills_stale(self, max_age_seconds: int = 3600) -> bool:
+        """Check if skills data is stale."""
+        if not self.skills_synced_at:
+            return True
+        age = timezone.now() - self.skills_synced_at
         return age.total_seconds() > max_age_seconds
 
 
@@ -289,3 +294,8 @@ class AuditLog(models.Model):
     def log(cls, user: User, action: str, **kwargs) -> 'AuditLog':
         """Create a new audit log entry."""
         return cls.objects.create(user=user, action=action, metadata=kwargs)
+
+
+# Import sub-modules for proper model registration
+from core.eve.models import *  # noqa: E402, F401, F403
+from core.character.models import *  # noqa: E402, F401, F403

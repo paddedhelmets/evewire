@@ -26,6 +26,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'oauth2_provider',
     'django_q',
+    'mptt',
     'core',
 ]
 
@@ -117,6 +118,8 @@ EVE_SSO_VERIFY_URL = 'https://login.eveonline.com/oauth/verify'
 # ESI Configuration
 ESI_BASE_URL = 'https://esi.evetech.net/latest'
 ESI_DATASOURCE = 'tranquility'
+ESI_COMPATIBILITY_DATE = config('ESI_COMPATIBILITY_DATE', default='2024-01-01')
+ESI_SWAGGER_URL = 'https://esi.evetech.net/latest/swagger.json'
 
 # OAuth2 Toolkit Configuration
 OAUTH2_PROVIDER = {

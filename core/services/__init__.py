@@ -1,18 +1,75 @@
 """
 Core services for evewire.
 
-Includes EVE SSO authentication, ESI client, and token management.
+Includes EVE SSO authentication, ESI client with compatibility date support,
+and token management.
 """
 
 import logging
 import requests
-from datetime import timedelta
-from typing import Optional
+from datetime import timedelta, datetime
+from typing import Optional, Any
 from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
 
 logger = logging.getLogger('evewire')
+
+
+class ESIMeta:
+    """Metadata from ESI response headers."""
+
+    def __init__(self, response: requests.Response):
+        self.response = response
+        self.remaining_error_limit = int(response.headers.get('X-Esi-Error-Limit-Remain', 0))
+        self.error_limit_reset = response.headers.get('X-Esi-Error-Limit-Reset', '')
+        self.expires = self._parse_expires()
+        self.cache_control = response.headers.get('Cache-Control', '')
+
+    def _parse_expires(self) -> Optional[datetime]:
+        """Parse the Expires header into a datetime."""
+        expires_str = self.response.headers.get('Expires', '')
+        if not expires_str:
+            return None
+        try:
+            # Parse RFC 2822 date format
+            from email.utils import parsedate_to_datetime
+            return parsedate_to_datetime(expires_str)
+        except Exception:
+            logger.warning(f'Failed to parse Expires header: {expires_str}')
+            return None
+
+    @property
+    def cache_expires_at(self) -> Optional[datetime]:
+        """Get the cache expiry timestamp."""
+        return self.expires
+
+    @property
+    def max_age_seconds(self) -> int:
+        """Get the max-age from Cache-Control header."""
+        if not self.cache_control:
+            return 3600  # Default 1 hour
+
+        for directive in self.cache_control.split(','):
+            directive = directive.strip()
+            if directive.startswith('max-age='):
+                return int(directive.split('=')[1])
+
+        return 3600  # Default 1 hour
+
+    def is_stale(self) -> bool:
+        """Check if the cached data would be stale now."""
+        if not self.expires:
+            return True
+        return timezone.now() >= self.expires
+
+
+class ESIResponse:
+    """ESI response with metadata."""
+
+    def __init__(self, data: Any, meta: ESIMeta):
+        self.data = data
+        self.meta = meta
 
 
 class TokenManager:
@@ -110,13 +167,32 @@ class TokenManager:
 
 
 class ESIClient:
-    """Client for EVE Swagger Interface (ESI) API."""
+    """
+    Client for EVE Swagger Interface (ESI) API.
+
+    Supports compatibility date versioning and returns response metadata
+    for cache-aware syncing.
+    """
 
     BASE_URL = settings.ESI_BASE_URL
     DEFAULT_DATASOURCE = settings.ESI_DATASOURCE
+    COMPATIBILITY_DATE = settings.ESI_COMPATIBILITY_DATE
 
     @classmethod
-    def get(cls, endpoint: str, character, **kwargs) -> dict:
+    def _get_headers(cls, access_token: str = None) -> dict:
+        """Build request headers with compatibility date."""
+        headers = {
+            'Accept': 'application/json',
+            'X-Compatibility-Date': cls.COMPATIBILITY_DATE,
+        }
+
+        if access_token:
+            headers['Authorization'] = f'Bearer {access_token}'
+
+        return headers
+
+    @classmethod
+    def get(cls, endpoint: str, character, **kwargs) -> ESIResponse:
         """Make an authenticated GET request to ESI."""
         access_token = character.get_access_token()
         if not access_token:
@@ -124,74 +200,106 @@ class ESIClient:
 
         url = f'{cls.BASE_URL}{endpoint}'
         params = {'datasource': cls.DEFAULT_DATASOURCE, **kwargs}
-        headers = {
-            'Authorization': f'Bearer {access_token}',
-            'Accept': 'application/json',
-        }
+        headers = cls._get_headers(access_token)
 
         response = requests.get(url, params=params, headers=headers, timeout=30)
         response.raise_for_status()
 
-        remaining = response.headers.get('X-Esi-Error-Limit-Remain', 'unknown')
-        logger.debug(f'ESI rate limit remaining: {remaining}')
+        meta = ESIMeta(response)
+        data = response.json()
 
-        return response.json()
+        logger.debug(f'ESI GET {endpoint}: rate limit remaining={meta.remaining_error_limit}')
+
+        return ESIResponse(data, meta)
 
     @classmethod
-    def get_public(cls, endpoint: str, **kwargs) -> dict:
+    def get_public(cls, endpoint: str, **kwargs) -> ESIResponse:
         """Make an unauthenticated GET request to ESI."""
         url = f'{cls.BASE_URL}{endpoint}'
         params = {'datasource': cls.DEFAULT_DATASOURCE, **kwargs}
-        headers = {'Accept': 'application/json'}
+        headers = cls._get_headers()
 
         response = requests.get(url, params=params, headers=headers, timeout=30)
         response.raise_for_status()
-        return response.json()
+
+        meta = ESIMeta(response)
+        data = response.json()
+
+        return ESIResponse(data, meta)
+
+    # Character endpoints
 
     @classmethod
-    def get_character_info(cls, character_id: int) -> dict:
+    def get_character_info(cls, character_id: int) -> ESIResponse:
         """Get public character information."""
         return cls.get_public(f'/characters/{character_id}/')
 
     @classmethod
-    def get_character_portrait(cls, character_id: int) -> dict:
+    def get_character_portrait(cls, character_id: int) -> ESIResponse:
         """Get character portrait URLs."""
         return cls.get_public(f'/characters/{character_id}/portrait/')
 
     @classmethod
-    def get_skills(cls, character) -> dict:
+    def get_skills(cls, character) -> ESIResponse:
         """Get character skills."""
         return cls.get(f'/characters/{character.id}/skills/', character)
 
     @classmethod
-    def get_skill_queue(cls, character) -> list:
+    def get_skill_queue(cls, character) -> ESIResponse:
         """Get character skill queue."""
         return cls.get(f'/characters/{character.id}/skillqueue/', character)
 
     @classmethod
-    def get_wallet_balance(cls, character) -> float:
+    def get_wallet_balance(cls, character) -> ESIResponse:
         """Get character wallet balance."""
         return cls.get(f'/characters/{character.id}/wallet/', character)
 
     @classmethod
-    def get_assets(cls, character) -> list:
+    def get_assets(cls, character) -> ESIResponse:
         """Get character assets."""
         return cls.get(f'/characters/{character.id}/assets/', character)
 
     @classmethod
-    def get_orders(cls, character) -> list:
+    def get_orders(cls, character) -> ESIResponse:
         """Get character market orders."""
         return cls.get(f'/characters/{character.id}/orders/', character)
 
     @classmethod
-    def get_corporation_info(cls, corporation_id: int) -> dict:
+    def get_wallet_journal(cls, character, page: int = 1) -> ESIResponse:
+        """Get character wallet journal."""
+        return cls.get(f'/characters/{character.id}/wallet/journal/', character, page=page)
+
+    @classmethod
+    def get_wallet_transactions(cls, character, page: int = 1) -> ESIResponse:
+        """Get character wallet transactions."""
+        return cls.get(f'/characters/{character.id}/wallet/transactions/', character, page=page)
+
+    # Public reference endpoints
+
+    @classmethod
+    def get_corporation_info(cls, corporation_id: int) -> ESIResponse:
         """Get public corporation information."""
         return cls.get_public(f'/corporations/{corporation_id}/')
 
     @classmethod
-    def get_alliance_info(cls, alliance_id: int) -> dict:
+    def get_alliance_info(cls, alliance_id: int) -> ESIResponse:
         """Get public alliance information."""
         return cls.get_public(f'/alliances/{alliance_id}/')
+
+    @classmethod
+    def get_solar_system_info(cls, system_id: int) -> ESIResponse:
+        """Get solar system information."""
+        return cls.get_public(f'/universe/systems/{system_id}/')
+
+    @classmethod
+    def get_station_info(cls, station_id: int) -> ESIResponse:
+        """Get station information."""
+        return cls.get_public(f'/universe/stations/{station_id}/')
+
+    @classmethod
+    def get_type_info(cls, type_id: int) -> ESIResponse:
+        """Get item type information."""
+        return cls.get_public(f'/universe/types/{type_id}/')
 
 
 class AuthService:
@@ -248,6 +356,8 @@ class AuthService:
         return user
 
 
+# Sync functions for character data
+
 def sync_character_data(character) -> bool:
     """Sync all character data from ESI."""
     from core.models import SyncStatus
@@ -281,23 +391,58 @@ def sync_character_data(character) -> bool:
 
 def _sync_skills(character) -> None:
     """Sync character skills from ESI."""
-    data = ESIClient.get_skills(character)
-    character.skills_data = data
+    from core.character.models import CharacterSkill
+
+    response = ESIClient.get_skills(character)
+    skills_data = response.data
+
+    # Update total SP cache
+    character.total_sp = skills_data.get('total_sp', 0)
     character.skills_synced_at = timezone.now()
-    character.save(update_fields=['skills_data', 'skills_synced_at'])
+    character.save(update_fields=['total_sp', 'skills_synced_at'])
+
+    # Update individual skills
+    for skill_info in skills_data.get('skills', []):
+        CharacterSkill.objects.update_or_create(
+            character=character,
+            skill_id=skill_info['skill_id'],
+            defaults={
+                'skill_level': skill_info['trained_skill_level'],
+                'skillpoints_in_skill': skill_info['skillpoints_in_skill'],
+                'trained_skill_level': skill_info['trained_skill_level'],
+            }
+        )
 
 
 def _sync_skill_queue(character) -> None:
     """Sync character skill queue from ESI."""
-    data = ESIClient.get_skill_queue(character)
-    character.skill_queue_data = data
-    character.skill_queue_synced_at = timezone.now()
-    character.save(update_fields=['skill_queue_data', 'skill_queue_synced_at'])
+    from core.character.models import SkillQueueItem
+
+    response = ESIClient.get_skill_queue(character)
+    queue_data = response.data
+
+    # Clear old queue
+    SkillQueueItem.objects.filter(character=character).delete()
+
+    # Insert new queue items
+    for i, queue_item in enumerate(queue_data):
+        SkillQueueItem.objects.create(
+            character=character,
+            queue_position=i,
+            skill_id=queue_item['skill_id'],
+            finish_level=queue_item['finished_level'],
+            level_start_sp=queue_item['level_start_sp'],
+            level_end_sp=queue_item['level_end_sp'],
+            training_start_time=queue_item['start_time'],
+            finish_date=queue_item['finish_date'],
+        )
 
 
 def _sync_wallet(character) -> None:
     """Sync character wallet balance from ESI."""
-    balance = ESIClient.get_wallet_balance(character)
+    response = ESIClient.get_wallet_balance(character)
+    balance = response.data
+
     character.wallet_balance = balance
     character.wallet_synced_at = timezone.now()
     character.save(update_fields=['wallet_balance', 'wallet_synced_at'])
@@ -305,15 +450,85 @@ def _sync_wallet(character) -> None:
 
 def _sync_assets(character) -> None:
     """Sync character assets from ESI."""
-    data = ESIClient.get_assets(character)
-    character.assets_data = data
+    from core.character.models import CharacterAsset
+
+    response = ESIClient.get_assets(character)
+    assets_data = response.data
+
+    # Delete old assets
+    CharacterAsset.objects.filter(character=character).delete()
+
+    # Build asset tree
+    # ESI returns flat list with parent relationship via is_singleton/item_id
+    # We need to build the MPTT tree
+    assets_by_id = {item['item_id']: item for item in assets_data}
+
+    # First pass: create all assets without parent
+    for item_data in assets_data:
+        CharacterAsset.objects.create(
+            character=character,
+            item_id=item_data['item_id'],
+            type_id=item_data['type_id'],
+            quantity=item_data.get('quantity', 1),
+            location_id=item_data.get('location_id'),
+            location_type=item_data.get('location_type', ''),
+            location_flag=item_data.get('location_flag', ''),
+            is_singleton=item_data.get('is_singleton', False),
+            is_blueprint_copy=item_data.get('is_blueprint_copy', False),
+        )
+
+    # Second pass: set parent relationships
+    for item_data in assets_data:
+        item_id = item_data['item_id']
+        # Check if this item has a location_id that points to another item
+        # (items inside containers/ships have location_id = parent item_id)
+        location_id = item_data.get('location_id')
+        location_type = item_data.get('location_type')
+
+        if location_type == 'other' and location_id in assets_by_id:
+            # This item is inside another item
+            try:
+                asset = CharacterAsset.objects.get(item_id=item_id)
+                parent = CharacterAsset.objects.get(item_id=location_id)
+                asset.parent = parent
+                asset.save(update_fields=['parent'])
+            except CharacterAsset.DoesNotExist:
+                pass
+
     character.assets_synced_at = timezone.now()
-    character.save(update_fields=['assets_data', 'assets_synced_at'])
+    character.save(update_fields=['assets_synced_at'])
 
 
 def _sync_orders(character) -> None:
     """Sync character market orders from ESI."""
-    data = ESIClient.get_orders(character)
-    character.orders_data = data
+    from core.character.models import MarketOrder
+
+    response = ESIClient.get_orders(character)
+    orders_data = response.data
+
+    # Delete old orders
+    MarketOrder.objects.filter(character=character).delete()
+
+    # Insert new orders
+    for order_data in orders_data:
+        MarketOrder.objects.create(
+            character=character,
+            order_id=order_data['order_id'],
+            is_buy_order=order_data.get('is_buy_order', False),
+            type_id=order_data['type_id'],
+            region_id=order_data.get('region_id'),
+            station_id=order_data.get('station_id'),
+            system_id=order_data.get('system_id'),
+            volume_remain=order_data.get('volume_remain', 0),
+            volume_total=order_data.get('volume_total', 0),
+            min_volume=order_data.get('min_volume', 1),
+            price=order_data.get('price', 0),
+            issued=order_data.get('issued'),
+            duration=order_data.get('duration', 0),
+            range=order_data.get('range', ''),
+            state=order_data.get('state', ''),
+            escrow=order_data.get('escrow', 0),
+        )
+
     character.orders_synced_at = timezone.now()
-    character.save(update_fields=['orders_data', 'orders_synced_at'])
+    character.save(update_fields=['orders_synced_at'])
