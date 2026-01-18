@@ -2,64 +2,441 @@
 
 {% block title %}{{ character.name }} - evewire{% endblock %}
 
+{% block extra_head %}
+<style>
+    .character-header {
+        display: flex;
+        gap: 1.5rem;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+
+    .header-portrait {
+        width: 256px;
+        height: 256px;
+        border-radius: 8px;
+        object-fit: cover;
+    }
+
+    .header-info {
+        flex: 1;
+    }
+
+    .header-name {
+        font-size: 2rem;
+        font-weight: bold;
+        margin-bottom: 0.5rem;
+    }
+
+    .header-corp {
+        font-size: 1.1rem;
+        color: #666;
+        margin-bottom: 0.25rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .corp-logo-large {
+        width: 48px;
+        height: 48px;
+        border-radius: 8px;
+    }
+
+    .header-bio {
+        color: #999;
+        font-size: 0.9rem;
+    }
+
+    .section-title {
+        font-size: 1.25rem;
+        font-weight: bold;
+        margin-bottom: 1rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .wallet-display {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #2ecc40;
+    }
+
+    .wallet-updated {
+        color: #666;
+        font-size: 0.85rem;
+    }
+
+    .attributes-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+        gap: 1rem;
+    }
+
+    .attribute {
+        text-align: center;
+        padding: 0.75rem;
+        background: #f5f5f5;
+        border-radius: 4px;
+    }
+
+    .attribute-name {
+        font-size: 0.75rem;
+        color: #666;
+        text-transform: uppercase;
+        margin-bottom: 0.25rem;
+    }
+
+    .attribute-value {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #3498db;
+    }
+
+    .skill-queue-item {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 0.75rem;
+        border-bottom: 1px solid #eee;
+    }
+
+    .skill-queue-item:last-child {
+        border-bottom: none;
+    }
+
+    .queue-position {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: #3498db;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        font-weight: bold;
+        flex-shrink: 0;
+    }
+
+    .queue-position.active {
+        background: #2ecc40;
+    }
+
+    .queue-info {
+        flex: 1;
+    }
+
+    .queue-skill-name {
+        font-weight: 500;
+    }
+
+    .queue-level {
+        color: #666;
+        font-size: 0.9rem;
+    }
+
+    .queue-time {
+        color: #666;
+        font-size: 0.85rem;
+        text-align: right;
+        flex-shrink: 0;
+    }
+
+    .queue-progress {
+        width: 100%;
+        height: 4px;
+        background: #eee;
+        border-radius: 2px;
+        overflow: hidden;
+        margin-top: 0.25rem;
+    }
+
+    .queue-progress-bar {
+        height: 100%;
+        background: linear-gradient(90deg, #3498db, #2ecc40);
+        transition: width 0.3s;
+    }
+
+    .orders-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+    }
+
+    .orders-table th {
+        text-align: left;
+        padding: 0.5rem;
+        border-bottom: 2px solid #ddd;
+        font-weight: 600;
+    }
+
+    .orders-table td {
+        padding: 0.5rem;
+        border-bottom: 1px solid #eee;
+    }
+
+    .order-type-buy {
+        color: #e74c3c;
+    }
+
+    .order-type-sell {
+        color: #2ecc40;
+    }
+
+    .queue-empty-message {
+        text-align: center;
+        padding: 2rem;
+        color: #c62828;
+        background: #ffebee;
+        border-radius: 4px;
+    }
+
+    .queue-warning-message {
+        text-align: center;
+        padding: 1rem;
+        color: #ef6c00;
+        background: #fff3e0;
+        border-radius: 4px;
+        margin-bottom: 1rem;
+    }
+
+    .level-stars {
+        color: #f39c12;
+    }
+
+    .skill-level-v {
+        color: #2ecc40;
+        font-weight: bold;
+    }
+
+    @media (max-width: 600px) {
+        .character-header {
+            flex-direction: column;
+            text-align: center;
+        }
+
+        .header-portrait {
+            width: 128px;
+            height: 128px;
+        }
+
+        .header-corp {
+            justify-content: center;
+        }
+
+        .orders-table {
+            font-size: 0.8rem;
+        }
+
+        .orders-table th,
+        .orders-table td {
+            padding: 0.25rem;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<h1>{{ character.name }}</h1>
+<div class="character-header">
+    <img src="https://images.evetech.net/characters/{{ character.id }}/portrait?size=256"
+         alt="{{ character.name }}"
+         class="header-portrait"
+         onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 256 256%22%3E%3Crect fill=%22%23ccc%22 width=%22256%22 height=%22256%22/%3E%3Ctext fill=%22%23666%22 x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 font-size=%2240%22%3E{{ character.name|slice:%220:2%22 }}%3C/text%3E%3C/svg%3E'">
 
-<div class="card">
-    <h2>Character Information</h2>
-    <p><strong>Character ID:</strong> {{ character.id }}</p>
-    <p><strong>Corporation:</strong> {{ character.user.corporation_name|default:"N/A" }}</p>
-    <p><strong>Alliance:</strong> {{ character.user.alliance_name|default:"None" }}</p>
+    <div class="header-info">
+        <div class="header-name">{{ character.name }}</div>
+
+        <div class="header-corp">
+            {% if character.user.corporation_id %}
+                {% if character.user.corporation_id > 1000000 %}
+                    <img src="https://images.evetech.net/corporations/{{ character.user.corporation_id }}/logo?size=48"
+                         alt=""
+                         class="corp-logo-large"
+                         onerror="this.style.display='none'">
+                {% endif %}
+                {{ character.user.corporation_name|default:"N/A" }}
+                {% if character.user.alliance_name %}
+                    <span style="color: #999;"> / {{ character.user.alliance_name }}</span>
+                {% endif %}
+            {% else %}
+                Unknown Corporation
+            {% endif %}
+        </div>
+
+        <div class="header-bio">
+            Character ID: {{ character.id }}
+        </div>
+    </div>
 </div>
 
-<div class="card">
-    <h2>Wallet</h2>
-    {% if character.wallet_balance %}
-        <p style="font-size: 1.5rem; font-weight: bold;">
-            {{ character.wallet_balance|floatformat:2 }} ISK
+<div style="display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));">
+    <!-- Wallet Card -->
+    <div class="card">
+        <div class="section-title">
+            Wallet Balance
+            <form method="post" action="{% url 'core:sync_character' character.id %}" style="display: inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn" style="font-size: 0.8rem; padding: 0.25rem 0.75rem;">Sync</button>
+            </form>
+        </div>
+        {% if character.wallet_balance %}
+            <div class="wallet-display">
+                {{ character.wallet_balance|floatformat:2 }}
+            </div>
+            <div class="wallet-updated">
+                Updated: {{ character.wallet_synced_at|date:"M j, H:i" }}
+            </div>
+        {% else %}
+            <p>No wallet data available.</p>
+        {% endif %}
+    </div>
+
+    <!-- Attributes Card -->
+    <div class="card">
+        <div class="section-title">Attributes</div>
+        <div class="attributes-grid">
+            <div class="attribute">
+                <div class="attribute-name">Intelligence</div>
+                <div class="attribute-value">20</div>
+            </div>
+            <div class="attribute">
+                <div class="attribute-name">Memory</div>
+                <div class="attribute-value">20</div>
+            </div>
+            <div class="attribute">
+                <div class="attribute-name">Perception</div>
+                <div class="attribute-value">20</div>
+            </div>
+            <div class="attribute">
+                <div class="attribute-name">Willpower</div>
+                <div class="attribute-value">20</div>
+            </div>
+            <div class="attribute">
+                <div class="attribute-name">Charisma</div>
+                <div class="attribute-value">20</div>
+            </div>
+        </div>
+        <p style="margin-top: 1rem; color: #999; font-size: 0.85rem;">
+            * Attributes are not yet fetched from ESI
         </p>
-        <p style="color: #666;">Last updated: {{ character.wallet_synced_at|date:"Y-m-d H:i:s" }}</p>
+    </div>
+</div>
+
+<!-- Skill Queue -->
+<div class="card" style="margin-top: 1rem;">
+    <div class="section-title">
+        Skill Queue ({{ queue_count }})
+        {% if queue_empty %}
+            <span style="background: #ffebee; color: #c62828; padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.9rem;">
+                Empty
+            </span>
+        {% elif queue_expiring_soon %}
+            <span style="background: #fff3e0; color: #ef6c00; padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.9rem;">
+                Expiring Soon
+            </span>
+        {% endif %}
+    </div>
+
+    {% if skill_queue %}
+        {% if queue_expiring_soon %}
+            <div class="queue-warning-message">
+                Your skill queue will be empty in less than 24 hours!
+            </div>
+        {% endif %}
+
+        {% for item in skill_queue %}
+            <div class="skill-queue-item">
+                <div class="queue-position {% if forloop.first %}active{% endif %}">{{ forloop.counter }}</div>
+                <div class="queue-info">
+                    <div class="queue-skill-name">{{ item.skill_name }}</div>
+                    <div class="queue-level">Level {{ item.trained_skill_level|default:"?" }} → {{ item.finish_level }}</div>
+                    <div class="queue-progress">
+                        <div class="queue-progress-bar" style="width: {{ item.progress_percent }}%;"></div>
+                    </div>
+                </div>
+                <div class="queue-time">
+                    {% if item.is_completed %}
+                        <span style="color: #2ecc40;">Completed</span>
+                    {% else %}
+                        <div>{{ item.finish_date|date:"M j, H:i" }}</div>
+                        <div style="font-size: 0.8rem;">({{ item.finish_date|timeuntil }})</div>
+                    {% endif %}
+                </div>
+            </div>
+        {% endfor %}
     {% else %}
-        <p>No wallet data. <a href="{% url 'core:sync_character' character.id %}" class="btn">Sync Now</a></p>
+        <div class="queue-empty-message">
+            <strong>Skill Queue Empty</strong><br>
+            Add skills to keep training!
+        </div>
     {% endif %}
 </div>
 
-<div class="card">
-    <h2>Skills</h2>
-    {% if character.skills_data %}
-        <p><strong>Total SP:</strong> {{ character.skills_data.total_sp|default:"N/A" }}</p>
-        <p><strong>Unallocated SP:</strong> {{ character.skills_data.unallocated_sp|default:"0" }}</p>
-        <p style="color: #666;">Last updated: {{ character.skills_synced_at|date:"Y-m-d H:i:s" }}</p>
+<!-- Skills Summary -->
+<div class="card" style="margin-top: 1rem;">
+    <div class="section-title">
+        Skills ({{ skills_count }})
+        <a href="{% url 'core:character_skills' character.id %}" class="btn" style="font-size: 0.9rem;">View All</a>
+    </div>
+
+    {% if skills_count > 0 %}
+        <p>
+            Total SP: <strong>{{ character.total_sp|intcomma|default:"N/A" }}</strong>
+            <span style="color: #999; margin-left: 1rem;">Updated: {{ character.skills_synced_at|date:"M j, H:i" }}</span>
+        </p>
+        <p style="color: #999; font-size: 0.9rem; margin-top: 0.5rem;">
+            View all skills grouped by category with training times.
+        </p>
     {% else %}
-        <p>No skills data. <a href="{% url 'core:sync_character' character.id %}" class="btn">Sync Now</a></p>
+        <p>No skills data available. <a href="{% url 'core:sync_character' character.id %}" class="btn">Sync Now</a></p>
     {% endif %}
 </div>
 
-<div class="card">
-    <h2>Skill Queue</h2>
-    {% if character.skill_queue_data %}
-        <p><strong>Skills in Queue:</strong> {{ character.skill_queue_data|length }}</p>
-        <p style="color: #666;">Last updated: {{ character.skill_queue_synced_at|date:"Y-m-d H:i:s" }}</p>
-    {% else %}
-        <p>No skill queue data. <a href="{% url 'core:sync_character' character.id %}" class="btn">Sync Now</a></p>
-    {% endif %}
-</div>
+<!-- Market Orders -->
+<div class="card" style="margin-top: 1rem;">
+    <div class="section-title">
+        Active Orders ({{ orders_count }})
+        {% if orders_value > 0 %}
+            <span style="font-size: 1rem; font-weight: normal; color: #666;">
+                Total: {{ orders_value|floatformat:2 }} ISK
+            </span>
+        {% endif %}
+    </div>
 
-<div class="card">
-    <h2>Market Orders</h2>
-    {% if character.orders_data %}
-        <p><strong>Active Orders:</strong> {{ character.orders_data|length }}</p>
-        <p style="color: #666;">Last updated: {{ character.orders_synced_at|date:"Y-m-d H:i:s" }}</p>
+    {% if active_orders %}
+        <div style="overflow-x: auto;">
+            <table class="orders-table">
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Item</th>
+                        <th>Station</th>
+                        <th>Price</th>
+                        <th>Remaining</th>
+                        <th>Expires</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for order in active_orders %}
+                        <tr>
+                            <td class="{% if order.is_buy_order %}order-type-buy{% else %}order-type-sell{% endif %}">
+                                {{ order.is_buy_order|yesno:"BUY,SELL" }}
+                            </td>
+                            <td>{{ order.type_id }}</td>
+                            <td>{{ order.station_id }}</td>
+                            <td>{{ order.price|floatformat:2 }}</td>
+                            <td>{{ order.volume_remain }}/{{ order.volume_total }}</td>
+                            <td>{{ order.expires_at|date:"M j" }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     {% else %}
-        <p>No orders data. <a href="{% url 'core:sync_character' character.id %}" class="btn">Sync Now</a></p>
+        <p>No active market orders.</p>
     {% endif %}
-</div>
-
-<div class="card">
-    <h2>Actions</h2>
-    <form method="post" action="{% url 'core:sync_character' character.id %}">
-        {% csrf_token %}
-        <button type="submit" class="btn">Sync All Data</button>
-    </form>
 </div>
 {% endblock %}

@@ -2,44 +2,291 @@
 
 {% block title %}Dashboard - evewire{% endblock %}
 
+{% block extra_head %}
+<style>
+    .character-grid {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .character-card {
+        display: flex;
+        gap: 1.5rem;
+        align-items: start;
+    }
+
+    .character-portrait {
+        width: 128px;
+        height: 128px;
+        border-radius: 4px;
+        object-fit: cover;
+        flex-shrink: 0;
+    }
+
+    .character-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .character-name {
+        font-size: 1.5rem;
+        font-weight: bold;
+        margin-bottom: 0.25rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .corp-logo {
+        width: 32px;
+        height: 32px;
+        border-radius: 4px;
+        vertical-align: middle;
+    }
+
+    .character-corp {
+        color: #666;
+        margin-bottom: 0.5rem;
+    }
+
+    .stats-row {
+        display: flex;
+        gap: 2rem;
+        flex-wrap: wrap;
+        margin: 1rem 0;
+    }
+
+    .stat {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .stat-label {
+        font-size: 0.8rem;
+        color: #666;
+        text-transform: uppercase;
+    }
+
+    .stat-value {
+        font-size: 1.25rem;
+        font-weight: bold;
+    }
+
+    .isk-value {
+        color: #2ecc40;
+    }
+
+    .sp-value {
+        color: #3498db;
+    }
+
+    .skill-queue-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.25rem 0.75rem;
+        border-radius: 4px;
+        font-size: 0.9rem;
+        font-weight: 500;
+    }
+
+    .queue-active {
+        background: #e8f5e9;
+        color: #2e7d32;
+    }
+
+    .queue-empty {
+        background: #ffebee;
+        color: #c62828;
+    }
+
+    .queue-warning {
+        background: #fff3e0;
+        color: #ef6c00;
+    }
+
+    .queue-indicator {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+    }
+
+    .queue-active .queue-indicator {
+        background: #2e7d32;
+        animation: pulse 2s infinite;
+    }
+
+    .queue-empty .queue-indicator {
+        background: #c62828;
+        animation: pulse 1s infinite;
+    }
+
+    .queue-warning .queue-indicator {
+        background: #ef6c00;
+        animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+
+    .current-training {
+        margin-top: 1rem;
+        padding: 0.75rem;
+        background: #f5f5f5;
+        border-radius: 4px;
+        font-size: 0.9rem;
+    }
+
+    .current-training-label {
+        color: #666;
+        font-size: 0.8rem;
+    }
+
+    .current-training-name {
+        font-weight: 500;
+    }
+
+    .training-time {
+        color: #666;
+        font-size: 0.85rem;
+    }
+
+    .quick-actions {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 1rem;
+    }
+
+    .sync-status {
+        font-size: 0.85rem;
+        color: #666;
+        margin-top: 0.5rem;
+    }
+
+    @media (max-width: 600px) {
+        .character-card {
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        .character-name {
+            justify-content: center;
+        }
+
+        .stats-row {
+            justify-content: center;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <h1>Dashboard</h1>
 
 {% if character %}
-    <div class="card">
-        <h2>{{ character.name }}</h2>
-        <p>Character ID: {{ character.id }}</p>
-        <p>Corporation: {{ character.user.corporation_name|default:"N/A" }}</p>
+    <div class="character-grid">
+        <div class="card character-card">
+            <img src="https://images.evetech.net/characters/{{ character.id }}/portrait?size=128"
+                 alt="{{ character.name }}"
+                 class="character-portrait"
+                 onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 128 128%22%3E%3Crect fill=%22%23ccc%22 width=%22128%22 height=%22128%22/%3E%3Ctext fill=%22%23666%22 x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 font-size=%2220%22%3E{{ character.name|slice:%220:2%22 }}%3C/text%3E%3C/svg%3E'">
 
-        <h3>Quick Stats</h3>
-        <ul>
-            {% if character.wallet_balance %}
-                <li>Wallet: {{ character.wallet_balance|floatformat:2 }} ISK</li>
-            {% else %}
-                <li>Wallet: <a href="{% url 'core:sync_character' character.id %}" class="btn" style="font-size: 0.9rem;">Sync Now</a></li>
-            {% endif %}
+            <div class="character-info">
+                <div class="character-name">
+                    {{ character.name }}
+                </div>
 
-            {% if character.skills_data %}
-                <li>Total SP: {{ character.skills_data.total_sp|default:"N/A" }}</li>
-            {% endif %}
+                <div class="character-corp">
+                    {% if character.user.corporation_id %}
+                        {% if character.user.corporation_id > 1000000 %}
+                            <img src="https://images.evetech.net/corporations/{{ character.user.corporation_id }}/logo?size=32"
+                                 alt=""
+                                 class="corp-logo"
+                                 onerror="this.style.display='none'">
+                        {% endif %}
+                        {{ character.user.corporation_name|default:"N/A" }}
+                        {% if character.user.alliance_name %}
+                            <span style="color: #999;"> / {{ character.user.alliance_name }}</span>
+                        {% endif %}
+                    {% else %}
+                        Unknown Corporation
+                    {% endif %}
+                </div>
 
-            {% if character.skill_queue_data %}
-                <li>Skill Queue: {{ character.skill_queue_data|length }} skills training</li>
-            {% endif %}
-        </ul>
+                <div class="stats-row">
+                    <div class="stat">
+                        <span class="stat-label">Wallet</span>
+                        {% if character.wallet_balance %}
+                            <span class="stat-value isk-value">{{ character.wallet_balance|floatformat:2 }}</span>
+                        {% else %}
+                            <span class="stat-value" style="color: #999;">N/A</span>
+                        {% endif %}
+                    </div>
 
-        <h3>Last Sync</h3>
-        <p>
-            Status: <strong>{{ character.get_last_sync_status_display }}</strong>
-            {% if character.last_sync %}
-                <br>Time: {{ character.last_sync|date:"Y-m-d H:i:s" }}
-            {% endif %}
-        </p>
+                    <div class="stat">
+                        <span class="stat-label">Total SP</span>
+                        {% if character.total_sp %}
+                            <span class="stat-value sp-value">{{ character.total_sp|intcomma }}</span>
+                        {% else %}
+                            <span class="stat-value" style="color: #999;">N/A</span>
+                        {% endif %}
+                    </div>
 
-        <form method="post" action="{% url 'core:sync_character' character.id %}">
-            {% csrf_token %}
-            <button type="submit" class="btn">Sync Character Data</button>
-        </form>
+                    <div class="stat">
+                        <span class="stat-label">Skills</span>
+                        <span class="stat-value">{{ character.skills.count }}</span>
+                    </div>
+                </div>
+
+                {% with skill_queue=character.skill_queue.all.order_by 'queue_position' %}
+                    {% if skill_queue %}
+                        {% with first_skill=skill_queue.first %}
+                            <div class="skill-queue-status queue-active">
+                                <span class="queue-indicator"></span>
+                                Training: {{ first_skill.skill_name }} to Level {{ first_skill.finish_level }}
+                            </div>
+
+                            <div class="current-training">
+                                <div class="current-training-label">Currently Training</div>
+                                <div class="current-training-name">{{ first_skill.skill_name }} L{{ first_skill.finish_level }}</div>
+                                <div class="training-time">
+                                    {% if first_skill.is_completed %}
+                                        <span style="color: #2ecc40;">Completed</span>
+                                    {% else %}
+                                        Finishes: {{ first_skill.finish_date|date:"M j, H:i" }}
+                                        ({{ first_skill.finish_date|timeuntil }})
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endwith %}
+                    {% else %}
+                        <div class="skill-queue-status queue-empty">
+                            <span class="queue-indicator"></span>
+                            Skill Queue Empty
+                        </div>
+                        <p style="margin-top: 0.5rem; color: #666; font-size: 0.9rem;">
+                            Add skills to your queue to keep training!
+                        </p>
+                    {% endif %}
+                {% endwith %}
+
+                <div class="quick-actions">
+                    <a href="{% url 'core:character_detail' character.id %}" class="btn">View Details</a>
+                    <form method="post" action="{% url 'core:sync_character' character.id %}" style="display: inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn" style="background: #555;">Sync</button>
+                    </form>
+                </div>
+
+                <div class="sync-status">
+                    Last sync: {% if character.last_sync %}{{ character.last_sync|date:"M j, H:i" }} ({{ character.get_last_sync_status_display }}){% else %}Never{% endif %}
+                </div>
+            </div>
+        </div>
     </div>
 {% else %}
     <div class="card">
