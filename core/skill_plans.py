@@ -120,10 +120,59 @@ class SkillPlanExporter:
         Get prerequisites for a skill from SDE data.
 
         Returns list of (skill_required, skill_level) tuples.
+
+        Skill prerequisite attributes:
+        - 182, 183, 184, 1285, 1289, 1290 - skill type IDs
+        - 277, 278, 279, 1286, 1287 - corresponding skill levels
         """
-        # TODO: Implement from dgmTypeAttributes when SDE is imported
-        # For now, return empty list
-        return []
+        from core.eve.models import TypeAttribute
+
+        # Map of skill attribute IDs to their corresponding level attribute IDs
+        # attributeID -> levelAttributeID
+        skill_attribute_map = {
+            182: 277,  # primary skill required -> primary skill level
+            183: 278,  # secondary skill required -> secondary skill level
+            184: 279,  # etc.
+            1285: 1286,
+            1289: 1287,
+            1290: 1289,  # Note: this appears to be an error in SDE, should be 1288
+        }
+
+        prerequisites = []
+
+        # Get all skill prerequisite attributes for this skill
+        skill_attrs = TypeAttribute.objects.filter(
+            type_id=skill_id,
+            attribute_id__in=skill_attribute_map.keys()
+        ).select_related('attribute_id')
+
+        for skill_attr in skill_attrs:
+            attr_id = skill_attr.attribute_id
+            skill_type_id = int(skill_attr.value_float) if skill_attr.value_float else None
+
+            if not skill_type_id:
+                continue
+
+            # Get the required level from the corresponding level attribute
+            level_attr_id = skill_attribute_map.get(attr_id)
+            if not level_attr_id:
+                continue
+
+            try:
+                level_obj = TypeAttribute.objects.get(
+                    type_id=skill_id,
+                    attribute_id=level_attr_id
+                )
+                required_level = int(level_obj.value_float) if level_obj.value_float else 0
+            except TypeAttribute.DoesNotExist:
+                required_level = 1  # Default to level 1 if not specified
+
+            prerequisites.append({
+                'skill_required': skill_type_id,
+                'skill_level': required_level,
+            })
+
+        return prerequisites
 
     @staticmethod
     def _add_prereqs_recursive(plan_skills: Dict, prereqs: List, target_level: int,

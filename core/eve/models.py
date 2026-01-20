@@ -211,3 +211,102 @@ class Alliance(models.Model):
 
     def __str__(self) -> str:
         return f"{self.name} [{self.ticker}]"
+
+
+class ItemGroup(models.Model):
+    """
+    EVE Online item group (from invGroups table in SDE).
+
+    Groups categorize item types (e.g., "Frigates", "Lasers", "Skills").
+    """
+
+    id = models.IntegerField(primary_key=True)  # groupID
+    name = models.CharField(max_length=255)
+    category_id = models.IntegerField(db_index=True, null=True)  # FK to invCategories
+    published = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = _('item group')
+        verbose_name_plural = _('item groups')
+        ordering = ['name']
+        db_table = 'core_itemgroup'
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class ItemCategory(models.Model):
+    """
+    EVE Online item category (from invCategories table in SDE).
+
+    Categories are the top-level classification (e.g., "Ships", "Modules", "Skills").
+    """
+
+    id = models.IntegerField(primary_key=True)  # categoryID
+    name = models.CharField(max_length=255)
+    published = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = _('item category')
+        verbose_name_plural = _('item categories')
+        ordering = ['name']
+        db_table = 'core_itemcategory'
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class AttributeType(models.Model):
+    """
+    EVE Online attribute type definition (from dgmAttributeTypes table in SDE).
+
+    Defines what attributes exist and their properties.
+    """
+
+    id = models.IntegerField(primary_key=True)  # attributeID
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    default_value = models.FloatField(null=True, blank=True)
+    published = models.BooleanField(default=True)
+    display_name = models.CharField(max_length=255, blank=True)
+    icon_id = models.IntegerField(null=True, blank=True)
+    data_type = models.IntegerField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = _('attribute type')
+        verbose_name_plural = _('attribute types')
+        ordering = ['name']
+        db_table = 'core_attributetype'
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.id})"
+
+
+class TypeAttribute(models.Model):
+    """
+    EVE Online type attribute (from dgmTypeAttributes table in SDE).
+
+    Stores attribute values for item types. This is how skill prerequisites
+    and other item properties are stored.
+    """
+
+    id = models.BigAutoField(primary_key=True)
+    type_id = models.IntegerField(db_index=True)  # FK to ItemType
+    attribute_id = models.IntegerField(db_index=True)  # FK to AttributeType
+    value_int = models.IntegerField(null=True, blank=True)
+    value_float = models.FloatField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = _('type attribute')
+        verbose_name_plural = _('type attributes')
+        unique_together = [['type_id', 'attribute_id']]
+        ordering = ['type_id', 'attribute_id']
+        db_table = 'core_typeattribute'
+
+    def __str__(self) -> str:
+        from core.eve.models import ItemType
+        try:
+            item = ItemType.objects.get(id=self.type_id)
+            return f"{item.name}: {self.attribute_id} = {self.value}"
+        except ItemType.DoesNotExist:
+            return f"Type {self.type_id}: {self.attribute_id}"
