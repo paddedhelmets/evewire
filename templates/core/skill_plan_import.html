@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}Import Skill Plan - evewire{% endblock %}
+
+{% block content %}
+<h1>Import Skill Plan</h1>
+
+<p>Import a skill plan from EVE XML format (compatible with in-game skill planner and EVEMon).</p>
+
+<div class="card">
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        <div style="margin-bottom: 1rem;">
+            <label for="xml_file" style="display: block; margin-bottom: 0.5rem; font-weight: bold;">XML File *</label>
+            <input type="file" name="xml_file" id="xml_file" accept=".xml" required style="padding: 0.5rem;">
+            <p style="color: #666; font-size: 0.9rem; margin-top: 0.25rem;">
+                Upload an EVE skill plan XML file.
+            </p>
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+            <label for="name" style="display: block; margin-bottom: 0.5rem; font-weight: bold;">Plan Name (optional)</label>
+            <input type="text" name="name" id="name" placeholder="Leave blank to use name from XML" style="width: 100%; padding: 0.5rem; max-width: 400px;">
+            <p style="color: #666; font-size: 0.9rem; margin-top: 0.25rem;">
+                Override the plan name from the XML file.
+            </p>
+        </div>
+
+        <div style="margin-top: 1rem;">
+            <button type="submit" class="btn">Import Plan</button>
+            <a href="{% url 'core:skill_plan_list' %}" style="margin-left: 0.5rem;">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h3>About EVE Skill Plans</h3>
+    <p>Skill plans in EVE XML format can be exported from:</p>
+    <ul>
+        <li><strong>In-game skill planner</strong> - Right-click a skill and plan training</li>
+        <li><strong>EVEMon</strong> - Popular skill tracking tool</li>
+        <li><strong>Pyfa</strong> - Python Fitting Assistant</li>
+        <li><strong>Other evewire users</strong> - Share plans with alliance mates</li>
+    </ul>
+    <p>The imported plan will include all skills from the XML file. You can then add or remove skills as needed.</p>
+</div>
+{% endblock %}
