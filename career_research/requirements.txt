@@ -1,0 +1,19 @@
+# Career Research Dependencies
+# Separate from main Django app requirements
+
+# EVE fitting engine (from pyfa)
+sqlalchemy>=1.4.0,<2.0.0
+logbook>=1.7.0
+numpy>=1.26.0
+
+# HTTP client for zkillboard
+requests>=2.31.0
+requests-cache>=1.1.0
+
+# Data analysis
+scipy>=1.11.0
+scikit-learn>=1.3.0
+
+# Utilities
+python-dateutil>=2.8.0
+pyyaml>=6.0
