@@ -506,6 +506,9 @@ class SkillPlan(models.Model):
         blank=True,
     )
 
+    # Reference plans are shared templates visible to all users
+    is_reference = models.BooleanField(default=False, db_index=True)
+
     # Hierarchical structure - allow sub-plans
     parent = models.ForeignKey(
         'self',
