@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}{% if mode == 'create' %}Create{% else %}Edit{% endif %} Skill Plan - evewire{% endblock %}
+
+{% block content %}
+<h1>{% if mode == 'create' %}Create{% else %}Edit{% endif %} Skill Plan</h1>
+
+<div class="card">
+    <form method="post">
+        {% csrf_token %}
+
+        <div style="margin-bottom: 1rem;">
+            <label for="name" style="display: block; margin-bottom: 0.5rem; font-weight: bold;">Name *</label>
+            <input type="text" name="name" id="name" value="{% if plan %}{{ plan.name }}{% endif %}" required style="width: 100%; padding: 0.5rem; max-width: 400px;">
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+            <label for="description" style="display: block; margin-bottom: 0.5rem; font-weight: bold;">Description</label>
+            <textarea name="description" id="description" rows="4" style="width: 100%; padding: 0.5rem; max-width: 600px;">{% if plan %}{{ plan.description }}{% endif %}</textarea>
+        </div>
+
+        <div style="margin-top: 1rem;">
+            <button type="submit" class="btn">{% if mode == 'create' %}Create{% else %}Save{% endif %} Plan</button>
+            <a href="{% if plan %}{% url 'core:skill_plan_detail' plan.id %}{% else %}{% url 'core:skill_plan_list' %}{% endif %}" style="margin-left: 0.5rem;">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
