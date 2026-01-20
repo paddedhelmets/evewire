@@ -6,6 +6,9 @@ sqlalchemy>=1.4.0,<2.0.0
 logbook>=1.7.0
 numpy>=1.26.0
 
+# Database
+psycopg[binary]>=3.2.0
+
 # HTTP client for zkillboard
 requests>=2.31.0
 requests-cache>=1.1.0
