@@ -175,6 +175,8 @@ class EveScope(models.TextChoices):
 
     SKILLS_READ = 'esi-skills.read_skills.v1', 'Read Skills'
     SKILL_QUEUE_READ = 'esi-skills.read_skillqueue.v1', 'Read Skill Queue'
+    CLONES_READ = 'esi-clones.read_clones.v1', 'Read Clones'
+    IMPLANTS_READ = 'esi-clones.read_implants.v1', 'Read Implants'
     WALLET_READ = 'esi-wallet.read_character_wallet.v1', 'Read Wallet'
     ASSETS_READ = 'esi-assets.read_assets.v1', 'Read Assets'
     ORDERS_READ = 'esi-markets.read_character_orders.v1', 'Read Market Orders'
@@ -185,6 +187,8 @@ class EveScope(models.TextChoices):
         return [
             cls.SKILLS_READ.value[0],
             cls.SKILL_QUEUE_READ.value[0],
+            cls.CLONES_READ.value[0],
+            cls.IMPLANTS_READ.value[0],
             cls.WALLET_READ.value[0],
             cls.ASSETS_READ.value[0],
             cls.ORDERS_READ.value[0],

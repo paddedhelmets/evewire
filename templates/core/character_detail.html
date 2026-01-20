@@ -20,6 +20,78 @@
 </div>
 
 <div class="card">
+    <h2>Attributes</h2>
+    {% if character.attributes %}
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 2px solid #ddd;">
+                    <th style="padding: 0.5rem; text-align: left;">Attribute</th>
+                    <th style="padding: 0.5rem; text-align: center;">Value</th>
+                    <th style="padding: 0.5rem; text-align: left;">Primary For</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 0.5rem;"><strong>Intelligence</strong></td>
+                    <td style="padding: 0.5rem; text-align: center; font-size: 1.2rem;">{{ character.attributes.intelligence }}</td>
+                    <td style="padding: 0.5rem; color: #666;">Electronics, Engineering, Science, Mechanics</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 0.5rem;"><strong>Perception</strong></td>
+                    <td style="padding: 0.5rem; text-align: center; font-size: 1.2rem;">{{ character.attributes.perception }}</td>
+                    <td style="padding: 0.5rem; color: #666;">Spaceship Command, Gunnery, Missiles</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 0.5rem;"><strong>Charisma</strong></td>
+                    <td style="padding: 0.5rem; text-align: center; font-size: 1.2rem;">{{ character.attributes.charisma }}</td>
+                    <td style="padding: 0.5rem; color: #666;">Trade, Social, Leadership</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 0.5rem;"><strong>Willpower</strong></td>
+                    <td style="padding: 0.5rem; text-align: center; font-size: 1.2rem;">{{ character.attributes.willpower }}</td>
+                    <td style="padding: 0.5rem; color: #666;">Command, Advanced Industry</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 0.5rem;"><strong>Memory</strong></td>
+                    <td style="padding: 0.5rem; text-align: center; font-size: 1.2rem;">{{ character.attributes.memory }}</td>
+                    <td style="padding: 0.5rem; color: #666;">Industry, Drones, Learning</td>
+                </tr>
+            </tbody>
+        </table>
+        <p style="color: #666; margin-top: 0.5rem;">Last updated: {{ character.attributes.synced_at|date:"Y-m-d H:i:s" }}</p>
+    {% else %}
+        <p>No attribute data. <a href="{% url 'core:sync_character' character.id %}" class="btn">Sync Now</a></p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2>Implants</h2>
+    {% with implants=character.implants.all %}
+        {% if implants %}
+            <p><strong>{{ implants.count }}</strong> implant{{ implants.count|pluralize }} installed</p>
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="border-bottom: 2px solid #ddd;">
+                        <th style="padding: 0.5rem; text-align: left;">Implant</th>
+                        <th style="padding: 0.5rem; text-align: left;">Slot</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for implant in implants %}
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 0.5rem;">{{ implant.type_name }}</td>
+                        <td style="padding: 0.5rem;">{{ implant.slot|default:"Unknown" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p style="color: #666;">No implants installed.</p>
+        {% endif %}
+    {% endwith %}
+</div>
+
+<div class="card">
     <h2>Wallet</h2>
     {% if character.wallet_balance is not None %}
         <p style="font-size: 1.5rem; font-weight: bold;">

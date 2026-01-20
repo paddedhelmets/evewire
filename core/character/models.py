@@ -115,6 +115,129 @@ class SkillQueueItem(models.Model):
         return min(100.0, max(0.0, (elapsed_seconds / total_seconds) * 100))
 
 
+class CharacterAttributes(models.Model):
+    """
+    Character attributes (affect skill training speed).
+
+    From ESI: GET /characters/{character_id}/attributes/
+
+    Attributes:
+    - intelligence: Primary for Electronics, Engineering, Science, Mechanics
+    - perception: Primary for Spaceship Command, Gunnery, Missiles
+    - charisma: Primary for Trade, Social, Leadership, Corporation Management
+    - willpower: Primary for Command, Advanced Industry
+    - memory: Primary for Industry, Drones, Learning
+    """
+
+    character = models.OneToOneField(
+        'core.Character',
+        on_delete=models.CASCADE,
+        related_name='attributes'
+    )
+
+    # Attribute values (base + bonuses from implants/boosters)
+    intelligence = models.SmallIntegerField(default=20)
+    perception = models.SmallIntegerField(default=20)
+    charisma = models.SmallIntegerField(default=20)
+    willpower = models.SmallIntegerField(default=20)
+    memory = models.SmallIntegerField(default=20)
+
+    # Any additional bonuses from implants/boosters
+    bonus_remap_available = models.IntegerField(default=0)
+
+    # Cache metadata
+    synced_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = _('character attributes')
+        verbose_name_plural = _('character attributes')
+
+    def __str__(self) -> str:
+        return f"{self.character.name} Attributes"
+
+    @property
+    def primary_secondary_pairs(self) -> dict:
+        """
+        Get common skill training attribute pairs.
+
+        Returns mapping of skill categories to (primary, secondary) attributes.
+        """
+        return {
+            'electronics': ('intelligence', 'memory'),
+            'engineering': ('intelligence', 'memory'),
+            'science': ('intelligence', 'memory'),
+            'mechanics': ('intelligence', 'memory'),
+            'spaceship_command': ('perception', 'willpower'),
+            'gunnery': ('perception', 'willpower'),
+            'missiles': ('perception', 'willpower'),
+            'trade': ('charisma', 'intelligence'),
+            'social': ('charisma', 'intelligence'),
+            'leadership': ('charisma', 'willpower'),
+            'corporation_management': ('charisma', 'memory'),
+            'industry': ('memory', 'intelligence'),
+            'drones': ('memory', 'perception'),
+            'resource_processing': ('memory', 'intelligence'),
+            'advanced_industry': ('willpower', 'intelligence'),
+        }
+
+
+class CharacterImplant(models.Model):
+    """
+    An implant installed in a character.
+
+    From ESI: GET /characters/{character_id}/implants/
+
+    Implants occupy slots 1-10 (head) and affect attributes or provide bonuses.
+    """
+
+    character = models.ForeignKey(
+        'core.Character',
+        on_delete=models.CASCADE,
+        related_name='implants'
+    )
+
+    # ESI implant fields
+    type_id = models.IntegerField(db_index=True)  # FK to ItemType
+
+    # Cache metadata
+    synced_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = _('character implant')
+        verbose_name_plural = _('character implants')
+        unique_together = [['character', 'type_id']]
+        ordering = ['character', 'type_id']
+
+    def __str__(self) -> str:
+        return f"{self.character.name}: {self.type_name}"
+
+    @property
+    def type_name(self) -> str:
+        """Get the implant type name from ItemType."""
+        from core.eve.models import ItemType
+        try:
+            return ItemType.objects.get(id=self.type_id).name
+        except ItemType.DoesNotExist:
+            return f"Implant {self.type_id}"
+
+    @property
+    def slot(self) -> int:
+        """
+        Determine implant slot (1-10) based on type attributes.
+
+        This is a simplified version - full implementation would use SDE data.
+        For now, returns 0 (unknown) and can be enhanced later.
+        """
+        # TODO: Parse from dgmTypeAttributes in SDE
+        # Slot 1-5: Attribute implants (INT, PER, CHA, WIL, MEM)
+        # Slot 6: Limited Ocular
+        # Slot 7: Limited Cybernetic
+        # Slot 8: Limited Neural
+        # Slot 9: Limited Hardwiring
+        # Slot 10: Limited Mental
+        return 0
+
+
 class CharacterAsset(MPTTModel):
     """
     An asset owned by a character.
