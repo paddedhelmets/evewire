@@ -274,45 +274,34 @@ class KillmailImporter:
         with conn.cursor() as cur:
             for fit in fits:
                 params = fit.to_sql_values()
-                try:
-                    # Insert killmail metadata (ignore if exists)
-                    # Need to handle both killmail_id and killmail_hash conflicts
-                    try:
-                        cur.execute("""
-                            INSERT INTO killmails
-                            (killmail_id, killmail_hash, killmail_time, solar_system_id,
-                             victim_character_id, victim_corporation_id, victim_alliance_id,
-                             victim_ship_id, is_npc)
-                            VALUES (%(killmail_id)s, %(killmail_hash)s, %(killmail_time)s,
-                                    %(solar_system_id)s, %(victim_character_id)s,
-                                    %(victim_corporation_id)s, %(victim_alliance_id)s,
-                                    %(victim_ship_id)s, %(is_npc)s)
-                            ON CONFLICT (killmail_id) DO NOTHING
-                        """, params)
-                    except psycopg.errors.UniqueViolation:
-                        # Hash conflict - already exists, skip this fit
-                        conn.rollback()
-                        self.stats['duplicates_skipped'] += 1
-                        continue
+                # Insert killmail metadata (upsert on killmail_id)
+                cur.execute("""
+                    INSERT INTO killmails
+                    (killmail_id, killmail_hash, killmail_time, solar_system_id,
+                     victim_character_id, victim_corporation_id, victim_alliance_id,
+                     victim_ship_id, is_npc)
+                    VALUES (%(killmail_id)s, %(killmail_hash)s, %(killmail_time)s,
+                            %(solar_system_id)s, %(victim_character_id)s,
+                            %(victim_corporation_id)s, %(victim_alliance_id)s,
+                            %(victim_ship_id)s, %(is_npc)s)
+                    ON CONFLICT (killmail_id) DO NOTHING
+                """, params)
 
-                    # Insert fit (unique constraint prevents duplicates)
-                    cur.execute("""
-                        INSERT INTO fits
-                        (killmail_id, ship_id, high_slots, med_slots, low_slots,
-                         rig_slots, subsystem_slots, solar_system_id, killed_at)
-                        VALUES (%(killmail_id)s, %(ship_id)s, %(high_slots)s,
-                                %(med_slots)s, %(low_slots)s, %(rig_slots)s,
-                                %(subsystem_slots)s, %(solar_system_id)s, %(killed_at)s)
-                        ON CONFLICT (killmail_id) DO NOTHING
-                    """, params)
+                # Insert fit (upsert on killmail_id)
+                cur.execute("""
+                    INSERT INTO fits
+                    (killmail_id, ship_id, high_slots, med_slots, low_slots,
+                     rig_slots, subsystem_slots, solar_system_id, killed_at)
+                    VALUES (%(killmail_id)s, %(ship_id)s, %(high_slots)s,
+                            %(med_slots)s, %(low_slots)s, %(rig_slots)s,
+                            %(subsystem_slots)s, %(solar_system_id)s, %(killed_at)s)
+                    ON CONFLICT (killmail_id) DO NOTHING
+                """, params)
 
-                    if cur.rowcount > 0:
-                        inserted += 1
-                    else:
-                        self.stats['duplicates_skipped'] += 1
-
-                except Exception as e:
-                    logger.error(f"Error inserting fit {fit.killmail_id}: {e}")
+                if cur.rowcount > 0:
+                    inserted += 1
+                else:
+                    self.stats['duplicates_skipped'] += 1
 
             conn.commit()
 
