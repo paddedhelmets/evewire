@@ -250,6 +250,16 @@ class ESIClient:
         return cls.get(f'/characters/{character.id}/skillqueue/', character)
 
     @classmethod
+    def get_attributes(cls, character) -> ESIResponse:
+        """Get character attributes."""
+        return cls.get(f'/characters/{character.id}/attributes/', character)
+
+    @classmethod
+    def get_implants(cls, character) -> ESIResponse:
+        """Get character implants."""
+        return cls.get(f'/characters/{character.id}/implants/', character)
+
+    @classmethod
     def get_wallet_balance(cls, character) -> ESIResponse:
         """Get character wallet balance."""
         return cls.get(f'/characters/{character.id}/wallet/', character)
@@ -368,6 +378,8 @@ def sync_character_data(character) -> bool:
 
         _sync_skills(character)
         _sync_skill_queue(character)
+        _sync_attributes(character)
+        _sync_implants(character)
         _sync_wallet(character)
         _sync_assets(character)
         _sync_orders(character)
@@ -435,6 +447,44 @@ def _sync_skill_queue(character) -> None:
             level_end_sp=queue_item['level_end_sp'],
             training_start_time=queue_item['start_time'],
             finish_date=queue_item['finish_date'],
+        )
+
+
+def _sync_attributes(character) -> None:
+    """Sync character attributes from ESI."""
+    from core.character.models import CharacterAttributes
+
+    response = ESIClient.get_attributes(character)
+    attrs_data = response.data
+
+    CharacterAttributes.objects.update_or_create(
+        character=character,
+        defaults={
+            'intelligence': attrs_data.get('intelligence', 20),
+            'perception': attrs_data.get('perception', 20),
+            'charisma': attrs_data.get('charisma', 20),
+            'willpower': attrs_data.get('willpower', 20),
+            'memory': attrs_data.get('memory', 20),
+            'bonus_remap_available': attrs_data.get('bonus_remaps', 0),
+        }
+    )
+
+
+def _sync_implants(character) -> None:
+    """Sync character implants from ESI."""
+    from core.character.models import CharacterImplant
+
+    response = ESIClient.get_implants(character)
+    implants_data = response.data
+
+    # Clear old implants
+    CharacterImplant.objects.filter(character=character).delete()
+
+    # Insert new implants
+    for implant_type_id in implants_data:
+        CharacterImplant.objects.create(
+            character=character,
+            type_id=implant_type_id,
         )
 
 
