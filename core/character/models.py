@@ -485,3 +485,170 @@ class MarketOrder(models.Model):
         if self.volume_total == 0:
             return 0.0
         return ((self.volume_total - self.volume_remain) / self.volume_total) * 100
+
+
+class SkillPlan(models.Model):
+    """
+    A skill plan - a collection of skill requirements.
+
+    Skill plans can be hierarchical (parent/child) and represent
+    goals like "Fly Loki" or "Max Industrialist". Each plan contains
+    skill entries with required and recommended levels.
+    """
+
+    name = models.CharField(max_length=255, db_index=True)
+    description = models.TextField(blank=True)
+    owner = models.ForeignKey(
+        'core.User',
+        on_delete=models.CASCADE,
+        related_name='skill_plans',
+        null=True,
+        blank=True,
+    )
+
+    # Hierarchical structure - allow sub-plans
+    parent = models.ForeignKey(
+        'self',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='children'
+    )
+
+    # Display order for sorting
+    display_order = models.IntegerField(default=0)
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _('skill plan')
+        verbose_name_plural = _('skill plans')
+        ordering = ['display_order', 'name']
+        db_table = 'core_skillplan'
+
+    def __str__(self) -> str:
+        return self.name
+
+    def get_all_entries(self):
+        """Get all entries from this plan and all parent plans."""
+        from core.character.models import SkillPlanEntry
+
+        # Start with this plan's entries
+        entry_ids = list(self.entries.values_list('id', flat=True))
+
+        # Add entries from parent plans
+        parent = self.parent
+        while parent:
+            entry_ids.extend(parent.entries.values_list('id', flat=True))
+            parent = parent.parent
+
+        return SkillPlanEntry.objects.filter(id__in=entry_ids)
+
+    def get_progress_for_character(self, character):
+        """
+        Calculate progress for a character against this plan.
+
+        Returns dict with:
+        - total_entries: total skill entries
+        - completed: entries that meet required level
+        - in_progress: entries partially trained
+        - not_started: entries not started
+        - recommended_completed: entries that meet recommended level
+        """
+        entries = self.get_all_entries()
+        character_skills = {s.skill_id: s for s in character.skills.all()}
+
+        total = 0
+        completed = 0
+        in_progress = 0
+        not_started = 0
+        recommended_completed = 0
+
+        for entry in entries:
+            if not entry.level:
+                continue  # Skip entries without required level (recommended-only)
+
+            total += 1
+            skill = character_skills.get(entry.skill_id)
+
+            if not skill:
+                not_started += 1
+            elif skill.skill_level >= entry.level:
+                completed += 1
+                if entry.recommended_level and skill.skill_level >= entry.recommended_level:
+                    recommended_completed += 1
+            elif skill.skill_level > 0:
+                in_progress += 1
+            else:
+                not_started += 1
+
+        return {
+            'total_entries': total,
+            'completed': completed,
+            'in_progress': in_progress,
+            'not_started': not_started,
+            'recommended_completed': recommended_completed,
+            'percent_complete': (completed / total * 100) if total > 0 else 0,
+        }
+
+
+class SkillPlanEntry(models.Model):
+    """
+    A skill requirement within a skill plan.
+
+    Each entry represents a skill with an optional required level
+    and recommended level. The recommended level should always be
+    higher than the required level.
+    """
+
+    skill_plan = models.ForeignKey(
+        SkillPlan,
+        on_delete=models.CASCADE,
+        related_name='entries'
+    )
+
+    skill_id = models.IntegerField(db_index=True)  # FK to ItemType
+
+    # Required level (1-5) - must be met for plan completion
+    level = models.SmallIntegerField(null=True, blank=True)
+
+    # Recommended level (1-5) - optional, higher than required
+    recommended_level = models.SmallIntegerField(null=True, blank=True)
+
+    # Display order for sorting within the plan
+    display_order = models.IntegerField(default=0)
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _('skill plan entry')
+        verbose_name_plural = _('skill plan entries')
+        ordering = ['skill_plan', 'display_order']
+        unique_together = [['skill_plan', 'skill_id']]
+        db_table = 'core_skillplanentry'
+
+    def __str__(self) -> str:
+        return f"{self.skill_plan.name}: {self.skill_name} -> L{self.level}"
+
+    @property
+    def skill_name(self) -> str:
+        """Get the skill name from ItemType."""
+        from core.eve.models import ItemType
+        try:
+            return ItemType.objects.get(id=self.skill_id).name
+        except ItemType.DoesNotExist:
+            return f"Skill {self.skill_id}"
+
+    def clean(self):
+        """Validate that recommended_level > level if both are set."""
+        from django.core.exceptions import ValidationError
+
+        if self.level and self.recommended_level:
+            if self.recommended_level <= self.level:
+                raise ValidationError({
+                    'recommended_level': 'Recommended level must be greater than required level.'
+                })

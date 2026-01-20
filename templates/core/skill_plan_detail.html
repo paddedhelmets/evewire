@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}{{ plan.name }} - Skill Plans - evewire{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+    <h1>{{ plan.name }}</h1>
+    <div>
+        <a href="{% url 'core:skill_plan_edit' plan.id %}" class="btn" style="margin-right: 0.5rem;">Edit Plan</a>
+        <a href="{% url 'core:skill_plan_list' %}">Back to Plans</a>
+    </div>
+</div>
+
+{% if plan.description %}
+<div class="card" style="margin-bottom: 1rem;">
+    <p>{{ plan.description }}</p>
+</div>
+{% endif %}
+
+{% if progress %}
+<div class="card" style="margin-bottom: 1rem;">
+    <h2>Progress</h2>
+    <div style="display: flex; gap: 2rem; margin-bottom: 1rem;">
+        <div>
+            <strong>{{ progress.percent_complete|floatformat:1 }}%</strong> Complete
+        </div>
+        <div>
+            <strong>{{ progress.completed }}</strong> / {{ progress.total_entries }} Required
+        </div>
+        <div>
+            <strong>{{ progress.in_progress }}</strong> In Progress
+        </div>
+        <div>
+            <strong>{{ progress.not_started }}</strong> Not Started
+        </div>
+    </div>
+    <div style="background: #eee; height: 20px; border-radius: 4px; overflow: hidden;">
+        <div style="background: #080; height: 100%; width: {{ progress.percent_complete }}%;"></div>
+    </div>
+</div>
+{% endif %}
+
+<div class="card">
+    <h2>Skills</h2>
+    {% if entries %}
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 2px solid #ddd;">
+                    <th style="padding: 0.5rem; text-align: left;">Skill</th>
+                    <th style="padding: 0.5rem; text-align: center;">Required</th>
+                    <th style="padding: 0.5rem; text-align: center;">Recommended</th>
+                    <th style="padding: 0.5rem; text-align: center;">Current</th>
+                    <th style="padding: 0.5rem; text-align: left;">Status</th>
+                    <th style="padding: 0.5rem; text-align: left;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in entries %}
+                <tr style="border-bottom: 1px solid #eee; {% if item.status == 'completed' %}background: #e6f7e6;{% elif item.status == 'not_started' %}opacity: 0.7;{% endif %}">
+                    <td style="padding: 0.5rem;">
+                        <strong>{{ item.entry.skill_name }}</strong>
+                    </td>
+                    <td style="padding: 0.5rem; text-align: center;">
+                        {% if item.entry.level %}L{{ item.entry.level }}{% else %}&mdash;{% endif %}
+                    </td>
+                    <td style="padding: 0.5rem; text-align: center;">
+                        {% if item.entry.recommended_level %}L{{ item.entry.recommended_level }}{% else %}&mdash;{% endif %}
+                    </td>
+                    <td style="padding: 0.5rem; text-align: center;">
+                        L{{ item.current_level }}
+                    </td>
+                    <td style="padding: 0.5rem;">
+                        {% if item.status == 'completed' %}
+                            <span style="color: #080; font-weight: bold;">✓ Complete</span>
+                        {% elif item.status == 'recommended' %}
+                            <span style="color: #060; font-weight: bold;">✓ Recommended Met</span>
+                        {% elif item.status == 'in_progress' %}
+                            <span style="color: #c60;">In Progress</span>
+                        {% elif item.status == 'not_started' %}
+                            <span style="color: #666;">Not Started</span>
+                        {% else %}
+                            <span style="color: #999;">Unknown</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 0.5rem;">
+                        <form method="post" action="{% url 'core:skill_plan_remove_skill' plan.id item.entry.id %}" style="display: inline;" onsubmit="return confirm('Remove this skill from the plan?');">
+                            {% csrf_token %}
+                            <button type="submit" style="background: none; border: none; color: #c00; cursor: pointer; text-decoration: underline;">Remove</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p style="color: #666;">No skills in this plan yet.</p>
+    {% endif %}
+
+    <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #ddd;">
+        <h3>Add Skill</h3>
+        <form method="post" action="{% url 'core:skill_plan_add_skill' plan.id %}" style="display: flex; gap: 0.5rem; align-items: center;">
+            {% csrf_token %}
+            <input type="text" name="skill_id" placeholder="Skill ID" required style="padding: 0.5rem;">
+            <select name="level" style="padding: 0.5rem;">
+                <option value="">Required Level</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+            </select>
+            <select name="recommended_level" style="padding: 0.5rem;">
+                <option value="">Recommended Level</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+            </select>
+            <button type="submit" class="btn">Add Skill</button>
+        </form>
+        <p style="color: #666; font-size: 0.9rem; margin-top: 0.5rem;">
+            Note: You'll need the Skill ID from the <a href="{% url 'core:skills_list' %}" target="_blank">skills list</a>.
+        </p>
+    </div>
+</div>
+{% endblock %}

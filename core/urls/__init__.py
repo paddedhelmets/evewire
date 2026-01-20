@@ -16,4 +16,16 @@ urlpatterns = [
     path('character/<int:character_id>/', views.character_detail, name='character_detail'),
     path('character/<int:character_id>/sync/', views.sync_character, name='sync_character'),
     path('theme/toggle/', views.toggle_theme, name='toggle_theme'),
+
+    # Skill plans
+    path('plans/', views.skill_plan_list, name='skill_plan_list'),
+    path('plans/create/', views.skill_plan_create, name='skill_plan_create'),
+    path('plans/<int:plan_id>/', views.skill_plan_detail, name='skill_plan_detail'),
+    path('plans/<int:plan_id>/edit/', views.skill_plan_edit, name='skill_plan_edit'),
+    path('plans/<int:plan_id>/delete/', views.skill_plan_delete, name='skill_plan_delete'),
+    path('plans/<int:plan_id>/add-skill/', views.skill_plan_add_skill, name='skill_plan_add_skill'),
+    path('plans/<int:plan_id>/remove-skill/<int:entry_id>/', views.skill_plan_remove_skill, name='skill_plan_remove_skill'),
+
+    # Skills
+    path('skills/', views.skills_list, name='skills_list'),
 ]

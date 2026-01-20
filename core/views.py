@@ -11,6 +11,7 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_http_methods
 from django.http import HttpRequest, HttpResponse
 from django.urls import reverse
+from django.db import models
 
 logger = logging.getLogger('evewire')
 
@@ -171,3 +172,303 @@ def sync_character(request: HttpRequest, character_id: int) -> HttpResponse:
     if referer:
         return redirect(referer)
     return redirect('character_detail', character_id=character_id)
+
+
+# Skill Plan Views
+
+@login_required
+def skill_plan_list(request: HttpRequest) -> HttpResponse:
+    """List all skill plans for the current user."""
+    from core.character.models import SkillPlan
+
+    plans = SkillPlan.objects.filter(owner=request.user, parent__isnull=True)
+    return render(request, 'core/skill_plan_list.html', {
+        'plans': plans,
+    })
+
+
+@login_required
+def skill_plan_detail(request: HttpRequest, plan_id: int) -> HttpResponse:
+    """Show a single skill plan with progress for the user's character."""
+    from core.character.models import SkillPlan
+    from core.models import Character
+
+    try:
+        plan = SkillPlan.objects.get(id=plan_id)
+    except SkillPlan.DoesNotExist:
+        return render(request, 'core/error.html', {
+            'message': 'Skill plan not found',
+        }, status=404)
+
+    # Get user's character
+    try:
+        character = Character.objects.get(user=request.user)
+    except Character.DoesNotExist:
+        character = None
+
+    # Get progress if character exists
+    progress = None
+    character_skills = {}
+    if character:
+        progress = plan.get_progress_for_character(character)
+        character_skills = {s.skill_id: s for s in character.skills.all()}
+
+    # Get entries with character skill status
+    entries = []
+    for entry in plan.entries.all():
+        skill = character_skills.get(entry.skill_id)
+        status = 'unknown'
+        current_level = 0
+
+        if skill:
+            current_level = skill.skill_level
+            if entry.level and current_level >= entry.level:
+                status = 'completed'
+            elif entry.recommended_level and current_level >= entry.recommended_level:
+                status = 'recommended'
+            elif current_level > 0:
+                status = 'in_progress'
+            else:
+                status = 'not_started'
+        elif entry.level:
+            status = 'not_started'
+
+        entries.append({
+            'entry': entry,
+            'current_level': current_level,
+            'status': status,
+        })
+
+    return render(request, 'core/skill_plan_detail.html', {
+        'plan': plan,
+        'entries': entries,
+        'progress': progress,
+        'character': character,
+    })
+
+
+@login_required
+@require_http_methods(['GET', 'POST'])
+def skill_plan_create(request: HttpRequest) -> HttpResponse:
+    """Create a new skill plan."""
+    from core.character.models import SkillPlan
+    from django.contrib import messages
+
+    if request.method == 'POST':
+        name = request.POST.get('name')
+        description = request.POST.get('description', '')
+
+        if not name:
+            messages.error(request, 'Plan name is required.')
+            return render(request, 'core/skill_plan_form.html', {
+                'mode': 'create',
+            })
+
+        # Get display order
+        max_order = SkillPlan.objects.filter(
+            owner=request.user,
+            parent__isnull=True
+        ).aggregate(max_order=models.Max('display_order'))['max_order'] or 0
+
+        plan = SkillPlan.objects.create(
+            name=name,
+            description=description,
+            owner=request.user,
+            display_order=max_order + 1,
+        )
+
+        messages.success(request, f'Skill plan "{name}" created.')
+        return redirect('core:skill_plan_detail', plan_id=plan.id)
+
+    return render(request, 'core/skill_plan_form.html', {
+        'mode': 'create',
+    })
+
+
+@login_required
+@require_http_methods(['GET', 'POST'])
+def skill_plan_edit(request: HttpRequest, plan_id: int) -> HttpResponse:
+    """Edit an existing skill plan."""
+    from core.character.models import SkillPlan
+    from django.contrib import messages
+
+    try:
+        plan = SkillPlan.objects.get(id=plan_id, owner=request.user)
+    except SkillPlan.DoesNotExist:
+        messages.error(request, 'Skill plan not found.')
+        return redirect('core:skill_plan_list')
+
+    if request.method == 'POST':
+        plan.name = request.POST.get('name', plan.name)
+        plan.description = request.POST.get('description', plan.description)
+        plan.save()
+
+        messages.success(request, 'Skill plan updated.')
+        return redirect('core:skill_plan_detail', plan_id=plan.id)
+
+    return render(request, 'core/skill_plan_form.html', {
+        'mode': 'edit',
+        'plan': plan,
+    })
+
+
+@login_required
+@require_http_methods(['POST'])
+def skill_plan_delete(request: HttpRequest, plan_id: int) -> HttpResponse:
+    """Delete a skill plan."""
+    from core.character.models import SkillPlan
+    from django.contrib import messages
+
+    try:
+        plan = SkillPlan.objects.get(id=plan_id, owner=request.user)
+    except SkillPlan.DoesNotExist:
+        messages.error(request, 'Skill plan not found.')
+        return redirect('core:skill_plan_list')
+
+    plan_name = plan.name
+    plan.delete()
+
+    messages.success(request, f'Skill plan "{plan_name}" deleted.')
+    return redirect('core:skill_plan_list')
+
+
+@login_required
+@require_http_methods(['POST'])
+def skill_plan_add_skill(request: HttpRequest, plan_id: int) -> HttpResponse:
+    """Add a skill to a skill plan."""
+    from core.character.models import SkillPlan, SkillPlanEntry
+    from core.eve.models import ItemType
+    from django.contrib import messages
+
+    try:
+        plan = SkillPlan.objects.get(id=plan_id, owner=request.user)
+    except SkillPlan.DoesNotExist:
+        return render(request, 'core/error.html', {
+            'message': 'Skill plan not found',
+        }, status=404)
+
+    skill_id = request.POST.get('skill_id')
+    level = request.POST.get('level')
+    recommended_level = request.POST.get('recommended_level')
+
+    if not skill_id:
+        messages.error(request, 'Skill is required.')
+        return redirect('core:skill_plan_detail', plan_id=plan.id)
+
+    # Validate skill exists
+    try:
+        ItemType.objects.get(id=skill_id)
+    except ItemType.DoesNotExist:
+        messages.error(request, 'Invalid skill.')
+        return redirect('core:skill_plan_detail', plan_id=plan.id)
+
+    # Validate levels
+    if level:
+        try:
+            level = int(level)
+            if not 1 <= level <= 5:
+                raise ValueError()
+        except (ValueError, TypeError):
+            messages.error(request, 'Level must be between 1 and 5.')
+            return redirect('core:skill_plan_detail', plan_id=plan.id)
+
+    if recommended_level:
+        try:
+            recommended_level = int(recommended_level)
+            if not 1 <= recommended_level <= 5:
+                raise ValueError()
+        except (ValueError, TypeError):
+            messages.error(request, 'Recommended level must be between 1 and 5.')
+            return redirect('core:skill_plan_detail', plan_id=plan.id)
+
+    # Check if skill already in plan
+    if SkillPlanEntry.objects.filter(skill_plan=plan, skill_id=skill_id).exists():
+        messages.error(request, 'Skill already in plan.')
+        return redirect('core:skill_plan_detail', plan_id=plan.id)
+
+    # Get display order
+    max_order = SkillPlanEntry.objects.filter(
+        skill_plan=plan
+    ).aggregate(max_order=models.Max('display_order'))['max_order'] or 0
+
+    SkillPlanEntry.objects.create(
+        skill_plan=plan,
+        skill_id=skill_id,
+        level=level,
+        recommended_level=recommended_level,
+        display_order=max_order + 1,
+    )
+
+    messages.success(request, 'Skill added to plan.')
+    return redirect('core:skill_plan_detail', plan_id=plan.id)
+
+
+@login_required
+@require_http_methods(['POST'])
+def skill_plan_remove_skill(request: HttpRequest, plan_id: int, entry_id: int) -> HttpResponse:
+    """Remove a skill from a skill plan."""
+    from core.character.models import SkillPlan, SkillPlanEntry
+    from django.contrib import messages
+
+    try:
+        plan = SkillPlan.objects.get(id=plan_id, owner=request.user)
+        entry = SkillPlanEntry.objects.get(id=entry_id, skill_plan=plan)
+    except (SkillPlan.DoesNotExist, SkillPlanEntry.DoesNotExist):
+        messages.error(request, 'Skill plan or entry not found.')
+        return redirect('core:skill_plan_list')
+
+    entry.delete()
+    messages.success(request, 'Skill removed from plan.')
+    return redirect('core:skill_plan_detail', plan_id=plan.id)
+
+
+@login_required
+def skills_list(request: HttpRequest) -> HttpResponse:
+    """List all skills with search and filtering."""
+    from core.character.models import CharacterSkill
+    from core.models import Character
+    from core.eve.models import ItemType
+
+    # Get user's character
+    try:
+        character = Character.objects.get(user=request.user)
+    except Character.DoesNotExist:
+        return render(request, 'core/error.html', {
+            'message': 'Character not found. Please log in again.',
+        }, status=404)
+
+    # Get search/filter parameters
+    search = request.GET.get('search', '')
+    group_id = request.GET.get('group', '')
+    min_level = request.GET.get('min_level', '')
+
+    # Start with all character skills
+    skills_qs = CharacterSkill.objects.filter(character=character).select_related()
+
+    # Apply filters
+    if search:
+        # Search by skill name
+        skill_ids = ItemType.objects.filter(name__icontains=search).values_list('id', flat=True)
+        skills_qs = skills_qs.filter(skill_id__in=skill_ids)
+
+    if group_id:
+        # Filter by group (need to implement this properly with SDE data)
+        # For now, skip this filter
+        pass
+
+    if min_level:
+        try:
+            min_level = int(min_level)
+            skills_qs = skills_qs.filter(skill_level__gte=min_level)
+        except ValueError:
+            pass
+
+    skills = skills_qs.order_by('-skill_level', 'skill_id')
+
+    return render(request, 'core/skills_list.html', {
+        'character': character,
+        'skills': skills,
+        'search': search,
+        'group': group_id,
+        'min_level': min_level,
+    })

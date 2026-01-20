@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}Skills - {{ character.name }} - evewire{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+    <h1>Skills - {{ character.name }}</h1>
+    <a href="{% url 'core:character_detail' character.id %}">Back to Character</a>
+</div>
+
+<div class="card">
+    <h2>Filter Skills</h2>
+    <form method="get" style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+        <input type="text" name="search" placeholder="Search skills..." value="{{ search }}" style="padding: 0.5rem;">
+        <select name="min_level" style="padding: 0.5rem;">
+            <option value="">All Levels</option>
+            <option value="1" {% if min_level == '1' %}selected{% endif %}>Level 1+</option>
+            <option value="2" {% if min_level == '2' %}selected{% endif %}>Level 2+</option>
+            <option value="3" {% if min_level == '3' %}selected{% endif %}>Level 3+</option>
+            <option value="4" {% if min_level == '4' %}selected{% endif %}>Level 4+</option>
+            <option value="5" {% if min_level == '5' %}selected{% endif %}>Level 5</option>
+        </select>
+        <button type="submit" class="btn">Filter</button>
+        <a href="{% url 'core:skills_list' %}" style="margin-left: 0.5rem;">Clear</a>
+    </form>
+</div>
+
+<div class="card">
+    <h2>
+        {% if search or min_level %}
+            Filtered Skills
+            ({{ skills.count }} match{{ skills.count|pluralize }})
+        {% else %}
+            All Skills
+            ({{ skills.count }} total)
+        {% endif %}
+    </h2>
+
+    {% if skills %}
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 2px solid #ddd;">
+                    <th style="padding: 0.5rem; text-align: left;">Skill</th>
+                    <th style="padding: 0.5rem; text-align: center;">Level</th>
+                    <th style="padding: 0.5rem; text-align: right;">Skill Points</th>
+                    <th style="padding: 0.5rem; text-align: left;">Skill ID</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for skill in skills %}
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 0.5rem;">
+                        <strong>{{ skill.skill_name }}</strong>
+                    </td>
+                    <td style="padding: 0.5rem; text-align: center;">
+                        <span style="color: {% if skill.skill_level == 5 %}#c00{% elif skill.skill_level == 4 %}#c60{% elif skill.skill_level == 3 %}#c90{% else %}#666{% endif %}; font-weight: bold; font-size: 1.1rem;">
+                            {{ skill.skill_level }}
+                        </span>
+                    </td>
+                    <td style="padding: 0.5rem; text-align: right;">{{ skill.skillpoints_in_skill|default:0 }}</td>
+                    <td style="padding: 0.5rem; font-family: monospace; color: #666;">{{ skill.skill_id }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p style="color: #666;">No skills match your filter.</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2>Skill Statistics</h2>
+    <div style="display: flex; gap: 2rem;">
+        <div>
+            <strong>Total SP:</strong> {{ character.total_sp|default:0 }}
+        </div>
+        <div>
+            <strong>Trained Skills:</strong> {{ character.skills.count }}
+        </div>
+        <div>
+            <strong>Level 5 Skills:</strong> {{ character.skills.filter|default:""|filter:"skill_level:5"|default:"0" }}
+        </div>
+    </div>
+</div>
+{% endblock %}
