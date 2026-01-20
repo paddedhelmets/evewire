@@ -178,12 +178,15 @@ def sync_character(request: HttpRequest, character_id: int) -> HttpResponse:
 
 @login_required
 def skill_plan_list(request: HttpRequest) -> HttpResponse:
-    """List all skill plans for the current user."""
+    """List all skill plans for the current user plus reference plans."""
     from core.character.models import SkillPlan
 
-    plans = SkillPlan.objects.filter(owner=request.user, parent__isnull=True)
+    user_plans = SkillPlan.objects.filter(owner=request.user, parent__isnull=True, is_reference=False)
+    reference_plans = SkillPlan.objects.filter(parent__isnull=True, is_reference=True)
+
     return render(request, 'core/skill_plan_list.html', {
-        'plans': plans,
+        'user_plans': user_plans,
+        'reference_plans': reference_plans,
     })
 
 

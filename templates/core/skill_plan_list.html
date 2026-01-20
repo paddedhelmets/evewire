@@ -16,8 +16,34 @@
     </div>
 </div>
 
+{% if reference_plans %}
+<div class="card" style="margin-bottom: 1rem;">
+    <h2>Reference Plans</h2>
+    <p style="color: #666; margin-bottom: 1rem;">Shared skill plan templates from the alliance. View details to check your progress.</p>
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid #ddd;">
+                <th style="padding: 0.5rem; text-align: left;">Plan</th>
+                <th style="padding: 0.5rem; text-align: center;">Entries</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for plan in reference_plans %}
+            <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 0.5rem;">
+                    <a href="{% url 'core:skill_plan_detail' plan.id %}" style="font-weight: bold; text-decoration: none;">{{ plan.name }}</a>
+                </td>
+                <td style="padding: 0.5rem; text-align: center;">{{ plan.entries.count }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
 <div class="card">
-    {% if plans %}
+    <h2>My Plans</h2>
+    {% if user_plans %}
         <table style="width: 100%; border-collapse: collapse;">
             <thead>
                 <tr style="border-bottom: 2px solid #ddd;">
@@ -28,7 +54,7 @@
                 </tr>
             </thead>
             <tbody>
-                {% for plan in plans %}
+                {% for plan in user_plans %}
                 <tr style="border-bottom: 1px solid #eee;">
                     <td style="padding: 0.5rem;">
                         <a href="{% url 'core:skill_plan_detail' plan.id %}" style="font-weight: bold; text-decoration: none;">{{ plan.name }}</a>
