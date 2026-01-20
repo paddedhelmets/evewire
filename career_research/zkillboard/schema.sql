@@ -68,6 +68,3 @@ SELECT
 FROM fits
 GROUP BY ship_id
 WITH DATA;
-
--- Unique constraint to prevent duplicate imports
-CREATE UNIQUE INDEX IF NOT EXISTS idx_killmails_hash ON killmails(killmail_hash);
