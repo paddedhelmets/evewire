@@ -8,6 +8,8 @@
     <h1>{{ plan.name }}</h1>
     <div>
         <a href="{% url 'core:skill_plan_edit' plan.id %}" class="btn" style="margin-right: 0.5rem;">Edit Plan</a>
+        <a href="{% url 'core:skill_plan_export' plan.id %}?prereqs=1&known=0" class="btn" style="margin-right: 0.5rem;">Export (with prereqs)</a>
+        <a href="{% url 'core:skill_plan_export' plan.id %}?prereqs=0&known=0" class="btn" style="margin-right: 0.5rem;">Export (plan only)</a>
         <a href="{% url 'core:skill_plan_list' %}">Back to Plans</a>
     </div>
 </div>

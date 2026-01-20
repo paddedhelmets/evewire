@@ -472,3 +472,80 @@ def skills_list(request: HttpRequest) -> HttpResponse:
         'group': group_id,
         'min_level': min_level,
     })
+
+
+# Skill Plan Import/Export Views
+
+@login_required
+def skill_plan_export(request: HttpRequest, plan_id: int) -> HttpResponse:
+    """Export a skill plan to EVE XML format."""
+    from core.character.models import SkillPlan
+    from core.models import Character
+    from core.skill_plans import SkillPlanExporter
+
+    try:
+        plan = SkillPlan.objects.get(id=plan_id, owner=request.user)
+    except SkillPlan.DoesNotExist:
+        return render(request, 'core/error.html', {
+            'message': 'Skill plan not found.',
+        }, status=404)
+
+    # Get options
+    include_prereqs = request.GET.get('prereqs', '1') == '1'
+    include_known = request.GET.get('known', '0') == '1'
+
+    # Get user's character for checking known skills
+    character = None
+    if not include_known:
+        try:
+            character = Character.objects.get(user=request.user)
+        except Character.DoesNotExist:
+            pass
+
+    # Generate XML
+    xml_content = SkillPlanExporter.export_to_xml(
+        plan,
+        character=character,
+        include_prereqs=include_prereqs,
+        include_known=include_known,
+    )
+
+    # Create response
+    response = HttpResponse(xml_content, content_type='application/xml')
+    filename = f"{plan.name}.xml"
+    filename = filename.replace(' ', '_').replace('/', '_')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+@login_required
+@require_http_methods(['GET', 'POST'])
+def skill_plan_import(request: HttpRequest) -> HttpResponse:
+    """Import a skill plan from EVE XML format."""
+    from core.skill_plans import SkillPlanImporter
+    from django.contrib import messages
+
+    if request.method == 'POST':
+        xml_file = request.FILES.get('xml_file')
+        plan_name = request.POST.get('name', '')
+
+        if not xml_file:
+            messages.error(request, 'Please select an XML file to import.')
+            return render(request, 'core/skill_plan_import.html')
+
+        try:
+            xml_content = xml_file.read().decode('utf-8')
+            plan = SkillPlanImporter.import_from_xml(
+                xml_content,
+                owner=request.user,
+                name=plan_name or None,
+            )
+            messages.success(request, f'Skill plan "{plan.name}" imported successfully.')
+            return redirect('core:skill_plan_detail', plan_id=plan.id)
+
+        except Exception as e:
+            messages.error(request, f'Failed to import skill plan: {e}')
+            logger.error(f'Skill plan import failed: {e}')
+            return render(request, 'core/skill_plan_import.html')
+
+    return render(request, 'core/skill_plan_import.html')
