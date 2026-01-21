@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}Order History - {{ character.name }} - evewire{% endblock %}
+
+{% block content %}
+<h1>Market Order History - {{ character.name }}</h1>
+
+<div style="margin-bottom: 1rem;">
+    <a href="{% url 'core:dashboard' %}">Dashboard</a>
+    <span style="margin: 0 0.5rem;">&rarr;</span>
+    <a href="{% url 'core:character_detail' character.id %}">{{ character.name }}</a>
+    <span style="margin: 0 0.5rem;">&rarr;</span>
+    <a href="{% url 'core:character_market_orders' character.id %}">Market Orders</a>
+    <span style="margin: 0 0.5rem;">&rarr;</span>
+    <span>History</span>
+</div>
+
+<div class="card">
+    <h2>Filters</h2>
+    <form method="get" style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end;">
+        <div>
+            <label for="type" style="display: block; margin-bottom: 0.25rem;">Order Type:</label>
+            <select name="type" id="type" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
+                <option value="">All Orders</option>
+                <option value="buy" {% if order_type == 'buy' %}selected{% endif %}>Buy Orders</option>
+                <option value="sell" {% if order_type == 'sell' %}selected{% endif %}>Sell Orders</option>
+            </select>
+        </div>
+        <div>
+            <label for="state" style="display: block; margin-bottom: 0.25rem;">State:</label>
+            <select name="state" id="state" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
+                <option value="">All States</option>
+                <option value="closed" {% if state_filter == 'closed' %}selected{% endif %}>Closed (Filled)</option>
+                <option value="expired" {% if state_filter == 'expired' %}selected{% endif %}>Expired</option>
+                <option value="cancelled" {% if state_filter == 'cancelled' %}selected{% endif %}>Cancelled</option>
+            </select>
+        </div>
+        <button type="submit" class="btn">Apply Filters</button>
+        <a href="{% url 'core:character_market_orders_history' character.id %}" class="btn" style="background: var(--text-secondary);">Clear</a>
+    </form>
+</div>
+
+{% if orders %}
+<div class="card">
+    <h2>Order History ({{ orders.paginator.count }} total)</h2>
+    <p style="color: var(--text-secondary); font-size: 0.9rem;">
+        Historical orders are retained for up to 1 year. Only closed, expired, and cancelled orders are shown here.
+        For active orders, see the <a href="{% url 'core:character_market_orders' character.id %}">Market Orders</a> page.
+    </p>
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid var(--border-color);">
+                <th style="padding: 0.75rem; text-align: left;">Type</th>
+                <th style="padding: 0.75rem; text-align: left;">Item</th>
+                <th style="padding: 0.75rem; text-align: right;">Price</th>
+                <th style="padding: 0.75rem; text-align: right;">Filled</th>
+                <th style="padding: 0.75rem; text-align: right;">Total Value</th>
+                <th style="padding: 0.75rem; text-align: left;">Station</th>
+                <th style="padding: 0.75rem; text-align: left;">Issued</th>
+                <th style="padding: 0.75rem; text-align: left;">State</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for order in orders %}
+            <tr style="border-bottom: 1px solid var(--table-border);">
+                <td style="padding: 0.75rem;">
+                    <span style="color: {% if order.is_buy_order %}var(--alert-success-text){% else %}var(--alert-error-text){% endif %}; font-weight: bold;">
+                        {% if order.is_buy_order %}BUY{% else %}SELL{% endif %}
+                    </span>
+                </td>
+                <td style="padding: 0.75rem;">{{ order.type_name }}</td>
+                <td style="padding: 0.75rem; text-align: right;">{{ order.price|isk_format }}</td>
+                <td style="padding: 0.75rem; text-align: right;">
+                    {{ order.volume_total|add:"-"|add:order.volume_remain }}/{{ order.volume_total }}
+                    ({{ order.fill_percent|floatformat:0 }}%)
+                </td>
+                <td style="padding: 0.75rem; text-align: right;">{{ order.price|multiply:order.volume_total|multiply:order.fill_percent|multiply:"0.01"|isk_format }}</td>
+                <td style="padding: 0.75rem; font-size: 0.9rem;">{{ order.station_id }}</td>
+                <td style="padding: 0.75rem;">{{ order.issued|date:"M d H:i" }}</td>
+                <td style="padding: 0.75rem;">
+                    <span style="font-size: 0.9rem; padding: 2px 6px; border-radius: 3px; background: {% if order.state == 'closed' %}var(--alert-success-bg){% elif order.state == 'expired' %}var(--alert-warning-bg){% else %}var(--alert-error-bg){% endif %}; color: {% if order.state == 'closed' %}var(--alert-success-text){% elif order.state == 'expired' %}var(--alert-warning-text){% else %}var(--alert-error-text){% endif %};">
+                        {{ order.state|title }}
+                    </span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if orders.has_other_pages %}
+    <div style="margin-top: 1.5rem; display: flex; justify-content: center; gap: 0.5rem; align-items: center;">
+        {% if orders.has_previous %}
+            <a href="?page={{ orders.previous_page_number }}{% if order_type %}&type={{ order_type }}{% endif %}{% if state_filter %}&state={{ state_filter }}{% endif %}" class="btn">&laquo; Previous</a>
+        {% endif %}
+
+        <span>
+            Page {{ orders.number }} of {{ orders.paginator.num_pages }}
+        </span>
+
+        {% if orders.has_next %}
+            <a href="?page={{ orders.next_page_number }}{% if order_type %}&type={{ order_type }}{% endif %}{% if state_filter %}&state={{ state_filter }}{% endif %}" class="btn">Next &raquo;</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% else %}
+<div class="card">
+    <p>No historical orders found.</p>
+</div>
+{% endif %}
+
+<div style="margin-bottom: 1rem;">
+    <a href="{% url 'core:character_market_orders' character.id %}" class="btn">Active Orders</a>
+    <a href="{% url 'core:character_detail' character.id %}" class="btn" style="margin-left: 0.5rem;">Back to Character</a>
+</div>
+{% endblock %}

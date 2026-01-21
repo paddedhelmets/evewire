@@ -487,6 +487,74 @@ class MarketOrder(models.Model):
         return ((self.volume_total - self.volume_remain) / self.volume_total) * 100
 
 
+class MarketOrderHistory(models.Model):
+    """
+    A historical market order (closed, expired, or cancelled).
+
+    From ESI: GET /characters/{character_id}/orders/history/
+
+    This stores orders that are no longer active but were once open.
+    Unlike MarketOrder, these are historical records and don't change.
+    """
+
+    character = models.ForeignKey(
+        'core.Character',
+        on_delete=models.CASCADE,
+        related_name='market_order_history'
+    )
+
+    # ESI fields (same as MarketOrder)
+    order_id = models.BigIntegerField(primary_key=True)
+    is_buy_order = models.BooleanField(default=False)
+    type_id = models.IntegerField(db_index=True)  # FK to ItemType
+    region_id = models.IntegerField(db_index=True)
+    station_id = models.BigIntegerField()
+    system_id = models.IntegerField()
+    volume_remain = models.IntegerField()
+    volume_total = models.IntegerField()
+    min_volume = models.IntegerField(default=1)
+    price = models.DecimalField(max_digits=20, decimal_places=2)
+    issued = models.DateTimeField()
+    duration = models.IntegerField()  # Days
+    range = models.CharField(max_length=20)  # station, region, solar_system, X jumps
+    state = models.CharField(max_length=20)  # closed, expired, cancelled
+    escrow = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+
+    # Cache metadata
+    synced_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = _('market order history')
+        verbose_name_plural = _('market order history')
+        ordering = ['-issued']
+
+    def __str__(self) -> str:
+        action = "BUY" if self.is_buy_order else "SELL"
+        return f"{self.character.name}: {action} {self.volume_remain}/{self.volume_total} Type {self.type_id} @ {self.price} [{self.state}]"
+
+    @property
+    def type_name(self) -> str:
+        """Get the item type name from ItemType."""
+        from core.eve.models import ItemType
+        try:
+            return ItemType.objects.get(id=self.type_id).name
+        except ItemType.DoesNotExist:
+            return f"Type {self.type_id}"
+
+    @property
+    def expires_at(self) -> timezone.datetime:
+        """Calculate when this order expired."""
+        from django.utils import timezone
+        return self.issued + timezone.timedelta(days=self.duration)
+
+    @property
+    def fill_percent(self) -> float:
+        """Calculate how much of the order was filled."""
+        if self.volume_total == 0:
+            return 0.0
+        return ((self.volume_total - self.volume_remain) / self.volume_total) * 100
+
+
 class SkillPlan(models.Model):
     """
     A skill plan - a collection of skill requirements.

@@ -40,4 +40,10 @@ urlpatterns = [
     path('character/<int:character_id>/wallet/transactions/', views.wallet_transactions, name='character_wallet_transactions'),
     path('character/<int:character_id>/wallet/balance/', views.wallet_balance, name='character_wallet_balance'),
     path('character/<int:character_id>/wallet/summary/', views.wallet_summary, name='character_wallet_summary'),
+
+    # Market Orders
+    path('market/orders/', views.market_orders, name='market_orders'),
+    path('character/<int:character_id>/market/orders/', views.market_orders, name='character_market_orders'),
+    path('market/orders/history/', views.market_orders_history, name='market_orders_history'),
+    path('character/<int:character_id>/market/orders/history/', views.market_orders_history, name='character_market_orders_history'),
 ]
