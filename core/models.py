@@ -230,6 +230,7 @@ class Character(models.Model):
     skills_synced_at = models.DateTimeField(null=True, blank=True)
     industry_jobs_synced_at = models.DateTimeField(null=True, blank=True)
     orders_synced_at = models.DateTimeField(null=True, blank=True)
+    contracts_synced_at = models.DateTimeField(null=True, blank=True)
 
     # Sync status
     last_sync_status = models.CharField(

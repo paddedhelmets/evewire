@@ -901,3 +901,205 @@ class IndustryJob(models.Model):
             return False
         remaining = self.end_date - timezone.now()
         return remaining.total_seconds() <= 3600  # 1 hour
+
+
+class Contract(models.Model):
+    """
+    A contract for a character.
+
+    From ESI: GET /characters/{character_id}/contracts/
+
+    Contract Types:
+    - item_exchange: Exchange items and/or ISK
+    - auction: Auction with buyout option
+    - courier: Courier contract (move items)
+    - loan: Loan contract
+
+    Contract Status:
+    - outstanding: Available to be accepted
+    - in_progress: Accepted, in progress
+    - finished_issuer: Completed, awaiting issuer completion
+    - finished_contractor: Completed, awaiting contractor completion
+    - finished: Fully completed
+    - cancelled: Cancelled by issuer
+    - rejected: Rejected by contractor
+    - failed: Failed (e.g., courier contract expired)
+
+    Availability:
+    - public: Public contract
+    - personal: Personal contract
+    - corporation: Corporation contract
+    - alliance: Alliance contract
+    """
+
+    character = models.ForeignKey(
+        'core.Character',
+        on_delete=models.CASCADE,
+        related_name='contracts'
+    )
+
+    # ESI contract fields
+    contract_id = models.BigIntegerField(primary_key=True)
+    type = models.CharField(max_length=20)  # item_exchange, auction, courier, loan
+    status = models.CharField(max_length=25, db_index=True)  # outstanding, in_progress, finished, etc.
+    title = models.CharField(max_length=255, blank=True)
+
+    for_corporation = models.BooleanField(default=False)
+    availability = models.CharField(max_length=20)  # public, personal, corporation, alliance
+
+    date_issued = models.DateTimeField(db_index=True)
+    date_expired = models.DateTimeField(db_index=True)
+    date_accepted = models.DateTimeField(null=True, blank=True)
+    date_completed = models.DateTimeField(null=True, blank=True)
+
+    issuer_id = models.IntegerField(db_index=True)
+    issuer_corporation_id = models.IntegerField()
+    assignee_id = models.IntegerField(null=True, blank=True)
+    acceptor_id = models.IntegerField(null=True, blank=True)
+
+    days_to_complete = models.IntegerField(null=True, blank=True)
+    price = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    reward = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    collateral = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    buyout = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    volume = models.FloatField(null=True, blank=True)
+
+    # Cache metadata
+    synced_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = _('contract')
+        verbose_name_plural = _('contracts')
+        ordering = ['-date_issued']
+
+    def __str__(self) -> str:
+        return f"{self.character.name}: {self.type} contract {self.contract_id} [{self.status}]"
+
+    @property
+    def type_name(self) -> str:
+        """Get human-readable type name."""
+        TYPE_NAMES = {
+            'item_exchange': 'Item Exchange',
+            'auction': 'Auction',
+            'courier': 'Courier',
+            'loan': 'Loan',
+        }
+        return TYPE_NAMES.get(self.type, f'Type {self.type}')
+
+    @property
+    def status_name(self) -> str:
+        """Get human-readable status name."""
+        STATUS_NAMES = {
+            'outstanding': 'Outstanding',
+            'in_progress': 'In Progress',
+            'finished_issuer': 'Finished (Issuer)',
+            'finished_contractor': 'Finished (Contractor)',
+            'finished': 'Completed',
+            'cancelled': 'Cancelled',
+            'rejected': 'Rejected',
+            'failed': 'Failed',
+        }
+        return STATUS_NAMES.get(self.status, self.status.replace('_', ' ').title())
+
+    @property
+    def availability_name(self) -> str:
+        """Get human-readable availability name."""
+        AVAILABILITY_NAMES = {
+            'public': 'Public',
+            'personal': 'Personal',
+            'corporation': 'Corporation',
+            'alliance': 'Alliance',
+        }
+        return AVAILABILITY_NAMES.get(self.availability, self.availability.title())
+
+    @property
+    def is_active(self) -> bool:
+        """Check if this contract is active (outstanding or in_progress)."""
+        return self.status in ('outstanding', 'in_progress')
+
+    @property
+    def is_completed(self) -> bool:
+        """Check if this contract is completed."""
+        return self.status in ('finished_issuer', 'finished_contractor', 'finished')
+
+    @property
+    def is_failed(self) -> bool:
+        """Check if this contract failed."""
+        return self.status in ('cancelled', 'rejected', 'failed')
+
+    @property
+    def is_expired(self) -> bool:
+        """Check if this contract has expired."""
+        from django.utils import timezone
+        return self.date_expired <= timezone.now()
+
+    @property
+    def expires_soon(self) -> bool:
+        """Check if this contract expires within 24 hours."""
+        from django.utils import timezone
+        if not self.is_active:
+            return False
+        remaining = self.date_expired - timezone.now()
+        return remaining.total_seconds() <= 86400  # 24 hours
+
+    @property
+    def total_value(self) -> float:
+        """Get total value of contract (price + reward + collateral + buyout)."""
+        total = 0.0
+        if self.price:
+            total += float(self.price)
+        if self.reward:
+            total += float(self.reward)
+        if self.collateral:
+            total += float(self.collateral)
+        if self.buyout:
+            total += float(self.buyout)
+        return total
+
+    @property
+    def items_count(self) -> int:
+        """Get number of items in this contract."""
+        return self.items.count()
+
+
+class ContractItem(models.Model):
+    """
+    An item in a contract.
+
+    From ESI: GET /characters/{character_id}/contracts/{contract_id}/items/
+    """
+
+    contract = models.ForeignKey(
+        Contract,
+        on_delete=models.CASCADE,
+        related_name='items'
+    )
+
+    # ESI item fields
+    item_id = models.BigIntegerField(db_index=True)
+    type_id = models.IntegerField(db_index=True)  # FK to ItemType
+    quantity = models.IntegerField(default=1)
+    is_included = models.BooleanField(default=True)
+    is_singleton = models.BooleanField(default=False)
+    raw_quantity = models.IntegerField(null=True, blank=True)
+
+    # Cache metadata
+    synced_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = _('contract item')
+        verbose_name_plural = _('contract items')
+        unique_together = [['contract', 'item_id']]
+        ordering = ['contract', 'type_id']
+
+    def __str__(self) -> str:
+        return f"{self.contract.contract_id}: {self.type_name} x{self.quantity}"
+
+    @property
+    def type_name(self) -> str:
+        """Get the item type name from ItemType."""
+        from core.eve.models import ItemType
+        try:
+            return ItemType.objects.get(id=self.type_id).name
+        except ItemType.DoesNotExist:
+            return f"Type {self.type_id}"
