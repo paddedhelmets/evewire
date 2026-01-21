@@ -93,6 +93,7 @@
                 <th style="padding: 0.75rem; text-align: left;">Title</th>
                 <th style="padding: 0.75rem; text-align: left;">Status</th>
                 <th style="padding: 0.75rem; text-align: right;">Value</th>
+                <th style="padding: 0.75rem; text-align: right;">Profit/Loss</th>
                 <th style="padding: 0.75rem; text-align: left;">Availability</th>
                 <th style="padding: 0.75rem; text-align: left;">Expires</th>
                 <th style="padding: 0.75rem; text-align: left;">Issued</th>
@@ -121,6 +122,18 @@
                     {% endif %}
                 </td>
                 <td style="padding: 0.75rem; text-align: right;">{{ contract.total_value|isk_format }}</td>
+                <td style="padding: 0.75rem; text-align: right;">
+                    {% if contract.type == 'item_exchange' and contract.is_completed and contract.profit_loss is not none %}
+                        <span style="color: {% if contract.profit_loss > 0 %}var(--alert-success-text){% elif contract.profit_loss < 0 %}var(--alert-error-text){% endif %};">
+                            {% if contract.profit_loss > 0 %}+{% endif %}{{ contract.profit_loss|isk_format }}
+                            {% if contract.profit_pct %}
+                                <span style="font-size: 0.8em;">({% if contract.profit_loss > 0 %}+{% endif %}{{ contract.profit_pct|floatformat:1 }}%)</span>
+                            {% endif %}
+                        </span>
+                    {% else %}
+                        &mdash;
+                    {% endif %}
+                </td>
                 <td style="padding: 0.75rem; font-size: 0.9rem;">{{ contract.availability_name }}</td>
                 <td style="padding: 0.75rem;">{{ contract.date_expired|date:"M d H:i" }}</td>
                 <td style="padding: 0.75rem;">{{ contract.date_issued|date:"M d H:i" }}</td>

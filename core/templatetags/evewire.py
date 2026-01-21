@@ -8,6 +8,15 @@ register = template.Library()
 
 
 @register.filter
+def add(value, arg):
+    """Add arg to value."""
+    try:
+        return float(value) + float(arg)
+    except (ValueError, TypeError):
+        return ''
+
+
+@register.filter
 def multiply(value, arg):
     """Multiply value by arg."""
     try:

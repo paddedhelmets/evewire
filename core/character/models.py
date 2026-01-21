@@ -1171,6 +1171,67 @@ class Contract(models.Model):
         """Get number of items in this contract."""
         return self.items.count()
 
+    @property
+    def included_items_value(self) -> float:
+        """Get total estimated market value of included items (what you receive)."""
+        return sum(
+            item.item_value
+            for item in self.items.filter(is_included=True)
+        )
+
+    @property
+    def requested_items_value(self) -> float:
+        """Get total estimated market value of requested items (what you provide)."""
+        return sum(
+            item.item_value
+            for item in self.items.filter(is_included=False)
+        )
+
+    @property
+    def contract_price_paid(self) -> float:
+        """Get the total ISK paid for this contract (price - reward for issuer)."""
+        price = float(self.price) if self.price else 0.0
+        reward = float(self.reward) if self.reward else 0.0
+        return price - reward
+
+    @property
+    def profit_loss(self) -> float:
+        """
+        Calculate profit/loss for completed item_exchange contracts.
+
+        For the issuer (owner):
+        - Received value = requested_items_value + price_paid
+        - Given value = included_items_value + reward
+        - Profit = Received value - Given value
+
+        For the contractor (acceptor):
+        - Received value = included_items_value + reward
+        - Given value = requested_items_value + price_paid
+        - Profit = Received value - Given value
+
+        Returns None for non-item_exchange or non-completed contracts.
+        """
+        if self.type != 'item_exchange' or not self.is_completed:
+            return None
+
+        # Calculate value received vs given
+        # Positive means profit, negative means loss
+        received = self.requested_items_value + self.contract_price_paid
+        given = self.included_items_value + (float(self.reward) if self.reward else 0.0)
+        return received - given
+
+    @property
+    def profit_pct(self) -> float:
+        """Calculate profit percentage. Returns None if not applicable."""
+        profit = self.profit_loss
+        if profit is None:
+            return None
+
+        cost = self.included_items_value + (float(self.reward) if self.reward else 0.0)
+        if cost == 0:
+            return None
+        return (profit / cost) * 100
+
 
 class ContractItem(models.Model):
     """
@@ -1213,3 +1274,14 @@ class ContractItem(models.Model):
             return ItemType.objects.get(id=self.type_id).name
         except ItemType.DoesNotExist:
             return f"Type {self.type_id}"
+
+    @property
+    def item_value(self) -> float:
+        """Get the estimated market value of this item (quantity * sell_price)."""
+        from core.eve.models import ItemType
+        try:
+            item_type = ItemType.objects.get(id=self.type_id)
+            price = float(item_type.sell_price) if item_type.sell_price else 0.0
+            return float(self.quantity) * price
+        except ItemType.DoesNotExist:
+            return 0.0

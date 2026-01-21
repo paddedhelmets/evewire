@@ -98,6 +98,7 @@
             <tr style="border-bottom: 2px solid var(--border-color);">
                 <th style="padding: 0.75rem; text-align: left;">Item</th>
                 <th style="padding: 0.75rem; text-align: right;">Quantity</th>
+                <th style="padding: 0.75rem; text-align: right;">Est. Value</th>
                 <th style="padding: 0.75rem; text-align: left;">Singleton</th>
             </tr>
         </thead>
@@ -106,10 +107,18 @@
             <tr style="border-bottom: 1px solid var(--table-border);">
                 <td style="padding: 0.75rem;">{{ item.type_name }}</td>
                 <td style="padding: 0.75rem; text-align: right;">{{ item.quantity }}</td>
+                <td style="padding: 0.75rem; text-align: right;">{{ item.item_value|isk_format }}</td>
                 <td style="padding: 0.75rem;">{% if item.is_singleton %}Yes{% else %}No{% endif %}</td>
             </tr>
             {% endfor %}
         </tbody>
+        <tfoot>
+            <tr style="font-weight: bold; border-top: 2px solid var(--border-color);">
+                <td colspan="2" style="padding: 0.75rem; text-align: right;">Total:</td>
+                <td style="padding: 0.75rem; text-align: right;">{{ contract.included_items_value|isk_format }}</td>
+                <td></td>
+            </tr>
+        </tfoot>
     </table>
     {% endif %}
 
@@ -120,6 +129,7 @@
             <tr style="border-bottom: 2px solid var(--border-color);">
                 <th style="padding: 0.75rem; text-align: left;">Item</th>
                 <th style="padding: 0.75rem; text-align: right;">Quantity</th>
+                <th style="padding: 0.75rem; text-align: right;">Est. Value</th>
                 <th style="padding: 0.75rem; text-align: left;">Singleton</th>
             </tr>
         </thead>
@@ -128,16 +138,70 @@
             <tr style="border-bottom: 1px solid var(--table-border);">
                 <td style="padding: 0.75rem;">{{ item.type_name }}</td>
                 <td style="padding: 0.75rem; text-align: right;">{{ item.quantity }}</td>
+                <td style="padding: 0.75rem; text-align: right;">{{ item.item_value|isk_format }}</td>
                 <td style="padding: 0.75rem;">{% if item.is_singleton %}Yes{% else %}No{% endif %}</td>
             </tr>
             {% endfor %}
         </tbody>
+        <tfoot>
+            <tr style="font-weight: bold; border-top: 2px solid var(--border-color);">
+                <td colspan="2" style="padding: 0.75rem; text-align: right;">Total:</td>
+                <td style="padding: 0.75rem; text-align: right;">{{ contract.requested_items_value|isk_format }}</td>
+                <td></td>
+            </tr>
+        </tfoot>
     </table>
     {% endif %}
 </div>
 {% else %}
 <div class="card">
     <p>No items in this contract.</p>
+</div>
+{% endif %}
+
+{% if contract.type == 'item_exchange' and contract.is_completed %}
+<div class="card" style="border-left: 4px solid {% if contract.profit_loss > 0 %}var(--alert-success-border){% elif contract.profit_loss < 0 %}var(--alert-error-border){% else %}var(--border-color){% endif %};">
+    <h2>Profitability Analysis</h2>
+    <table style="width: 100%; border-collapse: collapse;">
+        <tr style="border-bottom: 1px solid var(--border-color);">
+            <td style="padding: 0.5rem;"><strong>Included Items Value (Received):</strong></td>
+            <td style="padding: 0.5rem; text-align: right;">{{ contract.included_items_value|isk_format }}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid var(--border-color);">
+            <td style="padding: 0.5rem;"><strong>Reward Received:</strong></td>
+            <td style="padding: 0.5rem; text-align: right;">{% if contract.reward %}{{ contract.reward|isk_format }}{% else %}0 ISK{% endif %}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid var(--border-color);">
+            <td style="padding: 0.5rem;"><strong>Total Value Received:</strong></td>
+            <td style="padding: 0.5rem; text-align: right;">{{ contract.included_items_value|add:contract.reward|isk_format }}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid var(--border-color);">
+            <td style="padding: 0.5rem;"><strong>Requested Items Value (Given):</strong></td>
+            <td style="padding: 0.5rem; text-align: right;">{{ contract.requested_items_value|isk_format }}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid var(--border-color);">
+            <td style="padding: 0.5rem;"><strong>Price Paid:</strong></td>
+            <td style="padding: 0.5rem; text-align: right;">{% if contract.price %}{{ contract.price|isk_format }}{% else %}0 ISK{% endif %}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid var(--border-color);">
+            <td style="padding: 0.5rem;"><strong>Total Value Given:</strong></td>
+            <td style="padding: 0.5rem; text-align: right;">{{ contract.requested_items_value|add:contract.price|isk_format }}</td>
+        </tr>
+        <tr style="font-weight: bold; font-size: 1.1em; background: {% if contract.profit_loss > 0 %}var(--alert-success-bg){% elif contract.profit_loss < 0 %}var(--alert-error-bg){% else %}var(--alert-info-bg){% endif %};">
+            <td style="padding: 0.75rem;">
+                Profit/Loss:
+                {% if contract.profit_pct %}
+                    <span style="font-size: 0.9em; font-weight: normal;">({% if contract.profit_loss > 0 %}+{% endif %}{{ contract.profit_pct|floatformat:1 }}%)</span>
+                {% endif %}
+            </td>
+            <td style="padding: 0.75rem; text-align: right; color: {% if contract.profit_loss > 0 %}var(--alert-success-text){% elif contract.profit_loss < 0 %}var(--alert-error-text){% endif %};">
+                {% if contract.profit_loss > 0 %}+{% endif %}{{ contract.profit_loss|isk_format }}
+            </td>
+        </tr>
+    </table>
+    <p style="margin-top: 0.5rem; font-size: 0.9em; color: var(--text-muted);">
+        * Values are estimated using market sell prices. Actual profit may vary.
+    </p>
 </div>
 {% endif %}
 
