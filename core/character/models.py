@@ -824,3 +824,12 @@ class IndustryJob(models.Model):
         from django.utils import timezone
         remaining = self.end_date - timezone.now()
         return remaining if remaining.total_seconds() > 0 else timezone.timedelta(0)
+
+    @property
+    def is_expiring_soon(self) -> bool:
+        """Check if this active job will complete within 1 hour."""
+        from django.utils import timezone
+        if self.status != 1:  # Not active
+            return False
+        remaining = self.end_date - timezone.now()
+        return remaining.total_seconds() <= 3600  # 1 hour
