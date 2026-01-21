@@ -890,3 +890,141 @@ def wallet_summary(request: HttpRequest, character_id: int = None) -> HttpRespon
         'top_by_income': top_by_income,
         'top_by_expense': top_by_expense,
     })
+
+
+# Market Orders Views
+
+@login_required
+def market_orders(request: HttpRequest, character_id: int = None) -> HttpResponse:
+    """View market orders with filtering and pagination."""
+    from core.models import Character
+    from core.character.models import MarketOrder
+    from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+
+    # Get character - either specified or user's character
+    if character_id:
+        try:
+            character = Character.objects.get(id=character_id, user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+    else:
+        try:
+            character = Character.objects.get(user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+
+    # Get filter parameters
+    order_type = request.GET.get('type', '')  # 'buy', 'sell', or ''
+    state_filter = request.GET.get('state', '')  # 'open', 'closed', 'expired', 'cancelled', ''
+
+    # Build queryset
+    orders_qs = MarketOrder.objects.filter(character=character)
+
+    # Apply buy/sell filter
+    if order_type == 'buy':
+        orders_qs = orders_qs.filter(is_buy_order=True)
+    elif order_type == 'sell':
+        orders_qs = orders_qs.filter(is_buy_order=False)
+
+    # Apply state filter
+    if state_filter:
+        orders_qs = orders_qs.filter(state=state_filter)
+
+    # Order by issued date (newest first)
+    orders_qs = orders_qs.order_by('-issued')
+
+    # Pagination
+    page = request.GET.get('page', 1)
+    per_page = 50
+    paginator = Paginator(orders_qs, per_page)
+
+    try:
+        orders = paginator.page(page)
+    except PageNotAnInteger:
+        orders = paginator.page(1)
+    except EmptyPage:
+        orders = paginator.page(paginator.num_pages)
+
+    # Calculate order totals
+    buy_total = MarketOrder.objects.filter(
+        character=character, is_buy_order=True, state='open'
+    ).count()
+    sell_total = MarketOrder.objects.filter(
+        character=character, is_buy_order=False, state='open'
+    ).count()
+
+    return render(request, 'core/market_orders.html', {
+        'character': character,
+        'orders': orders,
+        'order_type': order_type,
+        'state_filter': state_filter,
+        'buy_total': buy_total,
+        'sell_total': sell_total,
+    })
+
+
+@login_required
+def market_orders_history(request: HttpRequest, character_id: int = None) -> HttpResponse:
+    """View historical market orders (closed, expired, cancelled) with filtering and pagination."""
+    from core.models import Character
+    from core.character.models import MarketOrderHistory
+    from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+
+    # Get character - either specified or user's character
+    if character_id:
+        try:
+            character = Character.objects.get(id=character_id, user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+    else:
+        try:
+            character = Character.objects.get(user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+
+    # Get filter parameters
+    order_type = request.GET.get('type', '')  # 'buy', 'sell', or ''
+    state_filter = request.GET.get('state', '')  # 'closed', 'expired', 'cancelled', ''
+
+    # Build queryset
+    orders_qs = MarketOrderHistory.objects.filter(character=character)
+
+    # Apply buy/sell filter
+    if order_type == 'buy':
+        orders_qs = orders_qs.filter(is_buy_order=True)
+    elif order_type == 'sell':
+        orders_qs = orders_qs.filter(is_buy_order=False)
+
+    # Apply state filter
+    if state_filter:
+        orders_qs = orders_qs.filter(state=state_filter)
+
+    # Order by issued date (newest first)
+    orders_qs = orders_qs.order_by('-issued')
+
+    # Pagination
+    page = request.GET.get('page', 1)
+    per_page = 50
+    paginator = Paginator(orders_qs, per_page)
+
+    try:
+        orders = paginator.page(page)
+    except PageNotAnInteger:
+        orders = paginator.page(1)
+    except EmptyPage:
+        orders = paginator.page(paginator.num_pages)
+
+    return render(request, 'core/market_orders_history.html', {
+        'character': character,
+        'orders': orders,
+        'order_type': order_type,
+        'state_filter': state_filter,
+    })

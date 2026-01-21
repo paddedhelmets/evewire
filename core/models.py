@@ -229,6 +229,7 @@ class Character(models.Model):
     total_sp = models.IntegerField(null=True, blank=True)
     skills_synced_at = models.DateTimeField(null=True, blank=True)
     industry_jobs_synced_at = models.DateTimeField(null=True, blank=True)
+    orders_synced_at = models.DateTimeField(null=True, blank=True)
 
     # Sync status
     last_sync_status = models.CharField(
@@ -274,9 +275,15 @@ class Character(models.Model):
 
     # Industry job slot calculation methods
     # Skill IDs: Industry (3380), Advanced Industry (3388)
-
     INDUSTRY_SKILL_ID = 3380
     ADVANCED_INDUSTRY_SKILL_ID = 3388
+
+    # Market order slot calculation methods
+    # Skill IDs: Trade (3443), Retail (3444), Wholesale (3445), Tycoon (3446)
+    TRADE_SKILL_ID = 3443
+    RETAIL_SKILL_ID = 3444
+    WHOLESALE_SKILL_ID = 3445
+    TYCOON_SKILL_ID = 3446
 
     def get_skill_level(self, skill_id: int) -> int:
         """Get the level of a specific skill."""
@@ -345,6 +352,43 @@ class Character(models.Model):
     def has_available_research_slot(self) -> bool:
         """Check if there's an available research slot."""
         return self.active_research_jobs < self.research_slots
+
+    # Market order slot calculation methods
+    # Base slots: 5
+    # Trade: +5 per level, Retail: +4 per level, Wholesale: +8 per level, Tycoon: +16 per level
+
+    @property
+    def market_order_slots(self) -> int:
+        """Get max market order slots from Trade skills."""
+        base_slots = 5
+        trade_bonus = 5 * self.get_skill_level(self.TRADE_SKILL_ID)
+        retail_bonus = 4 * self.get_skill_level(self.RETAIL_SKILL_ID)
+        wholesale_bonus = 8 * self.get_skill_level(self.WHOLESALE_SKILL_ID)
+        tycoon_bonus = 16 * self.get_skill_level(self.TYCOON_SKILL_ID)
+        return base_slots + trade_bonus + retail_bonus + wholesale_bonus + tycoon_bonus
+
+    @property
+    def active_market_orders(self) -> int:
+        """Count active (open) market orders."""
+        from core.character.models import MarketOrder
+        return self.market_orders.filter(state='open').count()
+
+    @property
+    def market_order_utilization(self) -> float:
+        """Get market order slot utilization as percentage (0-100)."""
+        if self.market_order_slots == 0:
+            return 0.0
+        return (self.active_market_orders / self.market_order_slots) * 100
+
+    @property
+    def is_market_orders_nearly_full(self) -> bool:
+        """Check if market order slots are >80% utilized."""
+        return self.market_order_utilization > 80.0
+
+    @property
+    def has_available_market_order_slot(self) -> bool:
+        """Check if there's an available market order slot."""
+        return self.active_market_orders < self.market_order_slots
 
 
 class AuditLog(models.Model):

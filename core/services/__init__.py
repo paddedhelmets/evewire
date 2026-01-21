@@ -270,9 +270,14 @@ class ESIClient:
         return cls.get(f'/characters/{character.id}/assets/', character)
 
     @classmethod
-    def get_orders(cls, character) -> ESIResponse:
+    def get_orders(cls, character, page: int = 1) -> ESIResponse:
         """Get character market orders."""
-        return cls.get(f'/characters/{character.id}/orders/', character)
+        return cls.get(f'/characters/{character.id}/orders/', character, page=page)
+
+    @classmethod
+    def get_orders_history(cls, character, page: int = 1) -> ESIResponse:
+        """Get character market order history (closed/expired/cancelled orders)."""
+        return cls.get(f'/characters/{character.id}/orders/history/', character, page=page)
 
     @classmethod
     def get_wallet_journal(cls, character, page: int = 1) -> ESIResponse:
@@ -388,6 +393,7 @@ def sync_character_data(character) -> bool:
         _sync_wallet(character)
         _sync_assets(character)
         _sync_orders(character)
+        _sync_orders_history(character)
         _sync_industry_jobs(character)
 
         character.last_sync_status = SyncStatus.SUCCESS
@@ -768,38 +774,196 @@ def _sync_assets(character) -> None:
 
 
 def _sync_orders(character) -> None:
-    """Sync character market orders from ESI."""
+    """
+    Sync character market orders from ESI.
+
+    Handles:
+    - Pagination across multiple pages
+    - State transitions with logging
+    - Order state transitions (open -> closed/expired/cancelled)
+    """
     from core.character.models import MarketOrder
 
-    response = ESIClient.get_orders(character)
-    orders_data = response.data
+    # Fetch all pages of orders
+    all_orders_data = []
+    page = 1
 
-    # Delete old orders
-    MarketOrder.objects.filter(character=character).delete()
+    while True:
+        response = ESIClient.get_orders(character, page=page)
+        orders_data = response.data
 
-    # Insert new orders
-    for order_data in orders_data:
-        MarketOrder.objects.create(
-            character=character,
-            order_id=order_data['order_id'],
-            is_buy_order=order_data.get('is_buy_order', False),
-            type_id=order_data['type_id'],
-            region_id=order_data.get('region_id'),
-            station_id=order_data.get('station_id'),
-            system_id=order_data.get('system_id'),
-            volume_remain=order_data.get('volume_remain', 0),
-            volume_total=order_data.get('volume_total', 0),
-            min_volume=order_data.get('min_volume', 1),
-            price=order_data.get('price', 0),
-            issued=order_data.get('issued'),
-            duration=order_data.get('duration', 0),
-            range=order_data.get('range', ''),
-            state=order_data.get('state', ''),
-            escrow=order_data.get('escrow', 0),
+        if not orders_data:
+            break
+
+        all_orders_data.extend(orders_data)
+
+        # ESI returns empty array when no more pages
+        if len(orders_data) < 1000:
+            break
+
+        page += 1
+
+    # Get existing orders for this character
+    existing_orders = {
+        order.order_id: order
+        for order in MarketOrder.objects.filter(character=character)
+    }
+    existing_order_ids = set(existing_orders.keys())
+    incoming_order_ids = {order['order_id'] for order in all_orders_data}
+
+    # Track seen order IDs
+    seen_order_ids = set()
+
+    # Process incoming orders
+    for order_data in all_orders_data:
+        order_id = order_data['order_id']
+        seen_order_ids.add(order_id)
+        new_state = order_data.get('state', 'unknown')
+
+        # Check if this is an existing order with state change
+        if order_id in existing_orders:
+            existing_order = existing_orders[order_id]
+            old_state = existing_order.state
+
+            # Log state change
+            if old_state != new_state:
+                logger.info(
+                    f'Market order {order_id} state change: '
+                    f'{old_state} -> {new_state} '
+                    f'(character: {character.id})'
+                )
+
+            # Update order data
+            for field, value in {
+                'is_buy_order': order_data.get('is_buy_order', False),
+                'type_id': order_data['type_id'],
+                'region_id': order_data.get('region_id'),
+                'station_id': order_data.get('station_id'),
+                'system_id': order_data.get('system_id'),
+                'volume_remain': order_data.get('volume_remain', 0),
+                'volume_total': order_data.get('volume_total', 0),
+                'min_volume': order_data.get('min_volume', 1),
+                'price': order_data.get('price', 0),
+                'issued': order_data.get('issued'),
+                'duration': order_data.get('duration', 0),
+                'range': order_data.get('range', ''),
+                'state': new_state,
+                'escrow': order_data.get('escrow', 0),
+            }.items():
+                setattr(existing_order, field, value)
+
+            existing_order.save()
+        else:
+            # Create new order
+            MarketOrder.objects.create(
+                character=character,
+                order_id=order_id,
+                is_buy_order=order_data.get('is_buy_order', False),
+                type_id=order_data['type_id'],
+                region_id=order_data.get('region_id'),
+                station_id=order_data.get('station_id'),
+                system_id=order_data.get('system_id'),
+                volume_remain=order_data.get('volume_remain', 0),
+                volume_total=order_data.get('volume_total', 0),
+                min_volume=order_data.get('min_volume', 1),
+                price=order_data.get('price', 0),
+                issued=order_data.get('issued'),
+                duration=order_data.get('duration', 0),
+                range=order_data.get('range', ''),
+                state=new_state,
+                escrow=order_data.get('escrow', 0),
+            )
+
+    # Orders not seen in this sync are no longer active (deleted/closed)
+    # Keep them in DB but they won't appear in active queries
+    deleted_order_ids = existing_order_ids - seen_order_ids
+    if deleted_order_ids:
+        logger.debug(
+            f'{len(deleted_order_ids)} market orders no longer active '
+            f'(character: {character.id})'
         )
+        # Optionally update state of these orders to 'closed'
+        MarketOrder.objects.filter(
+            character=character,
+            order_id__in=deleted_order_ids,
+            state='open'
+        ).update(state='closed')
 
     character.orders_synced_at = timezone.now()
     character.save(update_fields=['orders_synced_at'])
+
+
+def _sync_orders_history(character) -> None:
+    """
+    Sync character market order history from ESI.
+
+    Handles:
+    - Pagination across multiple pages
+    - Closed, expired, and cancelled orders
+    - Historical data (up to 1 year retention)
+    """
+    from core.character.models import MarketOrderHistory
+
+    # Fetch all pages of order history
+    all_orders_data = []
+    page = 1
+
+    while True:
+        response = ESIClient.get_orders_history(character, page=page)
+        orders_data = response.data
+
+        if not orders_data:
+            break
+
+        all_orders_data.extend(orders_data)
+
+        # ESI returns empty array when no more pages
+        if len(orders_data) < 1000:
+            break
+
+        page += 1
+
+    # Get existing order history for this character
+    existing_orders = {
+        order.order_id: order
+        for order in MarketOrderHistory.objects.filter(character=character)
+    }
+    existing_order_ids = set(existing_orders.keys())
+    incoming_order_ids = {order['order_id'] for order in all_orders_data}
+
+    # Process incoming orders
+    for order_data in all_orders_data:
+        order_id = order_data['order_id']
+
+        # Check if this is an existing order
+        if order_id in existing_orders:
+            # Skip - history doesn't change
+            continue
+        else:
+            # Create new historical order
+            MarketOrderHistory.objects.create(
+                character=character,
+                order_id=order_id,
+                is_buy_order=order_data.get('is_buy_order', False),
+                type_id=order_data['type_id'],
+                region_id=order_data.get('region_id'),
+                station_id=order_data.get('station_id'),
+                system_id=order_data.get('system_id'),
+                volume_remain=order_data.get('volume_remain', 0),
+                volume_total=order_data.get('volume_total', 0),
+                min_volume=order_data.get('min_volume', 1),
+                price=order_data.get('price', 0),
+                issued=order_data.get('issued'),
+                duration=order_data.get('duration', 0),
+                range=order_data.get('range', ''),
+                state=order_data.get('state', 'unknown'),
+                escrow=order_data.get('escrow', 0),
+            )
+
+    logger.debug(
+        f'Synced {len(all_orders_data)} historical orders '
+        f'(character: {character.id})'
+    )
 
 
 def _sync_industry_jobs(character) -> None:

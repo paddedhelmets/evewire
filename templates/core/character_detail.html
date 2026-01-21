@@ -177,10 +177,35 @@
 </div>
 
 <div class="card" id="orders">
-    <h2>Market Orders</h2>
-    {% with orders=character.market_orders.all %}
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+        <h2>Market Orders</h2>
+        <a href="{% url 'core:character_market_orders' character.id %}" style="font-size: 0.9rem;">View All Orders →</a>
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+        <div style="border: 1px solid #ddd; border-radius: 4px; padding: 0.75rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                <span style="font-size: 0.9rem; color: #666;">Buy Orders</span>
+                <span style="font-weight: bold; color: #080;">{{ character.market_orders.all|dictsort:"is_buy_order"|reverse|dictsortreversed:"is_buy_order"|slice:":100"|selectattr:"is_open"|list|length }}</span>
+            </div>
+        </div>
+        <div style="border: 1px solid #ddd; border-radius: 4px; padding: 0.75rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                <span style="font-size: 0.9rem; color: #666;">Sell Orders</span>
+                <span style="font-weight: bold; color: #c00;">{{ character.market_orders.all|dictsort:"is_buy_order"|slice:":100"|selectattr:"is_open"|list|length }}</span>
+            </div>
+        </div>
+        <div style="border: 1px solid #ddd; border-radius: 4px; padding: 0.75rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                <span style="font-size: 0.9rem; color: #666;">Slots</span>
+                <span style="font-weight: bold;">{{ character.active_market_orders }}/{{ character.market_order_slots }}</span>
+            </div>
+            <div style="background: #eee; height: 8px; border-radius: 4px; overflow: hidden;">
+                <div style="background: {% if character.market_order_utilization >= 100 %}#c00{% elif character.is_market_orders_nearly_full %}#ffc107{% else %}#080{% endif %}; height: 100%; width: {{ character.market_order_utilization }}%;"></div>
+            </div>
+        </div>
+    </div>
+    {% with orders=character.market_orders.all|dictsort:"is_buy_order"|slice:":10" %}
         {% if orders %}
-            <p><strong>{{ orders.count }}</strong> order{{ orders.count|pluralize }}</p>
             <table style="width: 100%; border-collapse: collapse;">
                 <thead>
                     <tr style="border-bottom: 2px solid #ddd;">
@@ -217,6 +242,11 @@
                     {% endfor %}
                 </tbody>
             </table>
+            {% if character.market_orders.all.count > 10 %}
+            <p style="margin-top: 0.5rem; font-size: 0.9rem; color: #666;">
+                Showing 10 of {{ character.market_orders.all.count }} orders. <a href="{% url 'core:character_market_orders' character.id %}">View all →</a>
+            </p>
+            {% endif %}
         {% else %}
             <p style="color: #666;">No market orders.</p>
         {% endif %}
