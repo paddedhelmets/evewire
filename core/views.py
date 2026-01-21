@@ -2348,3 +2348,113 @@ def industry_jobs_export(request: HttpRequest, character_id: int = None) -> Http
         ])
 
     return response
+
+
+@login_required
+def blueprints_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
+    """View blueprint library with BPO/BPC distinction and filtering."""
+    from core.models import Character
+    from core.character.models import CharacterAsset
+    from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+    from collections import defaultdict
+
+    # Get character
+    if character_id:
+        try:
+            character = Character.objects.get(id=character_id, user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+    else:
+        try:
+            character = Character.objects.get(user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+
+    # Get filter parameters
+    bp_type_filter = request.GET.get('type', '')  # 'BPO', 'BPC', or ''
+    search_query = request.GET.get('search', '')
+    location_filter = request.GET.get('location', '')
+
+    # Get all blueprint assets for this character
+    # Note: filter by checking type_id against blueprints in the SDE
+    from core.eve.models import ItemType
+    blueprint_type_ids = ItemType.objects.filter(category_id=9).values_list('id', flat=True)
+
+    # Build base queryset
+    blueprints_qs = CharacterAsset.objects.filter(
+        character=character,
+        type_id__in=blueprint_type_ids
+    )
+
+    # Apply type filter
+    if bp_type_filter == 'BPO':
+        # BPO: is_blueprint_copy = False
+        blueprints_qs = blueprints_qs.filter(is_blueprint_copy=False)
+    elif bp_type_filter == 'BPC':
+        # BPC: is_blueprint_copy = True
+        blueprints_qs = blueprints_qs.filter(is_blueprint_copy=True)
+
+    # Apply location filter
+    if location_filter:
+        if location_filter == 'station':
+            blueprints_qs = blueprints_qs.filter(location_type='station')
+        elif location_filter == 'structure':
+            blueprints_qs = blueprints_qs.filter(location_type='structure')
+        elif location_filter == 'solar_system':
+            blueprints_qs = blueprints_qs.filter(location_type='solar_system')
+
+    # Apply search filter (need to filter by type_id from matching ItemType names)
+    if search_query:
+        matching_type_ids = ItemType.objects.filter(
+            id__in=blueprint_type_ids,
+            name__icontains=search_query
+        ).values_list('id', flat=True)
+        blueprints_qs = blueprints_qs.filter(type_id__in=matching_type_ids)
+
+    # Get all matching blueprints and sort in Python (since we can't order by type__name without FK)
+    all_blueprints = list(blueprints_qs)
+
+    # Sort by type name (fetch names for sorting)
+    if all_blueprints:
+        type_ids = [bp.type_id for bp in all_blueprints]
+        type_names = dict(ItemType.objects.filter(
+            id__in=type_ids
+        ).values_list('id', 'name'))
+        for bp in all_blueprints:
+            bp._cached_type_name = type_names.get(bp.type_id, f"Type {bp.type_id}")
+        all_blueprints.sort(key=lambda x: x._cached_type_name)
+
+    # Pagination
+    page = request.GET.get('page', 1)
+    per_page = 50
+    paginator = Paginator(all_blueprints, per_page)
+
+    try:
+        blueprints = paginator.page(page)
+    except PageNotAnInteger:
+        blueprints = paginator.page(1)
+    except EmptyPage:
+        blueprints = paginator.page(paginator.num_pages)
+
+    # Calculate blueprint counts
+    base_qs = CharacterAsset.objects.filter(
+        character=character,
+        type_id__in=blueprint_type_ids
+    )
+    bpo_count = base_qs.filter(is_blueprint_copy=False).count()
+    bpc_count = base_qs.filter(is_blueprint_copy=True).count()
+
+    return render(request, 'core/blueprints_list.html', {
+        'character': character,
+        'blueprints': blueprints,
+        'bp_type_filter': bp_type_filter,
+        'search_query': search_query,
+        'location_filter': location_filter,
+        'bpo_count': bpo_count,
+        'bpc_count': bpc_count,
+        'total_blueprints': bpo_count + bpc_count,
+    })

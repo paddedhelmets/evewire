@@ -1,0 +1,303 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}Blueprint Library - {{ character.name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .blueprints-container {
+        background: var(--bg-secondary);
+        border-radius: 8px;
+        padding: 1.5rem;
+        box-shadow: var(--card-shadow);
+    }
+
+    .blueprints-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .blueprints-stats {
+        display: flex;
+        gap: 2rem;
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+    }
+
+    .blueprints-stats span {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .stat-bpo {
+        color: #28a745;
+    }
+
+    .stat-bpc {
+        color: #ffc107;
+    }
+
+    .blueprints-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+    }
+
+    .blueprints-table th {
+        background: var(--bg-primary);
+        padding: 0.75rem 1rem;
+        text-align: left;
+        font-weight: 600;
+        border-bottom: 2px solid var(--border-color);
+        color: var(--text-secondary);
+    }
+
+    .blueprints-table td {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid var(--table-border);
+    }
+
+    .blueprints-table tr:hover {
+        background: var(--bg-primary);
+    }
+
+    .blueprint-name {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .blueprint-badge {
+        font-size: 0.7rem;
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .blueprint-bpo {
+        background: #28a745;
+        color: white;
+    }
+
+    .blueprint-bpc {
+        background: #ffc107;
+        color: #333;
+    }
+
+    [data-theme="dark"] .blueprint-bpo {
+        background: #1e4a2a;
+        color: #6bff6b;
+    }
+
+    [data-theme="dark"] .blueprint-bpc {
+        background: #4a3d1a;
+        color: #ffc107;
+    }
+
+    .location-type {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .location-badge {
+        font-size: 0.7rem;
+        padding: 0.2rem 0.5rem;
+        border-radius: 3px;
+        background: var(--bg-primary);
+        color: var(--text-secondary);
+        text-transform: uppercase;
+    }
+
+    .no-blueprints {
+        text-align: center;
+        padding: 3rem;
+        color: var(--text-secondary);
+    }
+
+    .filter-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        align-items: flex-end;
+        margin-bottom: 1rem;
+        padding: 1rem;
+        background: var(--bg-primary);
+        border-radius: 4px;
+    }
+
+    .filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .filter-group label {
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        font-weight: 500;
+    }
+
+    .filter-group input,
+    .filter-group select {
+        padding: 0.5rem;
+        border-radius: 4px;
+        border: 1px solid var(--border-color);
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        min-width: 150px;
+    }
+
+    .filter-actions {
+        display: flex;
+        gap: 0.5rem;
+        margin-left: auto;
+    }
+
+    .quantity-cell {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .value-cell {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="blueprints-container">
+    <div class="blueprints-header">
+        <div>
+            <h2>Blueprint Library</h2>
+            <p style="color: var(--text-secondary); margin-top: 0.5rem;">
+                Character: <strong>{{ character.name }}</strong>
+            </p>
+        </div>
+        <div class="blueprints-stats">
+            <span class="stat-bpo">
+                <span class="blueprint-badge blueprint-bpo">BPO</span>
+                {{ bpo_count }} originals
+            </span>
+            <span class="stat-bpc">
+                <span class="blueprint-badge blueprint-bpc">BPC</span>
+                {{ bpc_count }} copies
+            </span>
+            <span>
+                Total: <strong>{{ total_blueprints }}</strong>
+            </span>
+        </div>
+    </div>
+
+    <form method="get" class="filter-bar">
+        <div class="filter-group">
+            <label for="type">Type</label>
+            <select name="type" id="type">
+                <option value="">All Blueprints</option>
+                <option value="BPO" {% if bp_type_filter == 'BPO' %}selected{% endif %}>BPO (Originals)</option>
+                <option value="BPC" {% if bp_type_filter == 'BPC' %}selected{% endif %}>BPC (Copies)</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="location">Location</label>
+            <select name="location" id="location">
+                <option value="">All Locations</option>
+                <option value="station" {% if location_filter == 'station' %}selected{% endif %}>Station</option>
+                <option value="structure" {% if location_filter == 'structure' %}selected{% endif %}>Structure</option>
+                <option value="solar_system" {% if location_filter == 'solar_system' %}selected{% endif %}>Solar System</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="search">Search</label>
+            <input type="text" name="search" id="search" value="{{ search_query }}" placeholder="Blueprint name...">
+        </div>
+        <div class="filter-actions">
+            <button type="submit" class="btn">Filter</button>
+            <a href="{% url 'core:blueprints_list' %}" class="btn" style="background: var(--text-secondary);">Clear</a>
+        </div>
+    </form>
+
+    {% if blueprints %}
+        <table class="blueprints-table">
+            <thead>
+                <tr>
+                    <th style="width: 40%;">Blueprint</th>
+                    <th style="width: 10%;">Type ID</th>
+                    <th style="width: 15%;">Location</th>
+                    <th style="width: 10%;">Location Flag</th>
+                    <th style="width: 10%;" class="quantity-cell">Quantity</th>
+                    <th style="width: 15%;" class="value-cell">Est. Value (ISK)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for bp in blueprints %}
+                <tr>
+                    <td>
+                        <div class="blueprint-name">
+                            {{ bp.type_name }}
+                            {% if bp.is_blueprint_copy %}
+                                <span class="blueprint-badge blueprint-bpc">BPC</span>
+                            {% else %}
+                                <span class="blueprint-badge blueprint-bpo">BPO</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td style="color: var(--text-secondary);">{{ bp.type_id }}</td>
+                    <td>
+                        <div class="location-type">
+                            {{ bp.location_name }}
+                            <span class="location-badge">{{ bp.location_type|default:"Unknown" }}</span>
+                        </div>
+                    </td>
+                    <td style="color: var(--text-secondary); font-size: 0.85rem;">{{ bp.location_flag|default:"&mdash;" }}</td>
+                    <td class="quantity-cell">{{ bp.quantity|default:1 }}</td>
+                    <td class="value-cell">
+                        {% if bp.is_blueprint_copy %}
+                            <span style="color: var(--text-secondary);">&mdash;</span>
+                        {% else %}
+                            {{ bp.get_value|isk_format }}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% if blueprints.has_other_pages %}
+        <div style="margin-top: 1.5rem; display: flex; justify-content: center; gap: 0.5rem; align-items: center;">
+            {% if blueprints.has_previous %}
+                <a href="?page={{ blueprints.previous_page_number }}{% if bp_type_filter %}&type={{ bp_type_filter }}{% endif %}{% if search_query %}&search={{ search_query }}{% endif %}{% if location_filter %}&location={{ location_filter }}{% endif %}" class="btn">&laquo; Previous</a>
+            {% endif %}
+
+            <span>
+                Page {{ blueprints.number }} of {{ blueprints.paginator.num_pages }}
+            </span>
+
+            {% if blueprints.has_next %}
+                <a href="?page={{ blueprints.next_page_number }}{% if bp_type_filter %}&type={{ bp_type_filter }}{% endif %}{% if search_query %}&search={{ search_query }}{% endif %}{% if location_filter %}&location={{ location_filter }}{% endif %}" class="btn">Next &raquo;</a>
+            {% endif %}
+        </div>
+        {% endif %}
+    {% else %}
+        <div class="no-blueprints">
+            <p>No blueprints found.</p>
+            {% if search_query or bp_type_filter or location_filter %}
+                <p>Try adjusting your filters.</p>
+            {% else %}
+                <p>Blueprints may not have been synced yet.</p>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>
+
+<div style="margin-top: 1rem;">
+    <a href="{% url 'core:industry_summary' %}" class="btn">Back to Industry</a>
+</div>
+{% endblock %}

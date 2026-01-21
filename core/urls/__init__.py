@@ -94,6 +94,8 @@ urlpatterns = [
 
     # Industry
     path('industry/', views.industry_summary, name='industry_summary'),
+    path('industry/blueprints/', views.blueprints_list, name='blueprints_list'),
+    path('character/<int:character_id>/industry/blueprints/', views.blueprints_list, name='character_blueprints_list'),
     path('industry/jobs/', views.industry_jobs_list, name='industry_jobs_list'),
     path('industry/jobs/<int:job_id>/', views.industry_job_detail, name='industry_job_detail'),
     path('character/<int:character_id>/industry/', views.industry_summary, name='character_industry_summary'),
