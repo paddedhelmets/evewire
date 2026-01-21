@@ -330,6 +330,72 @@ class CharacterAsset(MPTTModel):
         else:
             return "Unknown location"
 
+    def is_blueprint(self) -> bool:
+        """
+        Check if this asset is a blueprint.
+
+        Uses the is_blueprint_copy field from ESI.
+        If is_blueprint_copy is False, it could be a BPO or non-blueprint.
+        """
+        # Check if item category is Blueprint
+        from core.eve.models import ItemCategory
+        try:
+            item = ItemType.objects.get(id=self.type_id)
+            # Blueprint category ID is typically 9 in EVE SDE
+            if item.category_id == 9:
+                return True
+        except ItemType.DoesNotExist:
+            pass
+        return False
+
+    def blueprint_type(self) -> str | None:
+        """
+        Determine blueprint type: 'BPO' (original), 'BPC' (copy), or None.
+
+        BPO: is_blueprint_copy = False and item is a blueprint
+        BPC: is_blueprint_copy = True
+
+        Note: ESI provides is_blueprint_copy boolean.
+        For additional detection, raw_quantity can be used:
+        - raw_quantity == -1 or 0: BPO
+        - raw_quantity < -1: BPC (runs remaining = abs(raw_quantity))
+        """
+        if not self.is_blueprint():
+            return None
+
+        if self.is_blueprint_copy:
+            return 'BPC'
+        else:
+            return 'BPO'
+
+    def get_value(self) -> float:
+        """
+        Calculate the value of this asset.
+
+        BPO: Use base_price from ItemType
+        BPC: Value is 0 (copies have minimal intrinsic value)
+        Normal items: Use sell_price from ItemType
+
+        Returns value in ISK.
+        """
+        from core.eve.models import ItemType
+
+        try:
+            item = ItemType.objects.get(id=self.type_id)
+            bp_type = self.blueprint_type()
+
+            if bp_type == 'BPO':
+                # Use NPC base price for blueprint originals
+                return float(item.base_price or 0)
+            elif bp_type == 'BPC':
+                # Blueprint copies have minimal intrinsic value
+                return 0.0
+            else:
+                # Normal items use sell price
+                return float(item.sell_price or 0) * self.quantity
+        except ItemType.DoesNotExist:
+            return 0.0
+
 
 class WalletJournalEntry(models.Model):
     """

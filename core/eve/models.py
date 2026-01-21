@@ -44,6 +44,7 @@ class ItemType(models.Model):
     capacity = models.FloatField(null=True, blank=True)
     portion_size = models.IntegerField(null=True, blank=True)
     base_price = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    sell_price = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
     published = models.BooleanField(default=True)
 
     objects = ItemTypeManager()
