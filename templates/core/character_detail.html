@@ -217,6 +217,56 @@
     {% endwith %}
 </div>
 
+<div class="card" id="industry-slots">
+    <h2>Industry Slots</h2>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+        <!-- Manufacturing Slots -->
+        <div style="border: 1px solid #ddd; border-radius: 4px; padding: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <h3 style="margin: 0;">Manufacturing</h3>
+                {% if not character.has_available_manufacturing_slot %}
+                    <span style="padding: 4px 8px; border-radius: 3px; background: #f7e6e6; color: #c00; font-size: 0.85rem;">Full</span>
+                {% elif character.is_manufacturing_nearly_full %}
+                    <span style="padding: 4px 8px; border-radius: 3px; background: #fff3cd; color: #856404; font-size: 0.85rem;">Nearly Full</span>
+                {% else %}
+                    <span style="padding: 4px 8px; border-radius: 3px; background: #e6f7e6; color: #080; font-size: 0.85rem;">Available</span>
+                {% endif %}
+            </div>
+            <p style="font-size: 1.5rem; font-weight: bold; margin: 0.5rem 0;">
+                {{ character.active_manufacturing_jobs }} / {{ character.manufacturing_slots }}
+            </p>
+            <div style="background: #eee; height: 20px; border-radius: 4px; overflow: hidden;">
+                <div style="background: {% if character.manufacturing_utilization >= 100 %}#c00{% elif character.is_manufacturing_nearly_full %}#ffc107{% else %}#080{% endif %}; height: 100%; width: {{ character.manufacturing_utilization }}%;"></div>
+            </div>
+            <p style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">{{ character.manufacturing_utilization|floatformat:0 }}% utilized</p>
+        </div>
+
+        <!-- Research Slots -->
+        <div style="border: 1px solid #ddd; border-radius: 4px; padding: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <h3 style="margin: 0;">Research & Labs</h3>
+                {% if not character.has_available_research_slot %}
+                    <span style="padding: 4px 8px; border-radius: 3px; background: #f7e6e6; color: #c00; font-size: 0.85rem;">Full</span>
+                {% elif character.is_research_nearly_full %}
+                    <span style="padding: 4px 8px; border-radius: 3px; background: #fff3cd; color: #856404; font-size: 0.85rem;">Nearly Full</span>
+                {% else %}
+                    <span style="padding: 4px 8px; border-radius: 3px; background: #e6f7e6; color: #080; font-size: 0.85rem;">Available</span>
+                {% endif %}
+            </div>
+            <p style="font-size: 1.5rem; font-weight: bold; margin: 0.5rem 0;">
+                {{ character.active_research_jobs }} / {{ character.research_slots }}
+            </p>
+            <div style="background: #eee; height: 20px; border-radius: 4px; overflow: hidden;">
+                <div style="background: {% if character.research_utilization >= 100 %}#c00{% elif character.is_research_nearly_full %}#ffc107{% else %}#080{% endif %}; height: 100%; width: {{ character.research_utilization }}%;"></div>
+            </div>
+            <p style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">{{ character.research_utilization|floatformat:0 }}% utilized</p>
+        </div>
+    </div>
+    <p style="font-size: 0.85rem; color: #666; margin-top: 1rem;">
+        Slot limits based on Industry (manufacturing) and Advanced Industry (research) skill levels.
+    </p>
+</div>
+
 <div class="card" id="industry-jobs">
     <h2>Industry Jobs</h2>
     {% with active_jobs=character.industry_jobs.all|dictsort:"end_date" %}
