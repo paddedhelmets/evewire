@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}Wallet Balance - {{ character.name }} - evewire{% endblock %}
+
+{% block extra_head %}
+<style>
+    .balance-card {
+        display: inline-block;
+        min-width: 200px;
+        padding: 1.5rem;
+        background: var(--bg-secondary);
+        border-radius: 8px;
+        box-shadow: var(--card-shadow);
+        margin-right: 1rem;
+        margin-bottom: 1rem;
+    }
+    .balance-value {
+        font-size: 2rem;
+        font-weight: bold;
+        margin: 0.5rem 0;
+    }
+    .balance-label {
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+    }
+    .change-positive {
+        color: var(--alert-success-text);
+    }
+    .change-negative {
+        color: var(--alert-error-text);
+    }
+    .change-neutral {
+        color: var(--text-secondary);
+    }
+    #balanceChart {
+        width: 100%;
+        height: 300px;
+        margin-top: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1>Wallet Balance - {{ character.name }}</h1>
+
+<div style="margin-bottom: 1rem;">
+    <a href="{% url 'core:dashboard' %}">Dashboard</a>
+    <span style="margin: 0 0.5rem;">&rarr;</span>
+    <a href="{% url 'core:wallet_balance' %}">Balance History</a>
+</div>
+
+<div style="margin-bottom: 1.5rem;">
+    <div class="balance-card">
+        <div class="balance-label">Current Balance</div>
+        <div class="balance-value">{{ current_balance|isk_format }}</div>
+    </div>
+
+    <div class="balance-card">
+        <div class="balance-label">24h Change</div>
+        <div class="balance-value {% if change_24h > 0 %}change-positive{% elif change_24h < 0 %}change-negative{% else %}change-neutral{% endif %}">
+            {% if change_24h > 0 %}+{% endif %}{{ change_24h|isk_format }}
+        </div>
+        <div class="balance-label">
+            {% if percent_24h > 0 %}+{% endif %}{{ percent_24h|floatformat:2 }}%
+        </div>
+    </div>
+
+    <div class="balance-card">
+        <div class="balance-label">7 Day Change</div>
+        <div class="balance-value {% if change_7d > 0 %}change-positive{% elif change_7d < 0 %}change-negative{% else %}change-neutral{% endif %}">
+            {% if change_7d > 0 %}+{% endif %}{{ change_7d|isk_format }}
+        </div>
+        <div class="balance-label">
+            {% if percent_7d > 0 %}+{% endif %}{{ percent_7d|floatformat:2 }}%
+        </div>
+    </div>
+</div>
+
+{% if balance_history %}
+<div class="card">
+    <h2>Balance History (Last 30 Days)</h2>
+    <canvas id="balanceChart"></canvas>
+</div>
+
+<script>
+    (function() {
+        const canvas = document.getElementById('balanceChart');
+        const ctx = canvas.getContext('2d');
+        const data = {{ balance_history_json|safe }};
+
+        // Get theme from HTML
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        const textColor = isDark ? '#e0e0e0' : '#333';
+        const gridColor = isDark ? '#444' : '#ddd';
+
+        // Set canvas size for high DPI
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        ctx.scale(dpr, dpr);
+
+        // Find min/max for scaling
+        const balances = data.map(d => d.balance);
+        const minBalance = Math.min(...balances);
+        const maxBalance = Math.max(...balances);
+        const padding = (maxBalance - minBalance) * 0.1 || 1;
+
+        const chartWidth = rect.width;
+        const chartHeight = rect.height;
+        const paddingX = 60;
+        const paddingY = 30;
+
+        // Helper to map data to canvas coordinates
+        function xScale(index) {
+            return paddingX + (index / (data.length - 1)) * (chartWidth - 2 * paddingX);
+        }
+
+        function yScale(value) {
+            const range = maxBalance - minBalance + 2 * padding;
+            return chartHeight - paddingY - ((value - minBalance + padding) / range) * (chartHeight - 2 * paddingY);
+        }
+
+        function formatISK(value) {
+            if (value >= 1000000000) return (value / 1000000000).toFixed(1) + 'B';
+            if (value >= 1000000) return (value / 1000000).toFixed(1) + 'M';
+            if (value >= 1000) return (value / 1000).toFixed(1) + 'K';
+            return value.toFixed(0);
+        }
+
+        // Draw grid lines (horizontal)
+        ctx.strokeStyle = gridColor;
+        ctx.lineWidth = 0.5;
+        const gridSteps = 5;
+        for (let i = 0; i <= gridSteps; i++) {
+            const y = paddingY + (i / gridSteps) * (chartHeight - 2 * paddingY);
+            ctx.beginPath();
+            ctx.moveTo(paddingX, y);
+            ctx.lineTo(chartWidth - paddingX, y);
+            ctx.stroke();
+
+            // Y-axis labels
+            const value = maxBalance + padding - (i / gridSteps) * (maxBalance - minBalance + 2 * padding);
+            ctx.fillStyle = textColor;
+            ctx.font = '11px sans-serif';
+            ctx.textAlign = 'right';
+            ctx.fillText(formatISK(value) + ' ISK', paddingX - 10, y + 4);
+        }
+
+        // Draw the line
+        ctx.strokeStyle = isDark ? '#4da6ff' : '#0066cc';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+
+        data.forEach((point, i) => {
+            const x = xScale(i);
+            const y = yScale(point.balance);
+            if (i === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+        });
+
+        ctx.stroke();
+
+        // Draw points
+        ctx.fillStyle = isDark ? '#4da6ff' : '#0066cc';
+        data.forEach((point, i) => {
+            const x = xScale(i);
+            const y = yScale(point.balance);
+            ctx.beginPath();
+            ctx.arc(x, y, 3, 0, 2 * Math.PI);
+            ctx.fill();
+        });
+
+        // X-axis labels (dates)
+        ctx.fillStyle = textColor;
+        ctx.font = '11px sans-serif';
+        ctx.textAlign = 'center';
+        const labelInterval = Math.ceil(data.length / 6);
+        data.forEach((point, i) => {
+            if (i % labelInterval === 0 || i === data.length - 1) {
+                const x = xScale(i);
+                const date = new Date(point.date);
+                const label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                ctx.fillText(label, x, chartHeight - 10);
+            }
+        });
+
+        // Chart title
+        ctx.font = 'bold 14px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('Wallet Balance Over Time', paddingX, 20);
+    })();
+</script>
+{% else %}
+<div class="card">
+    <p>No balance history available. Sync your character data to populate this view.</p>
+    <form method="post" action="{% url 'core:sync_character' character.id %}">
+        {% csrf_token %}
+        <button type="submit" class="btn">Sync Character Data</button>
+    </form>
+</div>
+{% endif %}
+
+<div style="margin-bottom: 1rem;">
+    <a href="{% url 'core:wallet_journal' %}" class="btn">View Journal</a>
+    <a href="{% url 'core:wallet_transactions' %}" class="btn" style="margin-left: 0.5rem;">View Transactions</a>
+    <a href="{% url 'core:wallet_summary' %}" class="btn" style="margin-left: 0.5rem;">Income/Expense Summary</a>
+</div>
+{% endblock %}

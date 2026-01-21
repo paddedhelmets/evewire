@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}Wallet Transactions - {{ character.name }} - evewire{% endblock %}
+
+{% block content %}
+<h1>Wallet Transactions - {{ character.name }}</h1>
+
+<div style="margin-bottom: 1rem;">
+    <a href="{% url 'core:dashboard' %}">Dashboard</a>
+    <span style="margin: 0 0.5rem;">&rarr;</span>
+    <a href="{% url 'core:wallet_transactions' %}">Transactions</a>
+</div>
+
+<div class="card">
+    <h2>Filters</h2>
+    <form method="get" style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end;">
+        <div>
+            <label for="type" style="display: block; margin-bottom: 0.25rem;">Type:</label>
+            <select name="type" id="type" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
+                <option value="">All</option>
+                <option value="buy" {% if buy_sell_filter == 'buy' %}selected{% endif %}>Buy</option>
+                <option value="sell" {% if buy_sell_filter == 'sell' %}selected{% endif %}>Sell</option>
+            </select>
+        </div>
+        <div>
+            <label for="date_from" style="display: block; margin-bottom: 0.25rem;">From:</label>
+            <input type="date" name="date_from" id="date_from" value="{{ date_from }}" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
+        </div>
+        <div>
+            <label for="date_to" style="display: block; margin-bottom: 0.25rem;">To:</label>
+            <input type="date" name="date_to" id="date_to" value="{{ date_to }}" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
+        </div>
+        <button type="submit" class="btn">Apply Filters</button>
+        <a href="{% url 'core:wallet_transactions' %}" class="btn" style="background: var(--text-secondary);">Clear</a>
+    </form>
+</div>
+
+{% if transactions %}
+<div class="card">
+    <h2>Market Transactions</h2>
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid var(--border-color);">
+                <th style="padding: 0.75rem; text-align: left;">Date</th>
+                <th style="padding: 0.75rem; text-align: left;">Type</th>
+                <th style="padding: 0.75rem; text-align: left;">Item</th>
+                <th style="padding: 0.75rem; text-align: right;">Quantity</th>
+                <th style="padding: 0.75rem; text-align: right;">Unit Price</th>
+                <th style="padding: 0.75rem; text-align: right;">Total Value</th>
+                <th style="padding: 0.75rem; text-align: left;">Location</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for tx in transactions %}
+            <tr style="border-bottom: 1px solid var(--table-border);">
+                <td style="padding: 0.75rem;">{{ tx.date|date:"Y-m-d H:i" }}</td>
+                <td style="padding: 0.75rem;">
+                    <span style="font-weight: bold; color: {% if tx.is_buy %}var(--alert-success-text){% else %}var(--alert-error-text){% endif %};">
+                        {% if tx.is_buy %}BUY{% else %}SELL{% endif %}
+                    </span>
+                </td>
+                <td style="padding: 0.75rem;">{{ tx.type_name }}</td>
+                <td style="padding: 0.75rem; text-align: right;">{{ tx.quantity|localize }}</td>
+                <td style="padding: 0.75rem; text-align: right;">{{ tx.unit_price|format_is }}</td>
+                <td style="padding: 0.75rem; text-align: right; font-weight: bold;">{{ tx.total_value|format_is }}</td>
+                <td style="padding: 0.75rem; font-size: 0.9rem;">{{ tx.location_id }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if transactions.has_other_pages %}
+    <div style="margin-top: 1.5rem; display: flex; justify-content: center; gap: 0.5rem; align-items: center;">
+        {% if transactions.has_previous %}
+            <a href="?page={{ transactions.previous_page_number }}{% if buy_sell_filter %}&type={{ buy_sell_filter }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}" class="btn">&laquo; Previous</a>
+        {% endif %}
+
+        <span>
+            Page {{ transactions.number }} of {{ transactions.paginator.num_pages }}
+        </span>
+
+        {% if transactions.has_next %}
+            <a href="?page={{ transactions.next_page_number }}{% if buy_sell_filter %}&type={{ buy_sell_filter }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}" class="btn">Next &raquo;</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% else %}
+<div class="card">
+    <p>No transactions found.</p>
+</div>
+{% endif %}
+
+<div style="margin-bottom: 1rem;">
+    <a href="{% url 'core:wallet_journal' %}" class="btn">View Journal</a>
+    <a href="{% url 'core:wallet_balance' %}" class="btn" style="margin-left: 0.5rem;">Balance History</a>
+    <a href="{% url 'core:wallet_summary' %}" class="btn" style="margin-left: 0.5rem;">Income/Expense Summary</a>
+</div>
+{% endblock %}

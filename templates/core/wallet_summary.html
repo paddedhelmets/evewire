@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}Wallet Summary - {{ character.name }} - evewire{% endblock %}
+
+{% block content %}
+<h1>Income & Expense Summary - {{ character.name }}</h1>
+
+<div style="margin-bottom: 1rem;">
+    <a href="{% url 'core:dashboard' %}">Dashboard</a>
+    <span style="margin: 0 0.5rem;">&rarr;</span>
+    <a href="{% url 'core:wallet_summary' %}">Income/Expense Summary</a>
+</div>
+
+<div class="card">
+    <h2>Time Range</h2>
+    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        <a href="?days=7" class="btn" {% if days == 7 %}style="background: var(--btn-primary-hover);"{% endif %}>7 Days</a>
+        <a href="?days=30" class="btn" {% if days == 30 %}style="background: var(--btn-primary-hover);"{% endif %}>30 Days</a>
+        <a href="?days=90" class="btn" {% if days == 90 %}style="background: var(--btn-primary-hover);"{% endif %}>90 Days</a>
+        <a href="?days=365" class="btn" {% if days == 365 %}style="background: var(--btn-primary-hover);"{% endif %}>1 Year</a>
+    </div>
+</div>
+
+<div style="margin-bottom: 1.5rem;">
+    <div class="balance-card">
+        <div class="balance-label">Total Income ({{ days }} days)</div>
+        <div class="balance-value change-positive">{{ income_total|isk_format }}</div>
+    </div>
+
+    <div class="balance-card">
+        <div class="balance-label">Total Expenses ({{ days }} days)</div>
+        <div class="balance-value change-negative">{{ expense_total|isk_format }}</div>
+    </div>
+
+    <div class="balance-card">
+        <div class="balance-label">Net Change</div>
+        <div class="balance-value {% if grand_total > 0 %}change-positive{% elif grand_total < 0 %}change-negative{% else %}change-neutral{% endif %}">
+            {% if grand_total > 0 %}+{% endif %}{{ grand_total|isk_format }}
+        </div>
+    </div>
+</div>
+
+{% if summary %}
+<div class="card">
+    <h2>Breakdown by Transaction Type</h2>
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid var(--border-color);">
+                <th style="padding: 0.75rem; text-align: left;">Type</th>
+                <th style="padding: 0.75rem; text-align: right;">Income</th>
+                <th style="padding: 0.75rem; text-align: right;">Expenses</th>
+                <th style="padding: 0.75rem; text-align: right;">Net</th>
+                <th style="padding: 0.75rem; text-align: right;">Entries</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in summary %}
+            <tr style="border-bottom: 1px solid var(--table-border);">
+                <td style="padding: 0.75rem;">{{ item.ref_type|replace_underscore }}</td>
+                <td style="padding: 0.75rem; text-align: right;" class="change-positive">
+                    {% if item.income > 0 %}{{ item.income|isk_format }}{% else %}&mdash;{% endif %}
+                </td>
+                <td style="padding: 0.75rem; text-align: right;" class="change-negative">
+                    {% if item.expense > 0 %}{{ item.expense|isk_format }}{% else %}&mdash;{% endif %}
+                </td>
+                <td style="padding: 0.75rem; text-align: right; font-weight: bold; {% if item.net > 0 %}change-positive{% elif item.net < 0 %}change-negative{% endif %}">
+                    {% if item.net != 0 %}{% if item.net > 0 %}+{% endif %}{{ item.net|isk_format }}{% else %}&mdash;{% endif %}
+                </td>
+                <td style="padding: 0.75rem; text-align: right;">{{ item.entry_count }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot style="border-top: 2px solid var(--border-color);">
+            <tr style="font-weight: bold;">
+                <td style="padding: 0.75rem;">Total</td>
+                <td style="padding: 0.75rem; text-align: right;" class="change-positive">{{ income_total|isk_format }}</td>
+                <td style="padding: 0.75rem; text-align: right;" class="change-negative">{{ expense_total|isk_format }}</td>
+                <td style="padding: 0.75rem; text-align: right; {% if grand_total > 0 %}change-positive{% elif grand_total < 0 %}change-negative{% endif %}">
+                    {% if grand_total > 0 %}+{% endif %}{{ grand_total|isk_format }}
+                </td>
+                <td style="padding: 0.75rem; text-align: right;"></td>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+
+{% if top_by_income %}
+<div class="card">
+    <h2>Top Income Sources</h2>
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid var(--border-color);">
+                <th style="padding: 0.75rem; text-align: left;">Type</th>
+                <th style="padding: 0.75rem; text-align: right;">Amount</th>
+                <th style="padding: 0.75rem; text-align: right;">% of Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in top_by_income %}
+            {% if item.income > 0 %}
+            <tr style="border-bottom: 1px solid var(--table-border);">
+                <td style="padding: 0.75rem;">{{ item.ref_type|replace_underscore }}</td>
+                <td style="padding: 0.75rem; text-align: right;" class="change-positive">{{ item.income|isk_format }}</td>
+                <td style="padding: 0.75rem; text-align: right;">{% widthratio item.income income_total 100 %}%</td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if top_by_expense %}
+<div class="card">
+    <h2>Top Expense Categories</h2>
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid var(--border-color);">
+                <th style="padding: 0.75rem; text-align: left;">Type</th>
+                <th style="padding: 0.75rem; text-align: right;">Amount</th>
+                <th style="padding: 0.75rem; text-align: right;">% of Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in top_by_expense %}
+            {% if item.expense > 0 %}
+            <tr style="border-bottom: 1px solid var(--table-border);">
+                <td style="padding: 0.75rem;">{{ item.ref_type|replace_underscore }}</td>
+                <td style="padding: 0.75rem; text-align: right;" class="change-negative">{{ item.expense|isk_format }}</td>
+                <td style="padding: 0.75rem; text-align: right;">{% widthratio item.expense expense_total 100 %}%</td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% else %}
+<div class="card">
+    <p>No transaction data available for the selected time period.</p>
+</div>
+{% endif %}
+
+<div style="margin-bottom: 1rem;">
+    <a href="{% url 'core:wallet_journal' %}" class="btn">View Journal</a>
+    <a href="{% url 'core:wallet_transactions' %}" class="btn" style="margin-left: 0.5rem;">View Transactions</a>
+    <a href="{% url 'core:wallet_balance' %}" class="btn" style="margin-left: 0.5rem;">Balance History</a>
+</div>
+{% endblock %}
