@@ -1626,6 +1626,103 @@ def contracts_list(request: HttpRequest, character_id: int = None) -> HttpRespon
     })
 
 
+# Industry Views
+
+@login_required
+def industry_jobs(request: HttpRequest, character_id: int = None) -> HttpResponse:
+    """View industry jobs with filtering by status and activity type."""
+    from core.models import Character
+    from core.character.models import IndustryJob
+    from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+
+    # Get character - either specified or user's character
+    if character_id:
+        try:
+            character = Character.objects.get(id=character_id, user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+    else:
+        try:
+            character = Character.objects.get(user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+
+    # Get filter parameters
+    activity_filter = request.GET.get('activity', '')
+    status_filter = request.GET.get('status', '')
+
+    # Build queryset
+    jobs_qs = IndustryJob.objects.filter(character=character)
+
+    # Apply activity filter
+    if activity_filter:
+        jobs_qs = jobs_qs.filter(activity_id=activity_filter)
+
+    # Apply status filter
+    if status_filter:
+        jobs_qs = jobs_qs.filter(status=status_filter)
+
+    # Order by start date (newest first)
+    jobs_qs = jobs_qs.order_by('-start_date')
+
+    # Pagination
+    page = request.GET.get('page', 1)
+    per_page = 50
+    paginator = Paginator(jobs_qs, per_page)
+
+    try:
+        jobs = paginator.page(page)
+    except PageNotAnInteger:
+        jobs = paginator.page(1)
+    except EmptyPage:
+        jobs = paginator.page(paginator.num_pages)
+
+    # Calculate job counts by status
+    active_count = IndustryJob.objects.filter(character=character, status=1).count()
+    paused_count = IndustryJob.objects.filter(character=character, status=2).count()
+    completed_count = IndustryJob.objects.filter(character=character, status=104).count()
+    cancelled_count = IndustryJob.objects.filter(character=character, status=102).count()
+    failed_count = IndustryJob.objects.filter(character=character, status=105).count()
+
+    # Activity type labels
+    activity_labels = {
+        '1': 'Manufacturing',
+        '4': 'ME Research',
+        '5': 'Copying',
+        '8': 'Invention',
+        '3': 'TE Research',
+        '9': 'Reverse Engineering',
+        '11': 'Reactions',
+    }
+
+    # Status labels
+    status_labels = {
+        '1': 'Active',
+        '2': 'Paused',
+        '102': 'Cancelled',
+        '104': 'Delivered',
+        '105': 'Failed',
+    }
+
+    return render(request, 'core/industry_jobs.html', {
+        'character': character,
+        'jobs': jobs,
+        'activity_filter': activity_filter,
+        'status_filter': status_filter,
+        'active_count': active_count,
+        'paused_count': paused_count,
+        'completed_count': completed_count,
+        'cancelled_count': cancelled_count,
+        'failed_count': failed_count,
+        'activity_labels': activity_labels,
+        'status_labels': status_labels,
+    })
+
+
 # Asset Views
 
 @login_required
@@ -2029,12 +2126,13 @@ def industry_summary(request: HttpRequest, character_id: int = None) -> HttpResp
 
 
 @login_required
-def industry_jobs_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
-    """View industry jobs with filtering and pagination."""
+def industry_jobs(request: HttpRequest, character_id: int = None) -> HttpResponse:
+    """View industry jobs with filtering by status and activity type."""
     from core.models import Character
+    from core.character.models import IndustryJob
     from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 
-    # Get character
+    # Get character - either specified or user's character
     if character_id:
         try:
             character = Character.objects.get(id=character_id, user=request.user)
@@ -2050,8 +2148,75 @@ def industry_jobs_list(request: HttpRequest, character_id: int = None) -> HttpRe
                 'message': 'Character not found',
             }, status=404)
 
+    # Get filter parameters
+    activity_filter = request.GET.get('activity', '')
+    status_filter = request.GET.get('status', '')
+
+    # Build queryset
+    jobs_qs = IndustryJob.objects.filter(character=character)
+
+    # Apply activity filter
+    if activity_filter:
+        jobs_qs = jobs_qs.filter(activity_id=activity_filter)
+
+    # Apply status filter
+    if status_filter:
+        jobs_qs = jobs_qs.filter(status=status_filter)
+
+    # Order by start date (newest first)
+    jobs_qs = jobs_qs.order_by('-start_date')
+
+    # Pagination
+    page = request.GET.get('page', 1)
+    per_page = 50
+    paginator = Paginator(jobs_qs, per_page)
+
+    try:
+        jobs = paginator.page(page)
+    except PageNotAnInteger:
+        jobs = paginator.page(1)
+    except EmptyPage:
+        jobs = paginator.page(paginator.num_pages)
+
+    # Calculate job counts by status
+    active_count = IndustryJob.objects.filter(character=character, status=1).count()
+    paused_count = IndustryJob.objects.filter(character=character, status=2).count()
+    completed_count = IndustryJob.objects.filter(character=character, status=104).count()
+    cancelled_count = IndustryJob.objects.filter(character=character, status=102).count()
+    failed_count = IndustryJob.objects.filter(character=character, status=105).count()
+
+    # Activity type labels
+    activity_labels = {
+        '1': 'Manufacturing',
+        '4': 'ME Research',
+        '5': 'Copying',
+        '8': 'Invention',
+        '3': 'TE Research',
+        '9': 'Reverse Engineering',
+        '11': 'Reactions',
+    }
+
+    # Status labels
+    status_labels = {
+        '1': 'Active',
+        '2': 'Paused',
+        '102': 'Cancelled',
+        '104': 'Delivered',
+        '105': 'Failed',
+    }
+
     return render(request, 'core/industry_jobs.html', {
         'character': character,
+        'jobs': jobs,
+        'activity_filter': activity_filter,
+        'status_filter': status_filter,
+        'active_count': active_count,
+        'paused_count': paused_count,
+        'completed_count': completed_count,
+        'cancelled_count': cancelled_count,
+        'failed_count': failed_count,
+        'activity_labels': activity_labels,
+        'status_labels': status_labels,
     })
 
 
@@ -2060,21 +2225,4 @@ def industry_job_detail(request: HttpRequest, job_id: int) -> HttpResponse:
     """View detailed information about a single industry job."""
     return render(request, 'core/industry_job_detail.html', {
         'job_id': job_id,
-    })
-
-
-@login_required
-def industry_jobs(request: HttpRequest, character_id: int) -> HttpResponse:
-    """View industry jobs for a specific character."""
-    from core.models import Character
-
-    try:
-        character = Character.objects.get(id=character_id, user=request.user)
-    except Character.DoesNotExist:
-        return render(request, 'core/error.html', {
-            'message': 'Character not found',
-        }, status=404)
-
-    return render(request, 'core/industry_jobs.html', {
-        'character': character,
     })

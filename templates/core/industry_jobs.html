@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}Industry Jobs - {{ character.name }} - evewire{% endblock %}
+
+{% block content %}
+<h1>Industry Jobs - {{ character.name }}</h1>
+
+<div style="margin-bottom: 1rem;">
+    <a href="{% url 'core:dashboard' %}">Dashboard</a>
+    <span style="margin: 0 0.5rem;">&rarr;</span>
+    <a href="{% url 'core:character_detail' character.id %}">{{ character.name }}</a>
+    <span style="margin: 0 0.5rem;">&rarr;</span>
+    <span>Industry Jobs</span>
+</div>
+
+<div class="card">
+    <h2>Job Status Summary</h2>
+    <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem;">
+        <div style="border: 1px solid var(--border-color); border-radius: 4px; padding: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; font-size: 1rem;">Active</h3>
+                <span style="font-size: 1.2rem; font-weight: bold;">{{ active_count }}</span>
+            </div>
+        </div>
+        <div style="border: 1px solid var(--border-color); border-radius: 4px; padding: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; font-size: 1rem;">Paused</h3>
+                <span style="font-size: 1.2rem; font-weight: bold;">{{ paused_count }}</span>
+            </div>
+        </div>
+        <div style="border: 1px solid var(--border-color); border-radius: 4px; padding: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; font-size: 1rem;">Delivered</h3>
+                <span style="font-size: 1.2rem; font-weight: bold;">{{ completed_count }}</span>
+            </div>
+        </div>
+        <div style="border: 1px solid var(--border-color); border-radius: 4px; padding: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; font-size: 1rem;">Cancelled</h3>
+                <span style="font-size: 1.2rem; font-weight: bold;">{{ cancelled_count }}</span>
+            </div>
+        </div>
+        <div style="border: 1px solid var(--border-color); border-radius: 4px; padding: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; font-size: 1rem;">Failed</h3>
+                <span style="font-size: 1.2rem; font-weight: bold;">{{ failed_count }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Filters</h2>
+    <form method="get" style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end;">
+        <div>
+            <label for="activity" style="display: block; margin-bottom: 0.25rem;">Activity:</label>
+            <select name="activity" id="activity" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
+                <option value="">All Activities</option>
+                <option value="1" {% if activity_filter == '1' %}selected{% endif %}>Manufacturing</option>
+                <option value="4" {% if activity_filter == '4' %}selected{% endif %}>ME Research</option>
+                <option value="5" {% if activity_filter == '5' %}selected{% endif %}>Copying</option>
+                <option value="8" {% if activity_filter == '8' %}selected{% endif %}>Invention</option>
+                <option value="3" {% if activity_filter == '3' %}selected{% endif %}>TE Research</option>
+                <option value="11" {% if activity_filter == '11' %}selected{% endif %}>Reactions</option>
+            </select>
+        </div>
+        <div>
+            <label for="status" style="display: block; margin-bottom: 0.25rem;">Status:</label>
+            <select name="status" id="status" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
+                <option value="">All Statuses</option>
+                <option value="1" {% if status_filter == '1' %}selected{% endif %}>Active</option>
+                <option value="2" {% if status_filter == '2' %}selected{% endif %}>Paused</option>
+                <option value="104" {% if status_filter == '104' %}selected{% endif %}>Delivered</option>
+                <option value="102" {% if status_filter == '102' %}selected{% endif %}>Cancelled</option>
+                <option value="105" {% if status_filter == '105' %}selected{% endif %}>Failed</option>
+            </select>
+        </div>
+        <button type="submit" class="btn">Apply Filters</button>
+        <a href="{% url 'core:character_industry_jobs' character.id %}" class="btn" style="background: var(--text-secondary);">Clear</a>
+    </form>
+</div>
+
+{% if jobs %}
+<div class="card">
+    <h2>Jobs ({{ jobs.paginator.count }} total)</h2>
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid var(--border-color);">
+                <th style="padding: 0.75rem; text-align: left;">Job ID</th>
+                <th style="padding: 0.75rem; text-align: left;">Activity</th>
+                <th style="padding: 0.75rem; text-align: left;">Product</th>
+                <th style="padding: 0.75rem; text-align: left;">Blueprint</th>
+                <th style="padding: 0.75rem; text-align: left;">Location</th>
+                <th style="padding: 0.75rem; text-align: left;">Progress</th>
+                <th style="padding: 0.75rem; text-align: left;">Start Date</th>
+                <th style="padding: 0.75rem; text-align: left;">End Date</th>
+                <th style="padding: 0.75rem; text-align: left;">Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for job in jobs %}
+            <tr style="border-bottom: 1px solid var(--table-border); {% if not job.is_active %}opacity: 0.6;{% endif %}">
+                <td style="padding: 0.75rem; font-size: 0.9rem;">{{ job.job_id }}</td>
+                <td style="padding: 0.75rem;">{{ job.activity_name }}</td>
+                <td style="padding: 0.75rem;">{{ job.product_name|default:"-" }}</td>
+                <td style="padding: 0.75rem;">{{ job.blueprint_type_name }}</td>
+                <td style="padding: 0.75rem; font-size: 0.9rem;">{{ job.solar_system_id }}</td>
+                <td style="padding: 0.75rem; min-width: 150px;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <div style="background: #eee; height: 20px; border-radius: 4px; overflow: hidden; flex: 1;">
+                            <div style="background: {% if job.is_completed %}#080{% elif job.is_active %}#0066cc{% else %}#666{% endif %}; height: 100%; width: {{ job.progress_percent }}%;"></div>
+                        </div>
+                        <span style="font-size: 0.85rem; color: #666; min-width: 45px; text-align: right;">{{ job.progress_percent|floatformat:0 }}%</span>
+                    </div>
+                    {% if job.is_expiring_soon %}
+                        <span style="display: inline-block; margin-top: 0.25rem; padding: 2px 6px; border-radius: 3px; background: #fff3cd; color: #856404; font-size: 0.75rem;">Expiring Soon</span>
+                    {% endif %}
+                </td>
+                <td style="padding: 0.75rem;">{{ job.start_date|date:"M d H:i" }}</td>
+                <td style="padding: 0.75rem;">{{ job.end_date|date:"M d H:i" }}</td>
+                <td style="padding: 0.75rem;">
+                    <span style="font-size: 0.9rem; padding: 2px 6px; border-radius: 3px; background: {% if job.is_active %}var(--alert-success-bg){% elif job.is_completed %}var(--alert-info-bg){% else %}var(--alert-error-bg){% endif %}; color: {% if job.is_active %}var(--alert-success-text){% elif job.is_completed %}var(--alert-info-text){% else %}var(--alert-error-text){% endif %};">
+                        {{ job.status_name }}
+                    </span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if jobs.has_other_pages %}
+    <div style="margin-top: 1.5rem; display: flex; justify-content: center; gap: 0.5rem; align-items: center;">
+        {% if jobs.has_previous %}
+            <a href="?page={{ jobs.previous_page_number }}{% if activity_filter %}&activity={{ activity_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}" class="btn">&laquo; Previous</a>
+        {% endif %}
+
+        <span>
+            Page {{ jobs.number }} of {{ jobs.paginator.num_pages }}
+        </span>
+
+        {% if jobs.has_next %}
+            <a href="?page={{ jobs.next_page_number }}{% if activity_filter %}&activity={{ activity_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}" class="btn">Next &raquo;</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% else %}
+<div class="card">
+    <p>No industry jobs found.</p>
+</div>
+{% endif %}
+
+<div style="margin-bottom: 1rem;">
+    <a href="{% url 'core:character_detail' character.id %}" class="btn">Back to Character</a>
+</div>
+{% endblock %}
