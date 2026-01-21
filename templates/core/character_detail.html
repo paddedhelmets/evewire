@@ -98,6 +98,12 @@
             {{ character.wallet_balance|floatformat:2 }} ISK
         </p>
         <p style="color: #666;">Last updated: {{ character.wallet_synced_at|date:"Y-m-d H:i:s" }}</p>
+        <div style="margin-top: 1rem;">
+            <a href="{% url 'core:character_wallet_journal' character.id %}" class="btn">Journal</a>
+            <a href="{% url 'core:character_wallet_transactions' character.id %}" class="btn" style="margin-left: 0.5rem;">Transactions</a>
+            <a href="{% url 'core:character_wallet_balance' character.id %}" class="btn" style="margin-left: 0.5rem;">Balance History</a>
+            <a href="{% url 'core:character_wallet_summary' character.id %}" class="btn" style="margin-left: 0.5rem;">Summary</a>
+        </div>
     {% else %}
         <p>No wallet data.</p>
     {% endif %}

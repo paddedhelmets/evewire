@@ -495,13 +495,225 @@ def _sync_implants(character) -> None:
 
 
 def _sync_wallet(character) -> None:
-    """Sync character wallet balance from ESI."""
+    """Sync character wallet data from ESI (balance, journal, transactions)."""
+    # Sync balance
     response = ESIClient.get_wallet_balance(character)
     balance = response.data
 
     character.wallet_balance = balance
     character.wallet_synced_at = timezone.now()
     character.save(update_fields=['wallet_balance', 'wallet_synced_at'])
+
+    # Sync journal with fromID walking
+    _sync_wallet_journal(character)
+
+    # Sync transactions with fromID walking
+    _sync_wallet_transactions(character)
+
+
+def _sync_wallet_journal(character) -> None:
+    """
+    Sync character wallet journal from ESI with fromID walking.
+
+    ESI pagination pattern:
+    - First request: no from_id parameter (returns newest entries)
+    - Subsequent requests: from_id = entry_id - 1 of the oldest entry from previous page
+    - Max entries per page: 2560
+    - Stop when we get entries we already have
+    """
+    from core.character.models import WalletJournalEntry
+
+    # Get the oldest entry_id we already have (for duplicate detection)
+    oldest_existing = WalletJournalEntry.objects.filter(
+        character=character
+    ).order_by('entry_id').first()
+
+    # Track entries we've seen to avoid duplicates within this sync
+    seen_entry_ids = set()
+    entries_to_create = []
+
+    from_id = None
+    total_fetched = 0
+    max_pages = 100  # Safety limit to prevent infinite loops
+
+    for page_num in range(max_pages):
+        params = {}
+        if from_id is not None:
+            params['from_id'] = from_id
+
+        try:
+            response = ESIClient.get(
+                f'/characters/{character.id}/wallet/journal/',
+                character,
+                **params
+            )
+        except Exception as e:
+            logger.error(f'Failed to fetch wallet journal page {page_num} for character {character.id}: {e}')
+            break
+
+        entries = response.data
+        if not entries:
+            break
+
+        # Process entries
+        page_new_entries = 0
+        for entry_data in entries:
+            entry_id = entry_data['id']
+
+            # Skip if we've already seen this entry (duplicate within sync)
+            if entry_id in seen_entry_ids:
+                continue
+
+            # Skip if we already have this entry in database (from previous sync)
+            if oldest_existing and entry_id <= oldest_existing.entry_id:
+                continue
+
+            seen_entry_ids.add(entry_id)
+            page_new_entries += 1
+
+            entries_to_create.append(entry_data)
+
+        # Update from_id for next page (walk backward)
+        # ESI returns entries sorted by date descending (newest first)
+        # To get older entries, use from_id = oldest_entry_id - 1
+        oldest_entry_id = min(e['id'] for e in entries)
+        from_id = oldest_entry_id - 1
+
+        total_fetched += len(entries)
+
+        # Stop if we didn't get any new entries on this page
+        if page_new_entries == 0:
+            logger.info(f'Wallet journal sync for character {character.id}: no new entries on page {page_num}, stopping')
+            break
+
+        # ESI returns empty list when we've reached the beginning
+        if len(entries) < 10:  # Heuristic: last page typically has few entries
+            # Continue one more time to be sure, but we're likely at the end
+            pass
+
+    # Create all new entries
+    if entries_to_create:
+        created = 0
+        for entry_data in entries_to_create:
+            try:
+                WalletJournalEntry.objects.create(
+                    character=character,
+                    entry_id=entry_data['id'],
+                    amount=entry_data.get('amount', 0),
+                    balance=entry_data.get('balance', 0),
+                    date=entry_data.get('date'),
+                    description=entry_data.get('description', ''),
+                    first_party_id=entry_data.get('first_party_id'),
+                    reason=entry_data.get('reason', ''),
+                    ref_type=entry_data.get('ref_type', ''),
+                    tax=entry_data.get('tax'),
+                    tax_receiver_id=entry_data.get('tax_receiver_id'),
+                )
+                created += 1
+            except Exception as e:
+                # Handle duplicate entry_id errors
+                logger.debug(f'Skipping duplicate journal entry {entry_data.get("id")}: {e}')
+
+        logger.info(f'Wallet journal sync for character {character.id}: created {created} entries across {total_fetched} fetched')
+
+
+def _sync_wallet_transactions(character) -> None:
+    """
+    Sync character wallet transactions from ESI with fromID walking.
+
+    ESI pagination pattern:
+    - First request: no from_id parameter (returns newest transactions)
+    - Subsequent requests: from_id = transaction_id - 1 of the oldest transaction from previous page
+    - Max entries per page: 2560
+    - Stop when we get transactions we already have
+    """
+    from core.character.models import WalletTransaction
+
+    # Get the oldest transaction_id we already have
+    oldest_existing = WalletTransaction.objects.filter(
+        character=character
+    ).order_by('transaction_id').first()
+
+    # Track transactions we've seen
+    seen_transaction_ids = set()
+    transactions_to_create = []
+
+    from_id = None
+    total_fetched = 0
+    max_pages = 100
+
+    for page_num in range(max_pages):
+        params = {}
+        if from_id is not None:
+            params['from_id'] = from_id
+
+        try:
+            response = ESIClient.get(
+                f'/characters/{character.id}/wallet/transactions/',
+                character,
+                **params
+            )
+        except Exception as e:
+            logger.error(f'Failed to fetch wallet transactions page {page_num} for character {character.id}: {e}')
+            break
+
+        transactions = response.data
+        if not transactions:
+            break
+
+        # Process transactions
+        page_new_transactions = 0
+        for tx_data in transactions:
+            transaction_id = tx_data['transaction_id']
+
+            if transaction_id in seen_transaction_ids:
+                continue
+
+            if oldest_existing and transaction_id <= oldest_existing.transaction_id:
+                continue
+
+            seen_transaction_ids.add(transaction_id)
+            page_new_transactions += 1
+
+            transactions_to_create.append(tx_data)
+
+        # Update from_id for next page
+        oldest_transaction_id = min(t['transaction_id'] for t in transactions)
+        from_id = oldest_transaction_id - 1
+
+        total_fetched += len(transactions)
+
+        # Stop if no new entries
+        if page_new_transactions == 0:
+            logger.info(f'Wallet transactions sync for character {character.id}: no new transactions on page {page_num}, stopping')
+            break
+
+        if len(transactions) < 10:
+            pass
+
+    # Create all new transactions
+    if transactions_to_create:
+        created = 0
+        for tx_data in transactions_to_create:
+            try:
+                WalletTransaction.objects.create(
+                    character=character,
+                    transaction_id=tx_data['transaction_id'],
+                    date=tx_data.get('date'),
+                    is_buy=tx_data.get('is_buy', True),
+                    is_personal=tx_data.get('is_personal', False),
+                    journal_ref_id=tx_data.get('journal_ref_id'),
+                    location_id=tx_data.get('location_id'),
+                    quantity=tx_data.get('quantity', 0),
+                    type_id=tx_data.get('type_id'),
+                    unit_price=tx_data.get('unit_price', 0),
+                )
+                created += 1
+            except Exception as e:
+                logger.debug(f'Skipping duplicate transaction {tx_data.get("transaction_id")}: {e}')
+
+        logger.info(f'Wallet transactions sync for character {character.id}: created {created} transactions across {total_fetched} fetched')
+
 
 
 def _sync_assets(character) -> None:
