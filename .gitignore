@@ -21,3 +21,7 @@ venv/
 .env
 career_research/zkillboard/data/
 db.sqlite3
+
+# Gas Town (added by gt)
+.claude/
+.logs/
