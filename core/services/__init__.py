@@ -284,6 +284,11 @@ class ESIClient:
         """Get character wallet transactions."""
         return cls.get(f'/characters/{character.id}/wallet/transactions/', character, page=page)
 
+    @classmethod
+    def get_industry_jobs(cls, character) -> ESIResponse:
+        """Get character industry jobs."""
+        return cls.get(f'/characters/{character.id}/industry/jobs/', character)
+
     # Public reference endpoints
 
     @classmethod
@@ -383,6 +388,7 @@ def sync_character_data(character) -> bool:
         _sync_wallet(character)
         _sync_assets(character)
         _sync_orders(character)
+        _sync_industry_jobs(character)
 
         character.last_sync_status = SyncStatus.SUCCESS
         character.last_sync_error = ''
@@ -582,3 +588,52 @@ def _sync_orders(character) -> None:
 
     character.orders_synced_at = timezone.now()
     character.save(update_fields=['orders_synced_at'])
+
+
+def _sync_industry_jobs(character) -> None:
+    """Sync character industry jobs from ESI."""
+    from core.character.models import IndustryJob
+
+    response = ESIClient.get_industry_jobs(character)
+    jobs_data = response.data
+
+    # Get existing job IDs for this character
+    existing_job_ids = set(
+        IndustryJob.objects.filter(character=character).values_list('job_id', flat=True)
+    )
+    incoming_job_ids = {job['job_id'] for job in jobs_data}
+
+    # Delete jobs that are no longer returned (completed/failed/cancelled beyond retention)
+    jobs_to_delete = existing_job_ids - incoming_job_ids
+    if jobs_to_delete:
+        IndustryJob.objects.filter(character=character, job_id__in=jobs_to_delete).delete()
+
+    # Upsert jobs
+    for job_data in jobs_data:
+        IndustryJob.objects.update_or_create(
+            character=character,
+            job_id=job_data['job_id'],
+            defaults={
+                'activity_id': job_data.get('activity_id'),
+                'status': job_data.get('status', 999),
+                'blueprint_id': job_data.get('blueprint_id'),
+                'blueprint_type_id': job_data.get('blueprint_type_id'),
+                'blueprint_location_id': job_data.get('blueprint_location_id'),
+                'product_type_id': job_data.get('product_type_id'),
+                'station_id': job_data.get('station_id'),
+                'solar_system_id': job_data.get('solar_system_id'),
+                'start_date': job_data.get('start_date'),
+                'end_date': job_data.get('end_date'),
+                'pause_date': job_data.get('pause_date'),
+                'completed_date': job_data.get('completed_date'),
+                'completed_character_id': job_data.get('completed_character_id'),
+                'runs': job_data.get('runs', 1),
+                'cost': job_data.get('cost', 0),
+                'probability': job_data.get('probability'),
+                'attempts': job_data.get('attempts'),
+                'success': job_data.get('success'),
+            }
+        )
+
+    character.industry_jobs_synced_at = timezone.now()
+    character.save(update_fields=['industry_jobs_synced_at'])
