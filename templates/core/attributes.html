@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}Attributes - {{ character.name }} - evewire{% endblock %}
+
+{% block content %}
+<h1>Character Attributes - {{ character.name }}</h1>
+
+<div style="margin-bottom: 1rem;">
+    <a href="{% url 'core:skills_list' %}" class="btn">Back to Skills</a>
+</div>
+
+<div class="card">
+    <h2>Base Attributes</h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">These attributes affect your skill training speed. Higher is better.</p>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem;">
+        <div style="text-align: center; padding: 1.5rem; background: var(--bg-secondary); border-radius: 8px;">
+            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Intelligence</div>
+            <div style="font-size: 2.5rem; font-weight: bold; color: #00aaff;">{{ attributes.intelligence }}</div>
+        </div>
+        <div style="text-align: center; padding: 1.5rem; background: var(--bg-secondary); border-radius: 8px;">
+            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Perception</div>
+            <div style="font-size: 2.5rem; font-weight: bold; color: #ff6600;">{{ attributes.perception }}</div>
+        </div>
+        <div style="text-align: center; padding: 1.5rem; background: var(--bg-secondary); border-radius: 8px;">
+            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Charisma</div>
+            <div style="font-size: 2.5rem; font-weight: bold; color: #cc00cc;">{{ attributes.charisma }}</div>
+        </div>
+        <div style="text-align: center; padding: 1.5rem; background: var(--bg-secondary); border-radius: 8px;">
+            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Willpower</div>
+            <div style="font-size: 2.5rem; font-weight: bold; color: #00cc66;">{{ attributes.willpower }}</div>
+        </div>
+        <div style="text-align: center; padding: 1.5rem; background: var(--bg-secondary); border-radius: 8px;">
+            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Memory</div>
+            <div style="font-size: 2.5rem; font-weight: bold; color: #ffcc00;">{{ attributes.memory }}</div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h3>Skill Groups by Primary Attribute</h3>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+        <div style="padding: 1rem; border-left: 4px solid #00aaff; background: var(--bg-secondary);">
+            <strong>Intelligence</strong>
+            <ul style="margin: 0.5rem 0 0 1.25rem; font-size: 0.9rem;">
+                {% for group in skill_groups.intelligence %}
+                <li>{{ group }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        <div style="padding: 1rem; border-left: 4px solid #ff6600; background: var(--bg-secondary);">
+            <strong>Perception</strong>
+            <ul style="margin: 0.5rem 0 0 1.25rem; font-size: 0.9rem;">
+                {% for group in skill_groups.perception %}
+                <li>{{ group }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        <div style="padding: 1rem; border-left: 4px solid #cc00cc; background: var(--bg-secondary);">
+            <strong>Charisma</strong>
+            <ul style="margin: 0.5rem 0 0 1.25rem; font-size: 0.9rem;">
+                {% for group in skill_groups.charisma %}
+                <li>{{ group }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        <div style="padding: 1rem; border-left: 4px solid #00cc66; background: var(--bg-secondary);">
+            <strong>Willpower</strong>
+            <ul style="margin: 0.5rem 0 0 1.25rem; font-size: 0.9rem;">
+                {% for group in skill_groups.willpower %}
+                <li>{{ group }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        <div style="padding: 1rem; border-left: 4px solid #ffcc00; background: var(--bg-secondary);">
+            <strong>Memory</strong>
+            <ul style="margin: 0.5rem 0 0 1.25rem; font-size: 0.9rem;">
+                {% for group in skill_groups.memory %}
+                <li>{{ group }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+
+{% if attributes.bonus_remap_available %}
+<div class="card">
+    <h3>Remaps Available</h3>
+    <p>You have <strong>{{ attributes.bonus_remap_available }}</strong> bonus remap{{ attributes.bonus_remap_available|pluralize }} available.</p>
+</div>
+{% endif %}
+{% endblock %}

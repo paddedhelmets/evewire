@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}{{ campaign.title }} - Campaign - evewire{% endblock %}
+
+{% block content %}
+<h1>{{ campaign.title }}</h1>
+
+<div style="margin-bottom: 1rem;">
+    <a href="{% url 'core:campaign_list' %}" class="btn">Back to Campaigns</a>
+    <a href="{% url 'core:trade_overview' %}?campaign={{ campaign.id }}" class="btn" style="margin-left: 0.5rem;">View Trade Analysis</a>
+</div>
+
+<div class="card">
+    <h2>Campaign Details</h2>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
+        <div>
+            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Start Date</div>
+            <div style="font-weight: 600;">{{ campaign.start_date|date:"Y-m-d H:i" }}</div>
+        </div>
+        <div>
+            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.25rem;">End Date</div>
+            <div style="font-weight: 600;">{{ campaign.end_date|date:"Y-m-d H:i" }}</div>
+        </div>
+        <div>
+            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Duration</div>
+            <div style="font-weight: 600;">
+                {% widthratio campaign.end_date|timesince:campaign.start_date 1 %} days
+            </div>
+        </div>
+    </div>
+
+    {% if campaign.description %}
+    <div style="margin-bottom: 1.5rem;">
+        <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Description</div>
+        <div>{{ campaign.description|linebreaks }}</div>
+    </div>
+    {% endif %}
+
+    {% if campaign.characters.exists %}
+    <div style="margin-bottom: 1.5rem;">
+        <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Characters</div>
+        <div>
+            {% for character in campaign.characters.all %}
+            <span style="display: inline-block; padding: 0.25rem 0.5rem; background: var(--bg-secondary); border-radius: 4px; margin-right: 0.5rem; margin-bottom: 0.5rem;">
+                {{ character.name }}
+            </span>
+            {% endfor %}
+        </div>
+    </div>
+    {% else %}
+    <div style="margin-bottom: 1.5rem;">
+        <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Characters</div>
+        <div style="color: var(--text-secondary);">All characters</div>
+    </div>
+    {% endif %}
+
+    <div style="display: flex; gap: 0.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+        <a href="{% url 'core:trade_overview' %}?campaign={{ campaign.id }}" class="btn">View Trade Analysis</a>
+        <a href="{% url 'core:campaign_edit' campaign.id %}" class="btn">Edit Campaign</a>
+        <a href="{% url 'core:campaign_delete' campaign.id %}" class="btn" style="background: var(--alert-error-bg); color: var(--alert-error-text);">Delete Campaign</a>
+    </div>
+</div>
+
+<div class="card">
+    <h3>Campaign Statistics</h3>
+    <p style="color: var(--text-secondary);">View the <a href="{% url 'core:trade_overview' %}?campaign={{ campaign.id }}">trade analysis</a> for this campaign to see profit/loss, top items, and monthly breakdowns.</p>
+</div>
+{% endblock %}

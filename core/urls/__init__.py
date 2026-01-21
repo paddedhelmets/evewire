@@ -30,6 +30,8 @@ urlpatterns = [
 
     # Skills
     path('skills/', views.skills_list, name='skills_list'),
+    path('skills/implants/', views.implants_view, name='implants_view'),
+    path('skills/attributes/', views.attributes_view, name='attributes_view'),
 
     # Wallet
     path('wallet/journal/', views.wallet_journal, name='wallet_journal'),
@@ -52,6 +54,13 @@ urlpatterns = [
     path('character/<int:character_id>/trade/', views.trade_overview, name='character_trade_overview'),
     path('trade/item/<int:type_id>/', views.trade_item_detail, name='trade_item_detail'),
     path('character/<int:character_id>/trade/item/<int:type_id>/', views.trade_item_detail, name='character_trade_item_detail'),
+
+    # Trade Campaigns
+    path('trade/campaigns/', views.campaign_list, name='campaign_list'),
+    path('trade/campaigns/create/', views.campaign_create, name='campaign_create'),
+    path('trade/campaigns/<int:campaign_id>/', views.campaign_detail, name='campaign_detail'),
+    path('trade/campaigns/<int:campaign_id>/edit/', views.campaign_edit, name='campaign_edit'),
+    path('trade/campaigns/<int:campaign_id>/delete/', views.campaign_delete, name='campaign_delete'),
 
     # Contracts
     path('contracts/', views.contracts_list, name='contracts'),

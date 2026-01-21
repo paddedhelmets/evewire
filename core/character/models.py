@@ -225,17 +225,52 @@ class CharacterImplant(models.Model):
         """
         Determine implant slot (1-10) based on type attributes.
 
-        This is a simplified version - full implementation would use SDE data.
-        For now, returns 0 (unknown) and can be enhanced later.
+        Implant slots in EVE:
+        - Slots 1-5: Attribute implants (Int, Per, Cha, Wil, Mem)
+        - Slots 6-10: Limited implants (Ocular, Cybernetic, Neural, Hardwiring, Mental)
+
+        Uses implant name heuristic for slot detection.
+        For production, you would query dgmTypeAttributes table for 'upgradeCapacity' value.
         """
-        # TODO: Parse from dgmTypeAttributes in SDE
-        # Slot 1-5: Attribute implants (INT, PER, CHA, WIL, MEM)
-        # Slot 6: Limited Ocular
-        # Slot 7: Limited Cybernetic
-        # Slot 8: Limited Neural
-        # Slot 9: Limited Hardwiring
-        # Slot 10: Limited Mental
-        return 0
+        from core.eve.models import ItemType
+
+        try:
+            item_type = ItemType.objects.get(id=self.type_id)
+            name = item_type.name.lower()
+
+            # Attribute implants (slots 1-5)
+            # Named by primary attribute they boost
+            if 'intelligence' in name or 'logic' in name:
+                return 1
+            elif 'perception' in name or 'optic' in name:
+                return 2
+            elif 'charisma' in name or 'social' in name or 'talent' in name:
+                return 3
+            elif 'willpower' in name or 'clarity' in name or 'command' in name:
+                return 4
+            elif 'memory' in name or 'cerebral' in name:
+                return 5
+
+            # Limited implants (slots 6-10)
+            # Named 'Limited X' where X determines slot
+            elif 'limited ocular' in name or 'limited δ' in name or 'limited epsilon' in name:
+                return 6
+            elif 'limited cybernetic' in name or 'limited γ' in name or 'limited gamma' in name:
+                return 7
+            elif 'limited neural' in name or 'limited β' in name or 'limited beta' in name:
+                return 8
+            elif 'limited hardwiring' in name or 'limited α' in name or 'limited alpha' in name:
+                return 9
+            elif 'limited mental' in name or 'limited σ' in name or 'limited sigma' in name:
+                return 10
+
+            # Fallback: Check group for implant category
+            # Most implants are in group 299 (Cyberimplants)
+            # Could further refine by checking type attributes
+            return 0
+
+        except ItemType.DoesNotExist:
+            return 0
 
 
 class CharacterAsset(MPTTModel):

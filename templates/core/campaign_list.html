@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}Trade Campaigns - evewire{% endblock %}
+
+{% block content %}
+<h1>Trade Campaigns</h1>
+
+<div style="margin-bottom: 1rem;">
+    <a href="{% url 'core:trade_overview' %}" class="btn">Back to Trade</a>
+    <a href="{% url 'core:campaign_create' %}" class="btn" style="margin-left: 0.5rem;">Create New Campaign</a>
+</div>
+
+{% if campaigns %}
+<div class="card">
+    <h2>My Campaigns</h2>
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid var(--border-color);">
+                <th style="padding: 0.75rem; text-align: left;">Title</th>
+                <th style="padding: 0.75rem; text-align: left;">Date Range</th>
+                <th style="padding: 0.75rem; text-align: left;">Characters</th>
+                <th style="padding: 0.75rem; text-align: center;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for campaign in campaigns %}
+            <tr style="border-bottom: 1px solid var(--table-border);">
+                <td style="padding: 0.75rem;">
+                    <strong>{{ campaign.title }}</strong>
+                    {% if campaign.description %}
+                    <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">{{ campaign.description|truncatewords:20 }}</div>
+                    {% endif %}
+                </td>
+                <td style="padding: 0.75rem;">
+                    <div style="font-size: 0.9rem;">
+                        {{ campaign.start_date|date:"Y-m-d" }} to {{ campaign.end_date|date:"Y-m-d" }}
+                    </div>
+                </td>
+                <td style="padding: 0.75rem;">
+                    {% if campaign.characters.exists %}
+                        <span style="font-size: 0.85rem;">{{ campaign.characters.count }} character{{ campaign.characters.count|pluralize }}</span>
+                    {% else %}
+                        <span style="font-size: 0.85rem; color: var(--text-secondary);">All characters</span>
+                    {% endif %}
+                </td>
+                <td style="padding: 0.75rem; text-align: center;">
+                    <a href="{% url 'core:trade_overview' %}?campaign={{ campaign.id }}" class="btn" style="padding: 0.25rem 0.5rem; font-size: 0.9rem;">View Trade</a>
+                    <a href="{% url 'core:campaign_detail' campaign.id %}" class="btn" style="padding: 0.25rem 0.5rem; font-size: 0.9rem;">Details</a>
+                    <a href="{% url 'core:campaign_edit' campaign.id %}" class="btn" style="padding: 0.25rem 0.5rem; font-size: 0.9rem;">Edit</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="card">
+    <p style="color: var(--text-secondary);">No campaigns found. Create a campaign to analyze your trading performance for specific time periods.</p>
+    <p><a href="{% url 'core:campaign_create' %}" class="btn">Create Your First Campaign</a></p>
+</div>
+{% endif %}
+{% endblock %}

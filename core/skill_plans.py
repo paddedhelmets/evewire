@@ -293,15 +293,22 @@ def calculate_training_time(character, skill_id: int, target_level: int) -> Dict
     """
     Calculate training time for a skill to reach target level.
 
+    Uses EVE Online skill training formula:
+    - SP per minute = primary_attribute + (secondary_attribute / 2)
+    - SP needed for level L = 2^((2.5 * L) - 2) * 32 * rank
+
     Returns dict with:
     - total_seconds: estimated training time in seconds
     - sp_needed: SP needed for target level
     - sp_current: Current SP in skill (0 if not trained)
+    - current_level: Current trained level
+    - sp_per_minute: Skill points earned per minute
     """
-    # TODO: Implement actual SP calculation based on character attributes
-    # This requires the skill's rank and character's attributes
-    # For now, return placeholder
+    from core.character.models import CharacterAttributes
+    from core.eve.models import ItemType
+    import math
 
+    # Get current skill status
     try:
         char_skill = CharacterSkill.objects.get(
             character=character,
@@ -313,15 +320,85 @@ def calculate_training_time(character, skill_id: int, target_level: int) -> Dict
         current_level = 0
         current_sp = 0
 
-    # SP needed formula (simplified - needs rank from SDE)
-    # SP to train level L = 2^((2.5 * L) - 2) * 250 * rank
-    # For now, return placeholder
+    # Get character attributes
+    try:
+        attrs = character.attributes
+    except CharacterAttributes.DoesNotExist:
+        # Default attributes if not synced
+        attrs = None
+
+    # Get skill rank from SDE (using dgmTypeAttributes or hardcoded)
+    # For now, use a default rank of 1 for all skills
+    # TODO: Implement proper SDE lookup for skill rank
+    skill_rank = _get_skill_rank(skill_id)
+
+    # Get skill primary/secondary attributes from SDE
+    primary_attr_name, secondary_attr_name = _get_skill_attributes(skill_id)
+
+    # Calculate SP per minute
+    if attrs:
+        primary_value = getattr(attrs, primary_attr_name, 20)
+        secondary_value = getattr(attrs, secondary_attr_name, 20)
+        sp_per_minute = primary_value + (secondary_value / 2)
+    else:
+        sp_per_minute = 20 + (20 / 2)  # Default: both attributes at 20
+
+    # Calculate SP needed for each level from current to target
+    total_sp_needed = 0
+    for level in range(current_level + 1, target_level + 1):
+        level_sp = math.pow(2, (2.5 * level) - 2) * 32 * skill_rank
+        total_sp_needed += level_sp
+
+    # SP already earned towards current level
+    sp_at_current_level_start = 0
+    if current_level > 0:
+        sp_at_current_level_start = math.pow(2, (2.5 * current_level) - 2) * 32 * skill_rank
+
+    sp_remaining = max(0, total_sp_needed - (current_sp - sp_at_current_level_start))
+
+    # Calculate time
+    if sp_per_minute > 0:
+        total_seconds = int((sp_remaining / sp_per_minute) * 60)
+    else:
+        total_seconds = 0
+
     return {
-        'total_seconds': 0,
-        'sp_needed': 0,
+        'total_seconds': total_seconds,
+        'sp_needed': int(total_sp_needed),
+        'sp_remaining': int(sp_remaining),
         'sp_current': current_sp,
         'current_level': current_level,
+        'sp_per_minute': round(sp_per_minute, 2),
+        'skill_rank': skill_rank,
     }
+
+
+def _get_skill_rank(skill_id: int) -> int:
+    """
+    Get the rank (multiplier) for a skill.
+
+    Rank determines how many SP are needed to train the skill.
+    Most skills have rank 1, but some have higher ranks.
+
+    TODO: Implement proper SDE lookup from dgmTypeAttributes
+    For now, return 1 for all skills.
+    """
+    # Placeholder - would look up from SDE
+    return 1
+
+
+def _get_skill_attributes(skill_id: int) -> tuple[str, str]:
+    """
+    Get the primary and secondary attributes for a skill.
+
+    Returns tuple of (primary_attribute_name, secondary_attribute_name).
+
+    TODO: Implement proper SDE lookup from invTypes/dgmTypeAttributes
+    For now, return default (intelligence, memory) for all skills.
+    """
+    # Placeholder - would look up from SDE
+    # Default to intelligence/memory
+    return ('intelligence', 'memory')
 
 
 # Import models for aggregate functions

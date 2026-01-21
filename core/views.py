@@ -477,6 +477,127 @@ def skills_list(request: HttpRequest) -> HttpResponse:
     })
 
 
+@login_required
+def implants_view(request: HttpRequest) -> HttpResponse:
+    """View character implants with slot information."""
+    from core.character.models import CharacterImplant
+    from core.models import Character
+    from core.eve.models import ItemType
+
+    try:
+        character = Character.objects.get(user=request.user)
+    except Character.DoesNotExist:
+        return render(request, 'core/error.html', {
+            'message': 'Character not found. Please log in again.',
+        }, status=404)
+
+    # Get all implants for this character
+    implants_qs = CharacterImplant.objects.filter(character=character).select_related()
+
+    # Group by slot (implants don't have explicit slot field, so we'll need to get it from type)
+    # For now, just list all implants with their type names
+    implants = []
+    for implant in implants_qs:
+        try:
+            item_type = ItemType.objects.get(id=implant.type_id)
+            implants.append({
+                'type_id': implant.type_id,
+                'name': item_type.name,
+                'slot': _get_implant_slot(implant.type_id),
+            })
+        except ItemType.DoesNotExist:
+            implants.append({
+                'type_id': implant.type_id,
+                'name': f"Type {implant.type_id}",
+                'slot': 'Unknown',
+            })
+
+    # Check for empty slots (1-10)
+    filled_slots = set(imp['slot'] for imp in implants if isinstance(imp['slot'], int))
+    all_slots = list(range(1, 11))
+    empty_slots = [slot for slot in all_slots if slot not in filled_slots]
+
+    return render(request, 'core/implants.html', {
+        'character': character,
+        'implants': implants,
+        'empty_slots': empty_slots,
+        'total_slots': 10,
+    })
+
+
+@login_required
+def attributes_view(request: HttpRequest) -> HttpResponse:
+    """View character attributes with skill group associations."""
+    from core.character.models import CharacterAttributes
+    from core.models import Character
+
+    try:
+        character = Character.objects.get(user=request.user)
+    except Character.DoesNotExist:
+        return render(request, 'core/error.html', {
+            'message': 'Character not found. Please log in again.',
+        }, status=404)
+
+    try:
+        attrs = character.attributes
+    except CharacterAttributes.DoesNotExist:
+        return render(request, 'core/error.html', {
+            'message': 'Attributes not found. Please sync your character.',
+        }, status=404)
+
+    # Skill group associations with attributes
+    skill_groups = {
+        'intelligence': ['Electronics', 'Engineering', 'Science', 'Mechanics', 'Drones'],
+        'perception': ['Spaceship Command', 'Gunnery', 'Missiles'],
+        'charisma': ['Trade', 'Social', 'Leadership', 'Corporation Management'],
+        'willpower': ['Command', 'Advanced Industry'],
+        'memory': ['Industry', 'Learning'],
+    }
+
+    return render(request, 'core/attributes.html', {
+        'character': character,
+        'attributes': attrs,
+        'skill_groups': skill_groups,
+    })
+
+
+def _get_implant_slot(type_id: int) -> int | str:
+    """
+    Get the implant slot for a given type_id.
+
+    This is a simplified version - in production, you'd look this up from SDE data.
+    Implant slots:
+    - 1-5: Attribute implants (1=Int, 2=Per, 3=Cha, 4=Wil, 5=Mem)
+    - 6-10: Limited implant slots
+    """
+    # This is a placeholder - you'd implement proper SDE lookup
+    # For now, return the slot based on type_id ranges or a lookup table
+    from core.eve.models import ItemType
+
+    try:
+        item_type = ItemType.objects.get(id=type_id)
+        name = item_type.name.lower()
+
+        # Simple heuristic based on name (not perfect, but functional)
+        if 'intelligence' in name or 'logic' in name:
+            return 1
+        elif 'perception' in name or 'optic' in name:
+            return 2
+        elif 'charisma' in name or 'social' in name:
+            return 3
+        elif 'willpower' in name or 'command' in name:
+            return 4
+        elif 'memory' in name or 'cerebral' in name:
+            return 5
+        elif 'limited' in name:
+            # Slot 6-10 are limited implants - for now just return 6
+            return 6
+        else:
+            return 'Unknown'
+    except ItemType.DoesNotExist:
+        return 'Unknown'
+
+
 # Skill Plan Import/Export Views
 
 @login_required
@@ -1256,6 +1377,165 @@ def trade_item_detail(request: HttpRequest, character_id: int, type_id: int) -> 
         'timeframe': timeframe,
         'campaign_id': campaign_id,
     })
+
+
+# Trade Campaign CRUD Views
+
+@login_required
+def campaign_list(request: HttpRequest) -> HttpResponse:
+    """List all trade campaigns for the current user."""
+    from core.trade.models import Campaign
+
+    campaigns = Campaign.objects.filter(user=request.user).order_by('-start_date')
+
+    return render(request, 'core/campaign_list.html', {
+        'campaigns': campaigns,
+    })
+
+
+@login_required
+@require_http_methods(['GET', 'POST'])
+def campaign_create(request: HttpRequest) -> HttpResponse:
+    """Create a new trade campaign."""
+    from core.trade.models import Campaign
+    from core.models import Character
+    from django.contrib import messages
+
+    if request.method == 'POST':
+        title = request.POST.get('title')
+        description = request.POST.get('description', '')
+        start_date = request.POST.get('start_date')
+        end_date = request.POST.get('end_date')
+        character_ids = request.POST.getlist('characters')
+
+        if not title or not start_date or not end_date:
+            messages.error(request, 'Title, start date, and end date are required.')
+            return render(request, 'core/campaign_form.html', {
+                'characters': Character.objects.filter(user=request.user),
+            })
+
+        from django.utils.dateparse import parse_datetime
+        try:
+            start = parse_datetime(start_date)
+            end = parse_datetime(end_date)
+        except ValueError:
+            messages.error(request, 'Invalid date format.')
+            return render(request, 'core/campaign_form.html', {
+                'characters': Character.objects.filter(user=request.user),
+            })
+
+        # Generate slug from title
+        import re
+        slug = re.sub(r'[^a-z0-9]+', '-', title.lower()).strip('-')
+
+        campaign = Campaign.objects.create(
+            user=request.user,
+            title=title,
+            slug=slug,
+            description=description,
+            start_date=start,
+            end_date=end,
+        )
+
+        # Add characters if specified
+        if character_ids:
+            campaign.characters.set(character_ids)
+
+        messages.success(request, f'Campaign "{title}" created successfully.')
+        return redirect('core:campaign_detail', campaign_id=campaign.id)
+
+    return render(request, 'core/campaign_form.html', {
+        'characters': Character.objects.filter(user=request.user),
+    })
+
+
+@login_required
+def campaign_detail(request: HttpRequest, campaign_id: int) -> HttpResponse:
+    """View a single campaign with details."""
+    from core.trade.models import Campaign
+
+    try:
+        campaign = Campaign.objects.get(id=campaign_id, user=request.user)
+    except Campaign.DoesNotExist:
+        return render(request, 'core/error.html', {
+            'message': 'Campaign not found.',
+        }, status=404)
+
+    return render(request, 'core/campaign_detail.html', {
+        'campaign': campaign,
+    })
+
+
+@login_required
+@require_http_methods(['GET', 'POST'])
+def campaign_edit(request: HttpRequest, campaign_id: int) -> HttpResponse:
+    """Edit an existing campaign."""
+    from core.trade.models import Campaign
+    from core.models import Character
+    from django.contrib import messages
+
+    try:
+        campaign = Campaign.objects.get(id=campaign_id, user=request.user)
+    except Campaign.DoesNotExist:
+        return render(request, 'core/error.html', {
+            'message': 'Campaign not found.',
+        }, status=404)
+
+    if request.method == 'POST':
+        campaign.title = request.POST.get('title', campaign.title)
+        campaign.description = request.POST.get('description', '')
+        start_date = request.POST.get('start_date')
+        end_date = request.POST.get('end_date')
+        character_ids = request.POST.getlist('characters')
+
+        from django.utils.dateparse import parse_datetime
+        if start_date:
+            try:
+                campaign.start_date = parse_datetime(start_date)
+            except ValueError:
+                pass
+
+        if end_date:
+            try:
+                campaign.end_date = parse_datetime(end_date)
+            except ValueError:
+                pass
+
+        campaign.save()
+
+        if character_ids:
+            campaign.characters.set(character_ids)
+        else:
+            campaign.characters.clear()
+
+        messages.success(request, f'Campaign "{campaign.title}" updated successfully.')
+        return redirect('core:campaign_detail', campaign_id=campaign.id)
+
+    return render(request, 'core/campaign_form.html', {
+        'campaign': campaign,
+        'characters': Character.objects.filter(user=request.user),
+        'selected_characters': list(campaign.characters.values_list('id', flat=True)),
+    })
+
+
+@login_required
+@require_http_methods(['POST'])
+def campaign_delete(request: HttpRequest, campaign_id: int) -> HttpResponse:
+    """Delete a campaign."""
+    from core.trade.models import Campaign
+    from django.contrib import messages
+
+    try:
+        campaign = Campaign.objects.get(id=campaign_id, user=request.user)
+    except Campaign.DoesNotExist:
+        return render(request, 'core/error.html', {
+            'message': 'Campaign not found.',
+        }, status=404)
+
+    title = campaign.title
+    campaign.delete()
+    messages.success(request, f'Campaign "{title}" deleted successfully.')
+    return redirect('core:campaign_list')
 
 
 # Contracts Views
