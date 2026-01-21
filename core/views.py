@@ -1998,3 +1998,83 @@ def set_main_character(request: HttpRequest, character_id: int) -> HttpResponse:
 
     messages.success(request, f'"{character.character_name}" set as main character.')
     return redirect('characters')
+
+
+# Industry Views
+
+@login_required
+def industry_summary(request: HttpRequest, character_id: int = None) -> HttpResponse:
+    """View industry summary across all characters or a specific character."""
+    from core.models import Character
+
+    # Get character
+    if character_id:
+        try:
+            character = Character.objects.get(id=character_id, user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+    else:
+        try:
+            character = Character.objects.get(user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+
+    return render(request, 'core/industry_summary.html', {
+        'character': character,
+    })
+
+
+@login_required
+def industry_jobs_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
+    """View industry jobs with filtering and pagination."""
+    from core.models import Character
+    from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+
+    # Get character
+    if character_id:
+        try:
+            character = Character.objects.get(id=character_id, user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+    else:
+        try:
+            character = Character.objects.get(user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+
+    return render(request, 'core/industry_jobs.html', {
+        'character': character,
+    })
+
+
+@login_required
+def industry_job_detail(request: HttpRequest, job_id: int) -> HttpResponse:
+    """View detailed information about a single industry job."""
+    return render(request, 'core/industry_job_detail.html', {
+        'job_id': job_id,
+    })
+
+
+@login_required
+def industry_jobs(request: HttpRequest, character_id: int) -> HttpResponse:
+    """View industry jobs for a specific character."""
+    from core.models import Character
+
+    try:
+        character = Character.objects.get(id=character_id, user=request.user)
+    except Character.DoesNotExist:
+        return render(request, 'core/error.html', {
+            'message': 'Character not found',
+        }, status=404)
+
+    return render(request, 'core/industry_jobs.html', {
+        'character': character,
+    })
