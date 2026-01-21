@@ -15,7 +15,10 @@
 </div>
 
 <div class="card">
-    <h2>Contract Status Summary</h2>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h2>Contract Status Summary</h2>
+        <a href="{% url 'core:character_contracts_export' character.id %}" class="btn" style="background: #28a745;">Export CSV</a>
+    </div>
     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
         <div style="border: 1px solid var(--border-color); border-radius: 4px; padding: 1rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">

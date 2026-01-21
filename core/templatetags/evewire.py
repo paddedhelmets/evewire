@@ -92,3 +92,12 @@ def replace_underscore(value):
         return str(value).replace('_', ' ').title()
     except (ValueError, TypeError):
         return value
+
+
+@register.filter
+def commas(value):
+    """Format number with thousand separators."""
+    try:
+        return "{:,}".format(int(float(value)))
+    except (ValueError, TypeError):
+        return ''

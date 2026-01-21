@@ -82,4 +82,16 @@ urlpatterns = [
     path('character/<int:character_id>/assets/summary/', views.assets_summary, name='character_assets_summary'),
     path('assets/ships/', views.fitted_ships, name='fitted_ships'),
     path('character/<int:character_id>/assets/ships/', views.fitted_ships, name='character_fitted_ships'),
+    path('assets/export/', views.assets_export, name='assets_export'),
+    path('character/<int:character_id>/assets/export/', views.assets_export, name='character_assets_export'),
+
+    # Contracts
+    path('contracts/export/', views.contracts_export, name='contracts_export'),
+    path('character/<int:character_id>/contracts/export/', views.contracts_export, name='character_contracts_export'),
+
+    # Industry Jobs
+    path('industry/jobs/', views.industry_jobs_list, name='industry_jobs_list'),
+    path('character/<int:character_id>/industry/jobs/', views.industry_jobs_list, name='character_industry_jobs_list'),
+    path('industry/jobs/export/', views.industry_jobs_export, name='industry_jobs_export'),
+    path('character/<int:character_id>/industry/jobs/export/', views.industry_jobs_export, name='character_industry_jobs_export'),
 ]

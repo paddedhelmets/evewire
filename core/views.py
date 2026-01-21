@@ -1926,6 +1926,89 @@ def fitted_ships(request: HttpRequest, character_id: int = None) -> HttpResponse
     })
 
 
+@login_required
+def industry_jobs_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
+    """View industry jobs with filtering and pagination."""
+    from core.models import Character
+    from core.character.models import IndustryJob
+    from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+
+    # Get character
+    if character_id:
+        try:
+            character = Character.objects.get(id=character_id, user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+    else:
+        try:
+            character = Character.objects.get(user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+
+    # Get filter parameters
+    activity_filter = request.GET.get('activity', '')
+    status_filter = request.GET.get('status', '')
+
+    # Build queryset
+    jobs_qs = IndustryJob.objects.filter(character=character)
+
+    # Apply activity filter
+    if activity_filter:
+        jobs_qs = jobs_qs.filter(activity_id=activity_filter)
+
+    # Apply status filter
+    if status_filter:
+        jobs_qs = jobs_qs.filter(status=status_filter)
+
+    # Order by start date (newest first)
+    jobs_qs = jobs_qs.order_by('-start_date')
+
+    # Pagination
+    page = request.GET.get('page', 1)
+    per_page = 50
+    paginator = Paginator(jobs_qs, per_page)
+
+    try:
+        jobs = paginator.page(page)
+    except PageNotAnInteger:
+        jobs = paginator.page(1)
+    except EmptyPage:
+        jobs = paginator.page(paginator.num_pages)
+
+    # Activity options
+    ACTIVITY_OPTIONS = {
+        '': 'All Activities',
+        '1': 'Manufacturing',
+        '2': 'TE Research',
+        '4': 'ME Research',
+        '5': 'Copying',
+        '8': 'Invention',
+    }
+
+    # Status options
+    STATUS_OPTIONS = {
+        '': 'All Status',
+        '1': 'Active',
+        '2': 'Paused',
+        '102': 'Cancelled',
+        '104': 'Delivered',
+        '105': 'Failed',
+    }
+
+    return render(request, 'core/industry_jobs.html', {
+        'character': character,
+        'jobs': jobs,
+        'activity_filter': activity_filter,
+        'status_filter': status_filter,
+        'activity_options': ACTIVITY_OPTIONS,
+        'status_options': STATUS_OPTIONS,
+    })
+
+
 # Character Management Views
 
 @login_required
@@ -1998,3 +2081,273 @@ def set_main_character(request: HttpRequest, character_id: int) -> HttpResponse:
 
     messages.success(request, f'"{character.character_name}" set as main character.')
     return redirect('characters')
+
+
+# CSV Export Views
+
+@login_required
+def assets_export(request: HttpRequest, character_id: int = None) -> HttpResponse:
+    """Export character assets to CSV."""
+    from core.models import Character
+    from core.character.models import CharacterAsset
+    from core.eve.models import ItemType
+    import csv
+
+    # Get character
+    if character_id:
+        try:
+            character = Character.objects.get(id=character_id, user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+    else:
+        try:
+            character = Character.objects.get(user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+
+    # Get all assets for this character
+    assets_qs = CharacterAsset.objects.filter(character=character).select_related('type')
+
+    # Apply filters from query string
+    location_type = request.GET.get('location_type', '')
+    if location_type:
+        assets_qs = assets_qs.filter(location_type=location_type)
+
+    # Create CSV response
+    response = HttpResponse(content_type='text/csv')
+    filename = f"{character.character_name}_assets.csv"
+    filename = filename.replace(' ', '_').replace('/', '_')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+    writer = csv.writer(response)
+
+    # Write header
+    writer.writerow([
+        'Item ID',
+        'Item Name',
+        'Type ID',
+        'Quantity',
+        'Location ID',
+        'Location Type',
+        'Location Flag',
+        'Is Singleton',
+        'Is Blueprint Copy',
+        'Estimated Value (ISK)',
+    ])
+
+    # Write data rows
+    for asset in assets_qs:
+        item_type = asset.type
+        item_name = item_type.name if item_type else f"Type {asset.type_id}"
+
+        # Calculate estimated value
+        if item_type and item_type.sell_price:
+            value = float(item_type.sell_price) * asset.quantity
+        elif item_type and item_type.base_price:
+            value = float(item_type.base_price) * asset.quantity
+        else:
+            value = 0.0
+
+        writer.writerow([
+            asset.item_id,
+            item_name,
+            asset.type_id,
+            asset.quantity,
+            asset.location_id or '',
+            asset.location_type,
+            asset.location_flag,
+            'Yes' if asset.is_singleton else 'No',
+            'Yes' if asset.is_blueprint_copy else 'No',
+            f'{value:.2f}',
+        ])
+
+    return response
+
+
+@login_required
+def contracts_export(request: HttpRequest, character_id: int = None) -> HttpResponse:
+    """Export character contracts to CSV."""
+    from core.models import Character
+    from core.character.models import Contract
+    import csv
+
+    # Get character
+    if character_id:
+        try:
+            character = Character.objects.get(id=character_id, user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+    else:
+        try:
+            character = Character.objects.get(user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+
+    # Get all contracts for this character
+    contracts_qs = Contract.objects.filter(character=character)
+
+    # Apply filters from query string
+    contract_type = request.GET.get('type', '')
+    status_filter = request.GET.get('status', '')
+    availability_filter = request.GET.get('availability', '')
+
+    if contract_type:
+        contracts_qs = contracts_qs.filter(type=contract_type)
+    if status_filter:
+        contracts_qs = contracts_qs.filter(status=status_filter)
+    if availability_filter:
+        contracts_qs = contracts_qs.filter(availability=availability_filter)
+
+    # Create CSV response
+    response = HttpResponse(content_type='text/csv')
+    filename = f"{character.character_name}_contracts.csv"
+    filename = filename.replace(' ', '_').replace('/', '_')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+    writer = csv.writer(response)
+
+    # Write header
+    writer.writerow([
+        'Contract ID',
+        'Type',
+        'Status',
+        'Title',
+        'Availability',
+        'Date Issued',
+        'Date Expires',
+        'Date Completed',
+        'Issuer ID',
+        'Assignee ID',
+        'Acceptor ID',
+        'Price (ISK)',
+        'Reward (ISK)',
+        'Collateral (ISK)',
+        'Buyout (ISK)',
+        'Volume (m3)',
+        'Items Count',
+        'Total Value (ISK)',
+    ])
+
+    # Write data rows
+    for contract in contracts_qs:
+        writer.writerow([
+            contract.contract_id,
+            contract.type_name,
+            contract.status_name,
+            contract.title,
+            contract.availability_name,
+            contract.date_issued.strftime('%Y-%m-%d %H:%M:%S') if contract.date_issued else '',
+            contract.date_expired.strftime('%Y-%m-%d %H:%M:%S') if contract.date_expired else '',
+            contract.date_completed.strftime('%Y-%m-%d %H:%M:%S') if contract.date_completed else '',
+            contract.issuer_id,
+            contract.assignee_id or '',
+            contract.acceptor_id or '',
+            f'{float(contract.price):.2f}' if contract.price else '0.00',
+            f'{float(contract.reward):.2f}' if contract.reward else '0.00',
+            f'{float(contract.collateral):.2f}' if contract.collateral else '0.00',
+            f'{float(contract.buyout):.2f}' if contract.buyout else '0.00',
+            f'{contract.volume:.2f}' if contract.volume else '0.00',
+            contract.items_count,
+            f'{contract.total_value:.2f}',
+        ])
+
+    return response
+
+
+@login_required
+def industry_jobs_export(request: HttpRequest, character_id: int = None) -> HttpResponse:
+    """Export character industry jobs to CSV."""
+    from core.models import Character
+    from core.character.models import IndustryJob
+    import csv
+
+    # Get character
+    if character_id:
+        try:
+            character = Character.objects.get(id=character_id, user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+    else:
+        try:
+            character = Character.objects.get(user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+
+    # Get all industry jobs for this character
+    jobs_qs = IndustryJob.objects.filter(character=character)
+
+    # Apply filters from query string
+    activity_id = request.GET.get('activity', '')
+    status_filter = request.GET.get('status', '')
+
+    if activity_id:
+        jobs_qs = jobs_qs.filter(activity_id=activity_id)
+    if status_filter:
+        jobs_qs = jobs_qs.filter(status=status_filter)
+
+    # Create CSV response
+    response = HttpResponse(content_type='text/csv')
+    filename = f"{character.character_name}_industry_jobs.csv"
+    filename = filename.replace(' ', '_').replace('/', '_')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+    writer = csv.writer(response)
+
+    # Write header
+    writer.writerow([
+        'Job ID',
+        'Activity',
+        'Status',
+        'Blueprint Type ID',
+        'Blueprint Name',
+        'Product Type ID',
+        'Product Name',
+        'Station ID',
+        'Solar System ID',
+        'Start Date',
+        'End Date',
+        'Completed Date',
+        'Runs',
+        'Cost (ISK)',
+        'Probability (%)',
+        'Attempts',
+        'Success',
+        'Progress (%)',
+    ])
+
+    # Write data rows
+    for job in jobs_qs:
+        writer.writerow([
+            job.job_id,
+            job.activity_name,
+            job.status_name,
+            job.blueprint_type_id,
+            job.blueprint_type_name,
+            job.product_type_id or '',
+            job.product_name,
+            job.station_id,
+            job.solar_system_id,
+            job.start_date.strftime('%Y-%m-%d %H:%M:%S') if job.start_date else '',
+            job.end_date.strftime('%Y-%m-%d %H:%M:%S') if job.end_date else '',
+            job.completed_date.strftime('%Y-%m-%d %H:%M:%S') if job.completed_date else '',
+            job.runs,
+            f'{float(job.cost):.2f}' if job.cost else '0.00',
+            f'{job.probability:.1f}' if job.probability is not None else '',
+            job.attempts or '',
+            'Yes' if job.success else ('No' if job.success is not None else ''),
+            f'{job.progress_percent:.1f}' if job.progress_percent else '0.0',
+        ])
+
+    return response
