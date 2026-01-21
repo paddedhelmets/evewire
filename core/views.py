@@ -2490,3 +2490,271 @@ def blueprints_list(request: HttpRequest, character_id: int = None) -> HttpRespo
         'bpc_count': bpc_count,
         'total_blueprints': bpo_count + bpc_count,
     })
+
+
+# ============================================================================
+# FITTINGS VIEWS
+# ============================================================================
+
+@login_required
+def fittings_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
+    """View all fittings with filtering."""
+    from core.models import Character
+    from core.doctrines.models import Fitting
+    from core.eve.models import ItemType
+
+    # Get character
+    if character_id:
+        try:
+            character = Character.objects.get(id=character_id, user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+    else:
+        character = None
+
+    # Get filter parameters
+    ship_type_filter = request.GET.get('ship_type', '')
+    search_query = request.GET.get('search', '')
+    tag_filter = request.GET.get('tag', '')
+
+    # Build base queryset
+    fittings_qs = Fitting.objects.active()
+
+    # Apply ship type filter
+    if ship_type_filter:
+        fittings_qs = fittings_qs.filter(ship_type_id=ship_type_filter)
+
+    # Apply tag filter (JSON field query)
+    if tag_filter:
+        # Filter by JSON tags field - check if tag exists in the tags dict
+        fittings_qs = [f for f in fittings_qs if tag_filter in f.tags]
+
+    # Apply search filter
+    if search_query:
+        fittings_qs = fittings_qs.filter(name__icontains=search_query)
+
+    # Prefetch related data
+    fittings_qs = fittings_qs.select_related()
+
+    # Get all ship types for filter dropdown
+    ship_types = ItemType.objects.filter(category_id=6).order_by('name')
+
+    # Get all unique tags from active fittings
+    all_tags = set()
+    for fitting in Fitting.objects.active():
+        all_tags.update(fitting.tags.keys())
+
+    return render(request, 'core/fittings_list.html', {
+        'character': character,
+        'fittings': fittings_qs,
+        'ship_types': ship_types,
+        'ship_type_filter': ship_type_filter,
+        'search_query': search_query,
+        'tag_filter': tag_filter,
+        'all_tags': sorted(all_tags),
+    })
+
+
+@login_required
+def fitting_detail(request: HttpRequest, fitting_id: int) -> HttpResponse:
+    """View fitting details with module layout."""
+    from core.doctrines.models import Fitting, FittingMatch
+    from core.models import Character
+
+    try:
+        fitting = Fitting.objects.get(id=fitting_id)
+    except Fitting.DoesNotExist:
+        return render(request, 'core/error.html', {
+            'message': 'Fitting not found',
+        }, status=404)
+
+    # Get slots
+    slots = fitting.get_slots()
+
+    # Get matching assets for current user's characters
+    matching_assets = []
+    if request.user.is_authenticated:
+        for character in request.user.characters.all():
+            matches = FittingMatch.objects.filter(
+                character=character,
+                fitting=fitting,
+                is_match=True
+            ).select_related('character')
+            matching_assets.extend(matches)
+
+    return render(request, 'core/fitting_detail.html', {
+        'fitting': fitting,
+        'slots': slots,
+        'matching_assets': matching_assets,
+    })
+
+
+@login_required
+def fitting_matches(request: HttpRequest, character_id: int = None) -> HttpResponse:
+    """View asset matching results - show which ships match which fittings."""
+    from core.models import Character
+    from core.doctrines.services import AssetFitExtractor, FittingMatcher
+    from core.doctrines.models import Fitting
+
+    # Get character
+    if character_id:
+        try:
+            character = Character.objects.get(id=character_id, user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+    else:
+        # Use first character if none specified
+        try:
+            character = request.user.characters.first()
+            if not character:
+                return render(request, 'core/error.html', {
+                    'message': 'No characters found. Please add a character first.',
+                }, status=404)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'No characters found. Please add a character first.',
+            }, status=404)
+
+    # Extract fitted ships and match against fittings
+    extractor = AssetFitExtractor()
+    matcher = FittingMatcher(extractor)
+    
+    fitted_ships = extractor.extract_ships(character)
+    matches = []
+    
+    for ship in fitted_ships:
+        # Find matching fittings for this ship type
+        ship_fittings = Fitting.objects.active().filter(ship_type_id=ship.ship_type_id)
+        
+        for fitting in ship_fittings:
+            match_result = matcher._match_ship_to_fitting(ship, fitting)
+            if match_result:
+                matches.append(match_result)
+    
+    # Sort by match score descending
+    matches.sort(key=lambda m: m['score'], reverse=True)
+
+    # Get all characters for filter dropdown
+    characters = request.user.characters.all() if request.user.is_authenticated else []
+
+    return render(request, 'core/fitting_matches.html', {
+        'character': character,
+        'characters': characters,
+        'matches': matches,
+        'fitted_ships_count': len(fitted_ships),
+    })
+
+
+@login_required
+def shopping_lists_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
+    """View shopping lists for fitting fulfillment."""
+    from core.models import Character
+    from core.doctrines.models import ShoppingList
+
+    # Get character
+    if character_id:
+        try:
+            character = Character.objects.get(id=character_id, user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+    else:
+        # Use first character if none specified
+        try:
+            character = request.user.characters.first()
+            if not character:
+                return render(request, 'core/error.html', {
+                    'message': 'No characters found. Please add a character first.',
+                }, status=404)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'No characters found. Please add a character first.',
+            }, status=404)
+
+    # Get filter parameters
+    status_filter = request.GET.get('status', '')
+
+    # Build base queryset
+    lists_qs = ShoppingList.objects.filter(character=character)
+
+    # Apply status filter
+    if status_filter:
+        lists_qs = lists_qs.filter(status=status_filter)
+
+    # Order by created date (newest first)
+    lists_qs = lists_qs.order_by('-created_at')
+
+    # Get all characters for filter dropdown
+    characters = request.user.characters.all() if request.user.is_authenticated else []
+
+    # Calculate counts by status
+    all_lists = ShoppingList.objects.filter(character=character)
+    pending_count = all_lists.filter(status='pending').count()
+    partial_count = all_lists.filter(status='partial').count()
+    complete_count = all_lists.filter(status='complete').count()
+
+    return render(request, 'core/shopping_lists_list.html', {
+        'character': character,
+        'characters': characters,
+        'shopping_lists': lists_qs,
+        'status_filter': status_filter,
+        'pending_count': pending_count,
+        'partial_count': partial_count,
+        'complete_count': complete_count,
+    })
+
+
+@login_required
+def shopping_list_detail(request: HttpRequest, list_id: int) -> HttpResponse:
+    """View shopping list details."""
+    from core.models import Character
+    from core.doctrines.models import ShoppingList
+    from core.eve.models import ItemType
+
+    try:
+        shopping_list = ShoppingList.objects.get(id=list_id)
+    except ShoppingList.DoesNotExist:
+        return render(request, 'core/error.html', {
+            'message': 'Shopping list not found',
+        }, status=404)
+
+    # Check ownership
+    if shopping_list.character.user != request.user:
+        return render(request, 'core/error.html', {
+            'message': 'Access denied',
+        }, status=403)
+
+    # Get item details for items_to_buy
+    items_to_buy = []
+    if shopping_list.items_to_buy:
+        for type_id, quantity in shopping_list.items_to_buy.items():
+            try:
+                item_type = ItemType.objects.get(id=type_id)
+                items_to_buy.append({
+                    'type_id': type_id,
+                    'name': item_type.name,
+                    'quantity': quantity,
+                    'base_price': float(item_type.base_price or 0),
+                    'total_value': float(item_type.base_price or 0) * quantity,
+                })
+            except ItemType.DoesNotExist:
+                items_to_buy.append({
+                    'type_id': type_id,
+                    'name': f'Unknown Type {type_id}',
+                    'quantity': quantity,
+                    'base_price': 0,
+                    'total_value': 0,
+                })
+
+    # Sort by total value descending
+    items_to_buy.sort(key=lambda x: x['total_value'], reverse=True)
+
+    return render(request, 'core/shopping_list_detail.html', {
+        'shopping_list': shopping_list,
+        'items_to_buy': items_to_buy,
+    })

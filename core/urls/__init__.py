@@ -102,4 +102,13 @@ urlpatterns = [
     path('character/<int:character_id>/industry/jobs/', views.industry_jobs, name='character_industry_jobs'),
     path('industry/jobs/export/', views.industry_jobs_export, name='industry_jobs_export'),
     path('character/<int:character_id>/industry/jobs/export/', views.industry_jobs_export, name='character_industry_jobs_export'),
+
+    # Fittings
+    path('fittings/', views.fittings_list, name='fittings_list'),
+    path('fittings/<int:fitting_id>/', views.fitting_detail, name='fitting_detail'),
+    path('fittings/matches/', views.fitting_matches, name='fitting_matches'),
+    path('character/<int:character_id>/fittings/matches/', views.fitting_matches, name='character_fitting_matches'),
+    path('shopping-lists/', views.shopping_lists_list, name='shopping_lists_list'),
+    path('character/<int:character_id>/shopping-lists/', views.shopping_lists_list, name='character_shopping_lists_list'),
+    path('shopping-lists/<int:list_id>/', views.shopping_list_detail, name='shopping_list_detail'),
 ]

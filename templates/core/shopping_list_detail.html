@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}{{ shopping_list.fitting.name }} - Shopping List - evewire{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+    <h1>{{ shopping_list.fitting.name }} - Shopping List</h1>
+    <a href="{% url 'core:shopping_lists_list' shopping_list.character.id %}">Back to Lists</a>
+</div>
+
+<div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+    <div class="card" style="flex: 1; min-width: 250px;">
+        <h2>List Details</h2>
+        <p><strong>Ship:</strong> {{ shopping_list.fitting.ship_type_name }}</p>
+        <p><strong>Quantity:</strong> {{ shopping_list.quantity }} ship{{ shopping_list.quantity|pluralize }}</p>
+        <p><strong>Location:</strong> {{ shopping_list.location_type|title }} {{ shopping_list.location_id }}</p>
+        <p>
+            <strong>Status:</strong>
+            {% if shopping_list.status == 'pending' %}
+                <span style="color: #c00;">● Pending</span>
+            {% elif shopping_list.status == 'partial' %}
+                <span style="color: #c60;">○ Partially Fulfilled</span>
+            {% elif shopping_list.status == 'complete' %}
+                <span style="color: #080;">✓ Complete</span>
+            {% elif shopping_list.status == 'expired' %}
+                <span style="color: #888;">○ Expired</span>
+            {% else %}
+                {{ shopping_list.status|title }}
+            {% endif %}
+        </p>
+        {% if shopping_list.fulfilled_at %}
+            <p><strong>Fulfilled:</strong> {{ shopping_list.fulfilled_at|date:"M d, Y H:i" }}</p>
+        {% endif %}
+        <p><strong>Created:</strong> {{ shopping_list.created_at|date:"M d, Y H:i" }}</p>
+    </div>
+
+    <div class="card" style="flex: 1; min-width: 250px;">
+        <h2>Cost Summary</h2>
+        {% if shopping_list.total_cost %}
+            <p style="font-size: 1.5rem; font-weight: bold; color: var(--text-primary);">
+                {{ shopping_list.total_cost|isk_format }}
+            </p>
+            <p style="color: var(--text-secondary); font-size: 0.9rem;">
+                Estimated using NPC base prices
+            </p>
+        {% else %}
+            <p style="color: var(--text-secondary);">Cost not calculated</p>
+        {% endif %}
+        <p><strong>Items to Buy:</strong> {{ items_to_buy|length }}</p>
+    </div>
+</div>
+
+{% if items_to_buy %}
+<div class="card">
+    <h2>Items to Buy ({{ items_to_buy|length }})</h2>
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid var(--border-color);">
+                <th style="padding: 0.5rem; text-align: left;">Item</th>
+                <th style="padding: 0.5rem; text-align: center;">Type ID</th>
+                <th style="padding: 0.5rem; text-align: center;">Quantity</th>
+                <th style="padding: 0.5rem; text-align: right;">Unit Price</th>
+                <th style="padding: 0.5rem; text-align: right;">Total Value</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items_to_buy %}
+            <tr style="border-bottom: 1px solid var(--table-border);">
+                <td style="padding: 0.75rem; font-weight: bold;">{{ item.name }}</td>
+                <td style="padding: 0.75rem; text-align: center; font-family: monospace; color: var(--text-secondary);">{{ item.type_id }}</td>
+                <td style="padding: 0.75rem; text-align: center;">{{ item.quantity }}</td>
+                <td style="padding: 0.75rem; text-align: right;">
+                    {% if item.base_price > 0 %}
+                        {{ item.base_price|isk_format }}
+                    {% else %}
+                        <span style="color: #888;">-</span>
+                    {% endif %}
+                </td>
+                <td style="padding: 0.75rem; text-align: right;">
+                    {% if item.total_value > 0 %}
+                        {{ item.total_value|isk_format }}
+                    {% else %}
+                        <span style="color: #888;">-</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr style="border-top: 2px solid var(--border-color);">
+                <td colspan="4" style="padding: 0.75rem; text-align: right; font-weight: bold;">Total:</td>
+                <td style="padding: 0.75rem; text-align: right; font-weight: bold;">
+                    {% if shopping_list.total_cost %}
+                        {{ shopping_list.total_cost|isk_format }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+{% else %}
+<div class="card">
+    <h2>All Items Available</h2>
+    <p>All required items are available at this location.</p>
+    <p><strong>Status:</strong> {{ shopping_list.status|title }}</p>
+</div>
+{% endif %}
+
+<div class="card">
+    <h2>Shopping List Actions</h2>
+    <p style="color: var(--text-secondary); font-size: 0.9rem;">
+        This shopping list was created based on the <strong>{{ shopping_list.fitting.name }}</strong> fitting
+        for {{ shopping_list.quantity }} {{ shopping_list.fitting.ship_type_name }}{{ shopping_list.quantity|pluralize }}.
+    </p>
+    <p style="color: var(--text-secondary); font-size: 0.9rem;">
+        <strong>Location:</strong> {{ shopping_list.location_type|title }} {{ shopping_list.location_id }}
+    </p>
+</div>
+{% endblock %}

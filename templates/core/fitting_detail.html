@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}{{ fitting.name }} - Fittings - evewire{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+    <h1>{{ fitting.name }}</h1>
+    <a href="{% url 'core:fittings_list' %}">Back to Fittings</a>
+</div>
+
+<div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+    <div class="card" style="flex: 1; min-width: 300px;">
+        <h2>Fitting Details</h2>
+        <p><strong>Ship:</strong> {{ fitting.ship_type_name }}</p>
+        <p><strong>Status:</strong> {% if fitting.is_active %}Active{% else %}Inactive{% endif %}</p>
+        {% if fitting.description %}
+            <p><strong>Description:</strong> {{ fitting.description }}</p>
+        {% endif %}
+        {% if fitting.fit_count %}
+            <p><strong>Cluster Size:</strong> {{ fitting.fit_count }} ships</p>
+        {% endif %}
+        {% if fitting.avg_similarity %}
+            <p><strong>Avg Similarity:</strong> {{ fitting.avg_similarity|floatformat:2 }}%</p>
+        {% endif %}
+        {% for tag_key, tag_val in fitting.tags.items %}
+            <p><strong>{{ tag_key|title }}:</strong> {{ tag_val }}</p>
+        {% endfor %}
+    </div>
+
+    {% if matching_assets %}
+    <div class="card" style="flex: 1; min-width: 300px;">
+        <h2>Matching Ships ({{ matching_assets.count }})</h2>
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 2px solid var(--border-color);">
+                    <th style="padding: 0.5rem; text-align: left;">Character</th>
+                    <th style="padding: 0.5rem; text-align: left;">Asset ID</th>
+                    <th style="padding: 0.5rem; text-align: center;">Match</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for match in matching_assets %}
+                <tr style="border-bottom: 1px solid var(--table-border);">
+                    <td style="padding: 0.5rem;">{{ match.character.character_name }}</td>
+                    <td style="padding: 0.5rem; font-family: monospace;">{{ match.asset_id }}</td>
+                    <td style="padding: 0.5rem; text-align: center;">
+                        {% if match.is_match %}
+                            <span style="color: #080; font-weight: bold;">✓ MATCH</span>
+                        {% else %}
+                            <span style="color: #c60;">{{ match.match_score|floatformat:0 }}%</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2>Fitting Layout</h2>
+
+    <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
+        <!-- High Slots -->
+        <div style="flex: 1; min-width: 200px;">
+            <h3 style="color: #c00; border-bottom: 1px solid var(--border-color); padding-bottom: 0.25rem;">High Slots</h3>
+            {% for module_id in slots.high_slots %}
+                <p style="padding: 0.25rem 0; border-bottom: 1px solid var(--table-border);">
+                    {{ module_id|module_name }}
+                </p>
+            {% empty %}
+                <p style="color: #888; font-style: italic;">Empty</p>
+            {% endfor %}
+        </div>
+
+        <!-- Medium Slots -->
+        <div style="flex: 1; min-width: 200px;">
+            <h3 style="color: #080; border-bottom: 1px solid var(--border-color); padding-bottom: 0.25rem;">Medium Slots</h3>
+            {% for module_id in slots.med_slots %}
+                <p style="padding: 0.25rem 0; border-bottom: 1px solid var(--table-border);">
+                    {{ module_id|module_name }}
+                </p>
+            {% empty %}
+                <p style="color: #888; font-style: italic;">Empty</p>
+            {% endfor %}
+        </div>
+
+        <!-- Low Slots -->
+        <div style="flex: 1; min-width: 200px;">
+            <h3 style="color: #0066cc; border-bottom: 1px solid var(--border-color); padding-bottom: 0.25rem;">Low Slots</h3>
+            {% for module_id in slots.low_slots %}
+                <p style="padding: 0.25rem 0; border-bottom: 1px solid var(--table-border);">
+                    {{ module_id|module_name }}
+                </p>
+            {% empty %}
+                <p style="color: #888; font-style: italic;">Empty</p>
+            {% endfor %}
+        </div>
+
+        <!-- Rig Slots -->
+        <div style="flex: 1; min-width: 200px;">
+            <h3 style="color: #888; border-bottom: 1px solid var(--border-color); padding-bottom: 0.25rem;">Rig Slots</h3>
+            {% for module_id in slots.rig_slots %}
+                <p style="padding: 0.25rem 0; border-bottom: 1px solid var(--table-border);">
+                    {{ module_id|module_name }}
+                </p>
+            {% empty %}
+                <p style="color: #888; font-style: italic;">Empty</p>
+            {% endfor %}
+        </div>
+
+        <!-- Subsystem Slots -->
+        {% if slots.subsystem_slots %}
+        <div style="flex: 1; min-width: 200px;">
+            <h3 style="color: #609; border-bottom: 1px solid var(--border-color); padding-bottom: 0.25rem;">Subsystems</h3>
+            {% for module_id in slots.subsystem_slots %}
+                <p style="padding: 0.25rem 0; border-bottom: 1px solid var(--table-border);">
+                    {{ module_id|module_name }}
+                </p>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

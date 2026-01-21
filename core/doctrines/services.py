@@ -225,7 +225,7 @@ class FittingMatcher:
         ships = self.extractor.extract_ships(character)
 
         # Get fittings to match against
-        from core.fittings.models import Fitting
+        from core.doctrines.models import Fitting
         if fitting:
             fittings = [fitting]
         else:
@@ -298,7 +298,7 @@ class FittingMatcher:
         Returns:
             Number of matches cached
         """
-        from core.fittings.models import AssetMatch
+        from core.doctrines.models import FittingMatch
 
         matches = self.match_character_assets(character, fitting)
 

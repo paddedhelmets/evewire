@@ -110,3 +110,14 @@ def commas(value):
         return "{:,}".format(int(float(value)))
     except (ValueError, TypeError):
         return ''
+
+
+@register.filter
+def module_name(type_id):
+    """Get item type name for a module type_id."""
+    try:
+        from core.eve.models import ItemType
+        item = ItemType.objects.get(id=int(type_id))
+        return item.name
+    except (ItemType.DoesNotExist, ValueError, TypeError):
+        return f"Module {type_id}"

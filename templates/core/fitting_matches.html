@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}Fitting Matches - {{ character.name }} - evewire{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+    <h1>Fitting Matches - {{ character.name }}</h1>
+    <div style="display: flex; gap: 1rem; align-items: center;">
+        <form method="get" style="display: inline;">
+            <select name="character_id" onchange="this.form.submit();" style="padding: 0.5rem;">
+                {% for char in characters %}
+                    <option value="{{ char.id }}" {% if char.id == character.id %}selected{% endif %}>
+                        {{ char.character_name }}
+                    </option>
+                {% endfor %}
+            </select>
+        </form>
+        <a href="{% url 'core:fittings_list' %}">All Fittings</a>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Summary</h2>
+    <p><strong>Fitted Ships Found:</strong> {{ fitted_ships_count }}</p>
+    <p><strong>Matches Found:</strong> {{ matches.count }}</p>
+</div>
+
+{% if matches %}
+<div class="card">
+    <h2>Match Results</h2>
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid var(--border-color);">
+                <th style="padding: 0.5rem; text-align: left;">Ship</th>
+                <th style="padding: 0.5rem; text-align: left;">Fitting</th>
+                <th style="padding: 0.5rem; text-align: center;">Match Score</th>
+                <th style="padding: 0.5rem; text-align: left;">Location</th>
+                <th style="padding: 0.5rem; text-align: left;">Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for match in matches %}
+            <tr style="border-bottom: 1px solid var(--table-border); {% if not match.is_match %}opacity: 0.7;{% endif %}">
+                <td style="padding: 0.75rem;">
+                    <strong>{{ match.ship_name }}</strong>
+                    <br>
+                    <span style="font-size: 0.85rem; color: var(--text-secondary); font-family: monospace;">
+                        ID: {{ match.asset_id }}
+                    </span>
+                </td>
+                <td style="padding: 0.75rem;">
+                    <a href="{% url 'core:fitting_detail' match.fitting.id %}">{{ match.fitting_name }}</a>
+                </td>
+                <td style="padding: 0.75rem; text-align: center;">
+                    {% if match.is_match %}
+                        <span style="color: #080; font-weight: bold; font-size: 1.2rem;">✓ 100%</span>
+                    {% else %}
+                        <span style="color: #c60; font-weight: bold;">{{ match.score|floatformat:0 }}%</span>
+                    {% endif %}
+                </td>
+                <td style="padding: 0.75rem;">
+                    {{ match.location_type|title }} {{ match.location_id }}
+                </td>
+                <td style="padding: 0.75rem;">
+                    {% if match.is_match %}
+                        <span style="color: #080;">Complete Match</span>
+                    {% else %}
+                        <span style="color: #c60;">
+                            {{ match.missing_modules|length }} missing
+                            {% if match.extra_modules %}
+                                , {{ match.extra_modules|length }} extra
+                            {% endif %}
+                        </span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if matches %}
+<div class="card">
+    <h2>Match Details</h2>
+    {% for match in matches %}
+    {% if match.missing_modules or match.extra_modules %}
+    <div style="margin-bottom: 1rem; padding: 1rem; border: 1px solid var(--border-color); border-radius: 4px;">
+        <strong>{{ match.ship_name }} → {{ match.fitting_name }}</strong>
+        {% if match.missing_modules %}
+            <div style="margin-top: 0.5rem;">
+                <span style="color: #c00;">Missing:</span>
+                <ul style="margin-left: 1.5rem; margin-top: 0.25rem;">
+                    {% for module_id in match.missing_modules %}
+                        <li>{{ module_id|module_name }} ({{ module_id }})</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+        {% if match.extra_modules %}
+            <div style="margin-top: 0.5rem;">
+                <span style="color: #0066cc;">Extra:</span>
+                <ul style="margin-left: 1.5rem; margin-top: 0.25rem;">
+                    {% for module_id in match.extra_modules %}
+                        <li>{{ module_id|module_name }} ({{ module_id }})</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+    </div>
+    {% endif %}
+    {% endfor %}
+</div>
+{% endif %}
+{% else %}
+<div class="card">
+    <h2>No Matches Found</h2>
+    <p>No fitted ships found for {{ character.name }} that match any fittings.</p>
+    <p>You need to have fitted ships (assembled ships with modules) in your assets to see matches.</p>
+    <a href="{% url 'core:character_fitted_ships' character.id %}">View Fitted Ships</a>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}Shopping Lists - {{ character.name }} - evewire{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+    <h1>Shopping Lists - {{ character.name }}</h1>
+    <a href="{% url 'core:fitting_matches' character.id %}">View Fitting Matches</a>
+</div>
+
+<div class="card">
+    <h2>Filter Lists</h2>
+    <form method="get" style="display: flex; gap: 0.5rem; align-items: center;">
+        <select name="status" style="padding: 0.5rem;">
+            <option value="">All Status</option>
+            <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Pending</option>
+            <option value="partial" {% if status_filter == 'partial' %}selected{% endif %}>Partially Fulfilled</option>
+            <option value="complete" {% if status_filter == 'complete' %}selected{% endif %}>Complete</option>
+            <option value="expired" {% if status_filter == 'expired' %}selected{% endif %}>Expired</option>
+        </select>
+        <button type="submit" class="btn">Filter</button>
+        <a href="{% url 'core:shopping_lists_list' %}" style="margin-left: 0.5rem;">Clear</a>
+    </form>
+</div>
+
+<div class="card">
+    <h2>
+        {% if status_filter %}
+            {{ status_filter|title }} Lists
+        {% else %}
+            All Shopping Lists
+        {% endif %}
+    </h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+        <strong>Pending:</strong> {{ pending_count }} |
+        <strong>Partial:</strong> {{ partial_count }} |
+        <strong>Complete:</strong> {{ complete_count }}
+    </p>
+
+    {% if shopping_lists %}
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 2px solid var(--border-color);">
+                    <th style="padding: 0.5rem; text-align: left;">Fitting</th>
+                    <th style="padding: 0.5rem; text-align: center;">Quantity</th>
+                    <th style="padding: 0.5rem; text-align: left;">Location</th>
+                    <th style="padding: 0.5rem; text-align: center;">Status</th>
+                    <th style="padding: 0.5rem; text-align: right;">Total Cost</th>
+                    <th style="padding: 0.5rem; text-align: center;">Created</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for list in shopping_lists %}
+                <tr style="border-bottom: 1px solid var(--table-border);">
+                    <td style="padding: 0.75rem;">
+                        <a href="{% url 'core:shopping_list_detail' list.id %}" style="font-weight: bold;">
+                            {{ list.fitting.name }}
+                        </a>
+                        <br>
+                        <span style="font-size: 0.85rem; color: var(--text-secondary);">
+                            {{ list.fitting.ship_type_name }}
+                        </span>
+                    </td>
+                    <td style="padding: 0.75rem; text-align: center;">{{ list.quantity }}</td>
+                    <td style="padding: 0.75rem;">
+                        {{ list.location_type|title }} {{ list.location_id }}
+                    </td>
+                    <td style="padding: 0.75rem; text-align: center;">
+                        {% if list.status == 'pending' %}
+                            <span style="color: #c00;">● Pending</span>
+                        {% elif list.status == 'partial' %}
+                            <span style="color: #c60;">○ Partial</span>
+                        {% elif list.status == 'complete' %}
+                            <span style="color: #080;">✓ Complete</span>
+                        {% else %}
+                            <span style="color: #888;">○ {{ list.status|title }}</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 0.75rem; text-align: right;">
+                        {% if list.total_cost %}
+                            {{ list.total_cost|isk_format }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td style="padding: 0.75rem; text-align: center; font-size: 0.9rem;">
+                        {{ list.created_at|date:"M d, Y" }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p style="color: var(--text-secondary);">No shopping lists found.</p>
+        <p>Shopping lists are created when you generate a fit from a fitting specification.</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2>About Shopping Lists</h2>
+    <p>Shopping lists track items needed to fulfill fitting specifications at specific locations.</p>
+    <ul>
+        <li><strong>Pending:</strong> Not yet started - items still need to be purchased</li>
+        <li><strong>Partial:</strong> Some items have been acquired but not all</li>
+        <li><strong>Complete:</strong> All required items are available at the location</li>
+        <li><strong>Expired:</strong> List is past its useful date</li>
+    </ul>
+</div>
+{% endblock %}

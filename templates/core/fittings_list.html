@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}Fittings - evewire{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+    <h1>Fittings</h1>
+    {% if character %}
+        <a href="{% url 'core:fitting_matches' character.id %}">View My Matches</a>
+    {% else %}
+        <a href="{% url 'core:fitting_matches' %}">View My Matches</a>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2>Filter Fittings</h2>
+    <form method="get" style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+        <select name="ship_type" style="padding: 0.5rem;">
+            <option value="">All Ships</option>
+            {% for ship in ship_types %}
+                <option value="{{ ship.id }}" {% if ship_type_filter == ship.id|stringformat:"s" %}selected{% endif %}>
+                    {{ ship.name }}
+                </option>
+            {% endfor %}
+        </select>
+        <select name="tag" style="padding: 0.5rem;">
+            <option value="">All Tags</option>
+            {% for tag in all_tags %}
+                <option value="{{ tag }}" {% if tag_filter == tag %}selected{% endif %}>
+                    {{ tag|title }}
+                </option>
+            {% endfor %}
+        </select>
+        <input type="text" name="search" placeholder="Search fittings..." value="{{ search_query }}" style="padding: 0.5rem;">
+        <button type="submit" class="btn">Filter</button>
+        <a href="{% url 'core:fittings_list' %}" style="margin-left: 0.5rem;">Clear</a>
+    </form>
+</div>
+
+<div class="card">
+    <h2>
+        {% if ship_type_filter or search_query or tag_filter %}
+            Filtered Fittings ({{ fittings.count }} result{{ fittings.count|pluralize }})
+        {% else %}
+            All Fittings ({{ fittings.count }} total)
+        {% endif %}
+    </h2>
+
+    {% if fittings %}
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 2px solid var(--border-color);">
+                    <th style="padding: 0.5rem; text-align: left;">Fitting Name</th>
+                    <th style="padding: 0.5rem; text-align: left;">Ship Type</th>
+                    <th style="padding: 0.5rem; text-align: center;">Tags</th>
+                    <th style="padding: 0.5rem; text-align: center;">Fit Count</th>
+                    <th style="padding: 0.5rem; text-align: center;">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for fitting in fittings %}
+                <tr style="border-bottom: 1px solid var(--table-border);">
+                    <td style="padding: 0.75rem;">
+                        <a href="{% url 'core:fitting_detail' fitting.id %}" style="font-weight: bold;">
+                            {{ fitting.name }}
+                        </a>
+                    </td>
+                    <td style="padding: 0.75rem;">
+                        {{ fitting.ship_type_name }}
+                    </td>
+                    <td style="padding: 0.75rem; text-align: center;">
+                        {% for tag_key, tag_val in fitting.tags.items %}
+                            <span style="background: var(--btn-primary); color: white; padding: 0.1rem 0.5rem; border-radius: 12px; font-size: 0.8rem; margin-right: 0.25rem;">
+                                {{ tag_key }}: {{ tag_val }}
+                            </span>
+                        {% endfor %}
+                    </td>
+                    <td style="padding: 0.75rem; text-align: center;">
+                        {{ fitting.fit_count|default:"-" }}
+                    </td>
+                    <td style="padding: 0.75rem; text-align: center;">
+                        {% if fitting.is_active %}
+                            <span style="color: #080;">● Active</span>
+                        {% else %}
+                            <span style="color: #888;">○ Inactive</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p style="color: var(--text-secondary);">No fittings match your filter.</p>
+    {% endif %}
+</div>
+{% endblock %}
