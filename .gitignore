@@ -2,7 +2,6 @@
 reference/
 
 # Gas Town runtime artifacts
-.beads/
 state.json
 .runtime/
 *.log
