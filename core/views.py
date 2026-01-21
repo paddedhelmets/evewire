@@ -1028,3 +1028,120 @@ def market_orders_history(request: HttpRequest, character_id: int = None) -> Htt
         'order_type': order_type,
         'state_filter': state_filter,
     })
+
+
+# Contracts Views
+
+@login_required
+def contracts_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
+    """View contracts with filtering and pagination."""
+    from core.models import Character
+    from core.character.models import Contract
+    from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+
+    # Get character - either specified or user's character
+    if character_id:
+        try:
+            character = Character.objects.get(id=character_id, user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+    else:
+        try:
+            character = Character.objects.get(user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+
+    # Get filter parameters
+    contract_type = request.GET.get('type', '')  # 'item_exchange', 'auction', 'courier', 'loan', or ''
+    status_filter = request.GET.get('status', '')  # 'outstanding', 'in_progress', etc.
+    availability_filter = request.GET.get('availability', '')  # 'public', 'personal', 'corporation', 'alliance'
+
+    # Build queryset
+    contracts_qs = Contract.objects.filter(character=character)
+
+    # Apply type filter
+    if contract_type:
+        contracts_qs = contracts_qs.filter(type=contract_type)
+
+    # Apply status filter
+    if status_filter:
+        contracts_qs = contracts_qs.filter(status=status_filter)
+
+    # Apply availability filter
+    if availability_filter:
+        contracts_qs = contracts_qs.filter(availability=availability_filter)
+
+    # Order by issued date (newest first)
+    contracts_qs = contracts_qs.order_by('-date_issued')
+
+    # Pagination
+    page = request.GET.get('page', 1)
+    per_page = 50
+    paginator = Paginator(contracts_qs, per_page)
+
+    try:
+        contracts = paginator.page(page)
+    except PageNotAnInteger:
+        contracts = paginator.page(1)
+    except EmptyPage:
+        contracts = paginator.page(paginator.num_pages)
+
+    # Calculate contract counts by status
+    outstanding_count = Contract.objects.filter(
+        character=character, status='outstanding'
+    ).count()
+    in_progress_count = Contract.objects.filter(
+        character=character, status='in_progress'
+    ).count()
+    completed_count = Contract.objects.filter(
+        character=character, status__in=('finished_issuer', 'finished_contractor', 'finished')
+    ).count()
+
+    return render(request, 'core/contracts.html', {
+        'character': character,
+        'contracts': contracts,
+        'contract_type': contract_type,
+        'status_filter': status_filter,
+        'availability_filter': availability_filter,
+        'outstanding_count': outstanding_count,
+        'in_progress_count': in_progress_count,
+        'completed_count': completed_count,
+    })
+
+
+@login_required
+def contract_detail(request: HttpRequest, contract_id: int) -> HttpResponse:
+    """View a single contract with its items."""
+    from core.models import Character
+    from core.character.models import Contract, ContractItem
+
+    try:
+        contract = Contract.objects.get(contract_id=contract_id)
+    except Contract.DoesNotExist:
+        return render(request, 'core/error.html', {
+            'message': 'Contract not found',
+        }, status=404)
+
+    # Verify ownership
+    if contract.character.user != request.user:
+        return render(request, 'core/error.html', {
+            'message': 'Access denied',
+        }, status=403)
+
+    # Get contract items
+    items = contract.items.all()
+
+    # Calculate item statistics
+    included_items = [item for item in items if item.is_included]
+    requested_items = [item for item in items if not item.is_included]
+
+    return render(request, 'core/contract_detail.html', {
+        'contract': contract,
+        'items': items,
+        'included_items': included_items,
+        'requested_items': requested_items,
+    })

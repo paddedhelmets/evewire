@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}Contract {{ contract.contract_id }} - evewire{% endblock %}
+
+{% block content %}
+<h1>Contract {{ contract.contract_id }}</h1>
+
+<div style="margin-bottom: 1rem;">
+    <a href="{% url 'core:dashboard' %}">Dashboard</a>
+    <span style="margin: 0 0.5rem;">&rarr;</span>
+    <a href="{% url 'core:character_detail' contract.character.id %}">{{ contract.character.name }}</a>
+    <span style="margin: 0 0.5rem;">&rarr;</span>
+    <a href="{% url 'core:character_contracts' contract.character.id %}">Contracts</a>
+    <span style="margin: 0 0.5rem;">&rarr;</span>
+    <span>Contract {{ contract.contract_id }}</span>
+</div>
+
+<div class="card">
+    <h2>Contract Details</h2>
+    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
+        <div>
+            <p><strong>Type:</strong> {{ contract.type_name }}</p>
+            <p><strong>Status:</strong>
+                <span style="padding: 2px 6px; border-radius: 3px; background: {% if contract.is_active %}var(--alert-success-bg){% elif contract.is_completed %}var(--alert-info-bg){% else %}var(--alert-error-bg){% endif %}; color: {% if contract.is_active %}var(--alert-success-text){% elif contract.is_completed %}var(--alert-info-text){% else %}var(--alert-error-text){% endif %};">
+                    {{ contract.status_name }}
+                </span>
+                {% if contract.expires_soon and contract.is_active %}
+                    <span style="color: var(--alert-error-text); margin-left: 0.5rem;">&excl; Expires soon</span>
+                {% endif %}
+            </p>
+            <p><strong>Availability:</strong> {{ contract.availability_name }}</p>
+            <p><strong>For Corporation:</strong> {% if contract.for_corporation %}Yes{% else %}No{% endif %}</p>
+        </div>
+        <div>
+            <p><strong>Issued:</strong> {{ contract.date_issued|date:"M d, Y H:i" }}</p>
+            <p><strong>Expires:</strong> {{ contract.date_expired|date:"M d, Y H:i" }}</p>
+            {% if contract.date_accepted %}
+            <p><strong>Accepted:</strong> {{ contract.date_accepted|date:"M d, Y H:i" }}</p>
+            {% endif %}
+            {% if contract.date_completed %}
+            <p><strong>Completed:</strong> {{ contract.date_completed|date:"M d, Y H:i" }}</p>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if contract.title %}
+    <p style="margin-top: 1rem;"><strong>Title:</strong> {{ contract.title }}</p>
+    {% endif %}
+
+    {% if contract.days_to_complete %}
+    <p><strong>Days to Complete:</strong> {{ contract.days_to_complete }}</p>
+    {% endif %}
+
+    <h3 style="margin-top: 1.5rem;">Value</h3>
+    <table style="width: 100%; border-collapse: collapse;">
+        <tr style="border-bottom: 1px solid var(--border-color);">
+            <td style="padding: 0.5rem;"><strong>Price:</strong></td>
+            <td style="padding: 0.5rem; text-align: right;">{% if contract.price %}{{ contract.price|isk_format }}{% else %}&mdash;{% endif %}</td>
+        </tr>
+        {% if contract.reward %}
+        <tr style="border-bottom: 1px solid var(--border-color);">
+            <td style="padding: 0.5rem;"><strong>Reward:</strong></td>
+            <td style="padding: 0.5rem; text-align: right;">{{ contract.reward|isk_format }}</td>
+        </tr>
+        {% endif %}
+        {% if contract.collateral %}
+        <tr style="border-bottom: 1px solid var(--border-color);">
+            <td style="padding: 0.5rem;"><strong>Collateral:</strong></td>
+            <td style="padding: 0.5rem; text-align: right;">{{ contract.collateral|isk_format }}</td>
+        </tr>
+        {% endif %}
+        {% if contract.buyout %}
+        <tr style="border-bottom: 1px solid var(--border-color);">
+            <td style="padding: 0.5rem;"><strong>Buyout:</strong></td>
+            <td style="padding: 0.5rem; text-align: right;">{{ contract.buyout|isk_format }}</td>
+        </tr>
+        {% endif %}
+        <tr style="font-weight: bold;">
+            <td style="padding: 0.5rem;">Total:</td>
+            <td style="padding: 0.5rem; text-align: right;">{{ contract.total_value|isk_format }}</td>
+        </tr>
+    </table>
+
+    {% if contract.volume %}
+    <p style="margin-top: 0.5rem;"><strong>Volume:</strong> {{ contract.volume|floatformat:0 }} m³</p>
+    {% endif %}
+</div>
+
+{% if items %}
+<div class="card">
+    <h2>Contract Items ({{ items.count }})</h2>
+
+    {% if included_items %}
+    <h3 style="margin-bottom: 0.5rem;">Included Items</h3>
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 1rem;">
+        <thead>
+            <tr style="border-bottom: 2px solid var(--border-color);">
+                <th style="padding: 0.75rem; text-align: left;">Item</th>
+                <th style="padding: 0.75rem; text-align: right;">Quantity</th>
+                <th style="padding: 0.75rem; text-align: left;">Singleton</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in included_items %}
+            <tr style="border-bottom: 1px solid var(--table-border);">
+                <td style="padding: 0.75rem;">{{ item.type_name }}</td>
+                <td style="padding: 0.75rem; text-align: right;">{{ item.quantity }}</td>
+                <td style="padding: 0.75rem;">{% if item.is_singleton %}Yes{% else %}No{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    {% if requested_items %}
+    <h3 style="margin-bottom: 0.5rem;">Requested Items</h3>
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid var(--border-color);">
+                <th style="padding: 0.75rem; text-align: left;">Item</th>
+                <th style="padding: 0.75rem; text-align: right;">Quantity</th>
+                <th style="padding: 0.75rem; text-align: left;">Singleton</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in requested_items %}
+            <tr style="border-bottom: 1px solid var(--table-border);">
+                <td style="padding: 0.75rem;">{{ item.type_name }}</td>
+                <td style="padding: 0.75rem; text-align: right;">{{ item.quantity }}</td>
+                <td style="padding: 0.75rem;">{% if item.is_singleton %}Yes{% else %}No{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</div>
+{% else %}
+<div class="card">
+    <p>No items in this contract.</p>
+</div>
+{% endif %}
+
+<div style="margin-bottom: 1rem;">
+    <a href="{% url 'core:character_contracts' contract.character.id %}" class="btn">Back to Contracts</a>
+    <a href="{% url 'core:character_detail' contract.character.id %}" class="btn" style="margin-left: 0.5rem;">Back to Character</a>
+</div>
+{% endblock %}

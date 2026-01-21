@@ -20,3 +20,4 @@ __pycache__/
 venv/
 .env
 career_research/zkillboard/data/
+db.sqlite3

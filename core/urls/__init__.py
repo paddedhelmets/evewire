@@ -46,4 +46,9 @@ urlpatterns = [
     path('character/<int:character_id>/market/orders/', views.market_orders, name='character_market_orders'),
     path('market/orders/history/', views.market_orders_history, name='market_orders_history'),
     path('character/<int:character_id>/market/orders/history/', views.market_orders_history, name='character_market_orders_history'),
+
+    # Contracts
+    path('contracts/', views.contracts_list, name='contracts'),
+    path('character/<int:character_id>/contracts/', views.contracts_list, name='character_contracts'),
+    path('contracts/<int:contract_id>/', views.contract_detail, name='contract_detail'),
 ]
