@@ -238,13 +238,13 @@ class TradeAnalyzer:
         Get monthly trade summaries for a character.
 
         Detects all months with transaction activity and returns
-        summaries for each month.
+        summaries for each month with pre-calculated totals.
 
         Args:
             character: Character instance
 
         Returns:
-            List of tuples: (year, month, list of ItemTradeSummary)
+            List of dicts: {year, month, buy_total, sell_total, items}
         """
         # Get all transaction dates for this character
         dates = WalletTransaction.objects.filter(
@@ -267,8 +267,19 @@ class TradeAnalyzer:
                 end_date = timezone.datetime(year, month + 1, 1).replace(tzinfo=timezone.utc) - timedelta(seconds=1)
 
             # Analyze this month
-            monthly_data = TradeAnalyzer.analyze_timeframe(character, start_date, end_date)
-            summaries.append((year, month, monthly_data))
+            monthly_items = TradeAnalyzer.analyze_timeframe(character, start_date, end_date)
+
+            # Calculate monthly totals
+            buy_total = sum(item.buy_total for item in monthly_items)
+            sell_total = sum(item.sell_total for item in monthly_items)
+
+            summaries.append({
+                'year': year,
+                'month': month,
+                'buy_total': buy_total,
+                'sell_total': sell_total,
+                'items': monthly_items,
+            })
 
         return summaries
 
