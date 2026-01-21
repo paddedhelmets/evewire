@@ -1,0 +1,57 @@
+{% load evewire %}
+
+<tr class="asset-row" data-asset-id="{{ asset.item_id }}">
+    <td>
+        <div class="asset-item-name">
+            {% if asset.children.exists %}
+                <span class="asset-expand"
+                      data-target=".asset-children-{{ asset.item_id }}"
+                      onclick="toggleExpand(this)">
+                    &#9654;
+                </span>
+            {% else %}
+                <span style="width: 16px; display: inline-block;"></span>
+            {% endif %}
+            <span class="asset-name{% if indent > 0 %} asset-indent-{{ indent }}{% endif %}">
+                {{ asset.type_name }}
+            </span>
+            {% if asset.is_blueprint_copy %}
+                <span class="blueprint-badge blueprint-bpc">BPC</span>
+            {% endif %}
+            {% if asset.is_singleton %}
+                <span class="singleton-badge">Assembled</span>
+            {% endif %}
+        </div>
+    </td>
+    <td style="color: var(--text-secondary); font-size: 0.85rem;">
+        {{ asset.type_id }}
+    </td>
+    <td style="color: var(--text-secondary); font-size: 0.85rem;">
+        {{ asset.location_flag|default:"&mdash;" }}
+    </td>
+    <td style="text-align: right;">
+        {{ asset.quantity|default:1 }}
+    </td>
+    <td style="color: var(--text-secondary); font-size: 0.85rem;">
+        {{ asset.location_name }}
+    </td>
+    <td>
+        {% if asset.is_singleton %}
+            <span style="color: #0066cc;">&#10003;</span>
+        {% else %}
+            <span style="color: var(--text-secondary);">&mdash;</span>
+        {% endif %}
+    </td>
+</tr>
+
+{% if asset.children.exists %}
+    {% for child in asset.children.all %}
+        <tr class="asset-children asset-children-{{ asset.item_id }}">
+            <td colspan="6" style="padding: 0; border: none;">
+                <table class="asset-table" style="margin: 0;">
+                    {% include 'core/asset_row.html' with asset=child indent=indent|add:1 %}
+                </table>
+            </td>
+        </tr>
+    {% endfor %}
+{% endif %}

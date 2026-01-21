@@ -57,4 +57,12 @@ urlpatterns = [
     path('contracts/', views.contracts_list, name='contracts'),
     path('character/<int:character_id>/contracts/', views.contracts_list, name='character_contracts'),
     path('contracts/<int:contract_id>/', views.contract_detail, name='contract_detail'),
+
+    # Assets
+    path('assets/', views.assets_list, name='assets_list'),
+    path('character/<int:character_id>/assets/', views.assets_list, name='character_assets_list'),
+    path('assets/summary/', views.assets_summary, name='assets_summary'),
+    path('character/<int:character_id>/assets/summary/', views.assets_summary, name='character_assets_summary'),
+    path('assets/ships/', views.fitted_ships, name='fitted_ships'),
+    path('character/<int:character_id>/assets/ships/', views.fitted_ships, name='character_fitted_ships'),
 ]

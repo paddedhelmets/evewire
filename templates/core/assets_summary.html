@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}Assets Summary - {{ character.name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .summary-container {
+        background: var(--bg-secondary);
+        border-radius: 8px;
+        padding: 1.5rem;
+        box-shadow: var(--card-shadow);
+    }
+
+    .summary-header {
+        margin-bottom: 1.5rem;
+    }
+
+    .overall-totals {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .total-card {
+        background: var(--bg-primary);
+        padding: 1rem;
+        border-radius: 6px;
+        text-align: center;
+    }
+
+    .total-card .label {
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        margin-bottom: 0.5rem;
+    }
+
+    .total-card .value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--link-color);
+    }
+
+    .location-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .location-table th {
+        background: var(--bg-primary);
+        padding: 0.75rem 1rem;
+        text-align: left;
+        font-weight: 600;
+        border-bottom: 2px solid var(--border-color);
+        color: var(--text-secondary);
+    }
+
+    .location-table td {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid var(--table-border);
+    }
+
+    .location-table tr:hover {
+        background: var(--bg-primary);
+    }
+
+    .location-table .numeric {
+        text-align: right;
+        font-family: monospace;
+    }
+
+    .location-type-badge {
+        font-size: 0.7rem;
+        padding: 0.1rem 0.4rem;
+        border-radius: 3px;
+        background: var(--bg-primary);
+        color: var(--text-secondary);
+        margin-left: 0.5rem;
+    }
+
+    .no-assets {
+        text-align: center;
+        padding: 3rem;
+        color: var(--text-secondary);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="summary-container">
+    <div class="summary-header">
+        <div>
+            <h2>Assets Summary</h2>
+            <p style="color: var(--text-secondary); margin-top: 0.5rem;">
+                Character: <strong>{{ character.name }}</strong>
+            </p>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+            <a href="{% url 'core:assets_list' %}" class="btn" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">List</a>
+            <a href="{% url 'core:assets_summary' %}" class="btn" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">Summary</a>
+            <a href="{% url 'core:fitted_ships' %}" class="btn" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">Fitted Ships</a>
+        </div>
+    </div>
+
+    {% if locations %}
+        <div class="overall-totals">
+            <div class="total-card">
+                <div class="label">Total Items</div>
+                <div class="value">{{ total_items|commas }}</div>
+            </div>
+            <div class="total-card">
+                <div class="label">Total Value</div>
+                <div class="value">{{ total_value|commas }}</div>
+            </div>
+            <div class="total-card">
+                <div class="label">Total Volume</div>
+                <div class="value">{{ total_volume|floatformat:2 }} m³</div>
+            </div>
+            <div class="total-card">
+                <div class="label">Locations</div>
+                <div class="value">{{ locations|length }}</div>
+            </div>
+        </div>
+
+        <table class="location-table">
+            <thead>
+                <tr>
+                    <th>Location</th>
+                    <th class="numeric">Items</th>
+                    <th class="numeric">Volume (m³)</th>
+                    <th class="numeric">Value (ISK)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for loc in locations %}
+                <tr>
+                    <td>
+                        {{ loc.location_name }}
+                        <span class="location-type-badge">{{ loc.location_type }}</span>
+                    </td>
+                    <td class="numeric">{{ loc.total_items|commas }}</td>
+                    <td class="numeric">{{ loc.total_volume|floatformat:2 }}</td>
+                    <td class="numeric">{{ loc.total_value|floatformat:2|commas }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <div class="no-assets">
+            <p>No assets found for this character.</p>
+            <p>Assets may not have been synced yet.</p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
