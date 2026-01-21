@@ -1425,65 +1425,82 @@ def assets_summary(request: HttpRequest, character_id: int = None) -> HttpRespon
                 'message': 'Character not found',
             }, status=404)
 
-    # Get filter parameters
-    contract_type = request.GET.get('type', '')  # 'item_exchange', 'auction', 'courier', 'loan', or ''
-    status_filter = request.GET.get('status', '')  # 'outstanding', 'in_progress', etc.
-    availability_filter = request.GET.get('availability', '')  # 'public', 'personal', 'corporation', 'alliance'
+    # Get top-level assets only (no parent) to avoid double-counting nested items
+    assets_qs = CharacterAsset.objects.filter(
+        character=character,
+        parent=None
+    ).select_related('type')
 
-    # Build queryset
-    contracts_qs = Contract.objects.filter(character=character)
+    # Aggregate by location
+    location_data = defaultdict(lambda: {
+        'total_items': 0,
+        'total_quantity': 0,
+        'total_volume': Decimal('0.0'),
+        'total_value': Decimal('0.0'),
+    })
 
-    # Apply type filter
-    if contract_type:
-        contracts_qs = contracts_qs.filter(type=contract_type)
+    for asset in assets_qs:
+        key = (asset.location_type, asset.location_id)
+        item_type = asset.type
 
-    # Apply status filter
-    if status_filter:
-        contracts_qs = contracts_qs.filter(status=status_filter)
+        # Count each asset item (including quantity)
+        quantity = asset.quantity
+        location_data[key]['total_items'] += 1
+        location_data[key]['total_quantity'] += quantity
 
-    # Apply availability filter
-    if availability_filter:
-        contracts_qs = contracts_qs.filter(availability=availability_filter)
+        # Calculate volume (item volume * quantity)
+        if item_type and item_type.volume:
+            location_data[key]['total_volume'] += Decimal(str(item_type.volume)) * quantity
 
-    # Order by issued date (newest first)
-    contracts_qs = contracts_qs.order_by('-date_issued')
+        # Calculate value (use sell_price if available, otherwise base_price)
+        price = item_type.sell_price if item_type and item_type.sell_price else (item_type.base_price if item_type else None)
+        if price:
+            location_data[key]['total_value'] += price * quantity
 
-    # Pagination
-    page = request.GET.get('page', 1)
-    per_page = 50
-    paginator = Paginator(contracts_qs, per_page)
+    # Build location list with names
+    locations = []
+    for (loc_type, loc_id), data in sorted(location_data.items()):
+        # Get location name
+        if loc_type == 'station':
+            from core.eve.models import Station
+            try:
+                loc_name = Station.objects.get(id=loc_id).name
+            except Station.DoesNotExist:
+                loc_name = f"Station {loc_id}"
+        elif loc_type == 'solar_system':
+            from core.eve.models import SolarSystem
+            try:
+                loc_name = SolarSystem.objects.get(id=loc_id).name
+            except SolarSystem.DoesNotExist:
+                loc_name = f"System {loc_id}"
+        elif loc_type == 'structure':
+            loc_name = f"Structure {loc_id}"
+        else:
+            loc_name = f"{loc_type.title()} {loc_id}"
 
-    try:
-        contracts = paginator.page(page)
-    except PageNotAnInteger:
-        contracts = paginator.page(1)
-    except EmptyPage:
-        contracts = paginator.page(paginator.num_pages)
+        locations.append({
+            'location_type': loc_type,
+            'location_id': loc_id,
+            'location_name': loc_name,
+            'total_items': data['total_items'],
+            'total_volume': data['total_volume'],
+            'total_value': data['total_value'],
+        })
 
-    # Calculate contract counts by status
-    outstanding_count = Contract.objects.filter(
-        character=character, status='outstanding'
-    ).count()
-    in_progress_count = Contract.objects.filter(
-        character=character, status='in_progress'
-    ).count()
-    completed_count = Contract.objects.filter(
-        character=character, status__in=('finished_issuer', 'finished_contractor', 'finished')
-    ).count()
+    # Calculate overall totals
+    total_items = sum(loc['total_items'] for loc in locations)
+    total_value = sum(loc['total_value'] for loc in locations)
+    total_volume = sum(loc['total_volume'] for loc in locations)
 
-    return render(request, 'core/contracts.html', {
+    return render(request, 'core/assets_summary.html', {
         'character': character,
-        'contracts': contracts,
-        'contract_type': contract_type,
-        'status_filter': status_filter,
-        'availability_filter': availability_filter,
-        'outstanding_count': outstanding_count,
-        'in_progress_count': in_progress_count,
-        'completed_count': completed_count,
+        'locations': locations,
+        'total_items': total_items,
+        'total_value': total_value,
+        'total_volume': total_volume,
     })
 
 
-@login_required
 @login_required
 def contract_detail(request: HttpRequest, contract_id: int) -> HttpResponse:
     """View a single contract with its items."""
