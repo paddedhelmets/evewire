@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}{{ item_name }} - Trade Detail - {{ character.name }} - evewire{% endblock %}
+
+{% block content %}
+<h1>{{ item_name }} - Trade Detail</h1>
+
+<div style="margin-bottom: 1rem;">
+    <a href="{% url 'core:dashboard' %}">Dashboard</a>
+    <span style="margin: 0 0.5rem;">&rarr;</span>
+    <a href="{% url 'core:trade_overview' %}">Trade Analysis</a>
+    <span style="margin: 0 0.5rem;">&rarr;</span>
+    <span>{{ item_name }}</span>
+</div>
+
+<div class="card">
+    <h2>Statistics</h2>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+        <div style="padding: 1rem; background: var(--card-bg); border-radius: 8px;">
+            <div style="font-size: 0.9rem; color: var(--text-secondary);">Buy Average</div>
+            <div style="font-size: 1.25rem; font-weight: bold; color: var(--alert-error-text);">{{ buy_avg|format_is }} ISK</div>
+            <div style="font-size: 0.85rem; color: var(--text-secondary);">{{ buy_count }} transactions x {{ buy_quantity }} units</div>
+        </div>
+        <div style="padding: 1rem; background: var(--card-bg); border-radius: 8px;">
+            <div style="font-size: 0.9rem; color: var(--text-secondary);">Sell Average</div>
+            <div style="font-size: 1.25rem; font-weight: bold; color: var(--alert-success-text);">{{ sell_avg|format_is }} ISK</div>
+            <div style="font-size: 0.85rem; color: var(--text-secondary);">{{ sell_count }} transactions x {{ sell_quantity }} units</div>
+        </div>
+        <div style="padding: 1rem; background: var(--card-bg); border-radius: 8px;">
+            <div style="font-size: 0.9rem; color: var(--text-secondary);">Balance (Profit/Loss)</div>
+            <div style="font-size: 1.25rem; font-weight: bold; color: {% if balance >= 0 %}var(--alert-success-text){% else %}var(--alert-error-text){% endif %};">
+                {% if balance >= 0 %}+{% endif %}{{ balance|format_is }} ISK
+            </div>
+        </div>
+        <div style="padding: 1rem; background: var(--card-bg); border-radius: 8px;">
+            <div style="font-size: 0.9rem; color: var(--text-secondary);">Profit per Unit</div>
+            <div style="font-size: 1.25rem; font-weight: bold; color: {% if profit_per_unit >= 0 %}var(--alert-success-text){% else %}var(--alert-error-text){% endif %};">
+                {% if profit_per_unit >= 0 %}+{% endif %}{{ profit_per_unit|format_is }} ISK
+            </div>
+        </div>
+        <div style="padding: 1rem; background: var(--card-bg); border-radius: 8px;">
+            <div style="font-size: 0.9rem; color: var(--text-secondary);">Profit Margin</div>
+            <div style="font-size: 1.25rem; font-weight: bold; color: {% if profit_pct >= 0 %}var(--alert-success-text){% else %}var(--alert-error-text){% endif %};">
+                {{ profit_pct|floatformat:1 }}%
+            </div>
+        </div>
+        <div style="padding: 1rem; background: var(--card-bg); border-radius: 8px;">
+            <div style="font-size: 0.9rem; color: var(--text-secondary);">Unsold Stock</div>
+            <div style="font-size: 1.25rem; font-weight: bold;">
+                {{ diff }} units
+            </div>
+            {% if diff > 0 %}
+            <div style="font-size: 0.85rem; color: var(--text-secondary);">Value at sell avg: {{ diff|multiply:sell_avg|format_is }} ISK</div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if diff > 0 %}
+    <div style="margin-top: 1rem; padding: 1rem; background: var(--accent-bg); border-radius: 8px; border-left: 4px solid var(--accent-primary);">
+        <div style="font-size: 0.9rem; color: var(--text-secondary);">Projected Profit (if stock sold at sell average)</div>
+        <div style="font-size: 1.25rem; font-weight: bold; color: {% if projected >= 0 %}var(--alert-success-text){% else %}var(--alert-error-text){% endif %};">
+            {% if projected >= 0 %}+{% endif %}{{ projected|format_is }} ISK
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2>Transaction History</h2>
+    {% if transactions %}
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid var(--border-color);">
+                <th style="padding: 0.75rem; text-align: left;">Date</th>
+                <th style="padding: 0.75rem; text-align: left;">Type</th>
+                <th style="padding: 0.75rem; text-align: right;">Quantity</th>
+                <th style="padding: 0.75rem; text-align: right;">Unit Price</th>
+                <th style="padding: 0.75rem; text-align: right;">Total Value</th>
+                <th style="padding: 0.75rem; text-align: left;">Location</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for tx in transactions %}
+            <tr style="border-bottom: 1px solid var(--table-border);">
+                <td style="padding: 0.75rem;">{{ tx.date|date:"Y-m-d H:i" }}</td>
+                <td style="padding: 0.75rem;">
+                    <span style="font-weight: bold; color: {% if tx.is_buy %}var(--alert-error-text){% else %}var(--alert-success-text){% endif %};">
+                        {% if tx.is_buy %}BUY{% else %}SELL{% endif %}
+                    </span>
+                </td>
+                <td style="padding: 0.75rem; text-align: right;">{{ tx.quantity|localize }}</td>
+                <td style="padding: 0.75rem; text-align: right;">{{ tx.unit_price|format_is }} ISK</td>
+                <td style="padding: 0.75rem; text-align: right; font-weight: bold;">{{ tx.quantity|multiply:tx.unit_price|format_is }} ISK</td>
+                <td style="padding: 0.75rem; font-size: 0.9rem;">{{ tx.location_id }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>No transactions found for this item.</p>
+    {% endif %}
+</div>
+
+<div style="margin-top: 1rem;">
+    <a href="{% url 'core:trade_overview' %}{% if timeframe %}?timeframe={{ timeframe }}{% endif %}{% if campaign_id %}&campaign={{ campaign_id }}{% endif %}" class="btn">&larr; Back to Trade Overview</a>
+</div>
+
+{% endblock %}
