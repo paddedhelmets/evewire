@@ -75,32 +75,19 @@
             </tr>
         </thead>
         <tbody>
-            {% for year, month, items in monthly_summaries %}
-            {% if items %}
-            {% regroup items by type_id as type_groups %}
-            {% for group in type_groups %}
-            {% if forloop.first %}
-            {% with buy_total=0 sell_total=0 %}
-            {% for item in items %}
-            {% with buy_total=buy_total|add:item.buy_total sell_total=sell_total|add:item.sell_total %}
-            {% if forloop.last %}
+            {% for month in monthly_summaries %}
+            {% if month.items %}
             <tr style="border-bottom: 1px solid var(--table-border);">
-                <td style="padding: 0.75rem;">{{ year }}-{{ month|stringformat:"02d" }}</td>
-                <td style="padding: 0.75rem; text-align: right; color: var(--alert-error-text);">{{ buy_total|format_is }} ISK</td>
-                <td style="padding: 0.75rem; text-align: right; color: var(--alert-success-text);">{{ sell_total|format_is }} ISK</td>
-                <td style="padding: 0.75rem; text-align: right; font-weight: bold; color: {% if sell_total >= buy_total %}var(--alert-success-text){% else %}var(--alert-error-text){% endif %};">
-                    {% if sell_total >= buy_total %}+{% endif %}{{ sell_total|add:buy_total|format_is }} ISK
+                <td style="padding: 0.75rem;">{{ month.year }}-{{ month.month|stringformat:"02d" }}</td>
+                <td style="padding: 0.75rem; text-align: right; color: var(--alert-error-text);">{{ month.buy_total|format_is }} ISK</td>
+                <td style="padding: 0.75rem; text-align: right; color: var(--alert-success-text);">{{ month.sell_total|format_is }} ISK</td>
+                <td style="padding: 0.75rem; text-align: right; font-weight: bold; color: {% if month.sell_total >= month.buy_total %}var(--alert-success-text){% else %}var(--alert-error-text){% endif %};">
+                    {% if month.sell_total >= month.buy_total %}+{% endif %}{{ month.sell_total|add:month.buy_total|format_is }} ISK
                 </td>
                 <td style="padding: 0.75rem; text-align: center;">
-                    <a href="?year={{ year }}&month={{ month }}" class="btn" style="padding: 0.25rem 0.5rem; font-size: 0.9rem;">View</a>
+                    <a href="?year={{ month.year }}&month={{ month.month }}" class="btn" style="padding: 0.25rem 0.5rem; font-size: 0.9rem;">View</a>
                 </td>
             </tr>
-            {% endif %}
-            {% endwith %}
-            {% endfor %}
-            {% endwith %}
-            {% endif %}
-            {% endfor %}
             {% endif %}
             {% endfor %}
         </tbody>
