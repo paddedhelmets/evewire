@@ -1926,89 +1926,6 @@ def fitted_ships(request: HttpRequest, character_id: int = None) -> HttpResponse
     })
 
 
-@login_required
-def industry_jobs_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
-    """View industry jobs with filtering and pagination."""
-    from core.models import Character
-    from core.character.models import IndustryJob
-    from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-
-    # Get character
-    if character_id:
-        try:
-            character = Character.objects.get(id=character_id, user=request.user)
-        except Character.DoesNotExist:
-            return render(request, 'core/error.html', {
-                'message': 'Character not found',
-            }, status=404)
-    else:
-        try:
-            character = Character.objects.get(user=request.user)
-        except Character.DoesNotExist:
-            return render(request, 'core/error.html', {
-                'message': 'Character not found',
-            }, status=404)
-
-    # Get filter parameters
-    activity_filter = request.GET.get('activity', '')
-    status_filter = request.GET.get('status', '')
-
-    # Build queryset
-    jobs_qs = IndustryJob.objects.filter(character=character)
-
-    # Apply activity filter
-    if activity_filter:
-        jobs_qs = jobs_qs.filter(activity_id=activity_filter)
-
-    # Apply status filter
-    if status_filter:
-        jobs_qs = jobs_qs.filter(status=status_filter)
-
-    # Order by start date (newest first)
-    jobs_qs = jobs_qs.order_by('-start_date')
-
-    # Pagination
-    page = request.GET.get('page', 1)
-    per_page = 50
-    paginator = Paginator(jobs_qs, per_page)
-
-    try:
-        jobs = paginator.page(page)
-    except PageNotAnInteger:
-        jobs = paginator.page(1)
-    except EmptyPage:
-        jobs = paginator.page(paginator.num_pages)
-
-    # Activity options
-    ACTIVITY_OPTIONS = {
-        '': 'All Activities',
-        '1': 'Manufacturing',
-        '2': 'TE Research',
-        '4': 'ME Research',
-        '5': 'Copying',
-        '8': 'Invention',
-    }
-
-    # Status options
-    STATUS_OPTIONS = {
-        '': 'All Status',
-        '1': 'Active',
-        '2': 'Paused',
-        '102': 'Cancelled',
-        '104': 'Delivered',
-        '105': 'Failed',
-    }
-
-    return render(request, 'core/industry_jobs.html', {
-        'character': character,
-        'jobs': jobs,
-        'activity_filter': activity_filter,
-        'status_filter': status_filter,
-        'activity_options': ACTIVITY_OPTIONS,
-        'status_options': STATUS_OPTIONS,
-    })
-
-
 # Character Management Views
 
 @login_required
@@ -2081,6 +1998,86 @@ def set_main_character(request: HttpRequest, character_id: int) -> HttpResponse:
 
     messages.success(request, f'"{character.character_name}" set as main character.')
     return redirect('characters')
+
+
+# Industry Views
+
+@login_required
+def industry_summary(request: HttpRequest, character_id: int = None) -> HttpResponse:
+    """View industry summary across all characters or a specific character."""
+    from core.models import Character
+
+    # Get character
+    if character_id:
+        try:
+            character = Character.objects.get(id=character_id, user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+    else:
+        try:
+            character = Character.objects.get(user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+
+    return render(request, 'core/industry_summary.html', {
+        'character': character,
+    })
+
+
+@login_required
+def industry_jobs_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
+    """View industry jobs with filtering and pagination."""
+    from core.models import Character
+    from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+
+    # Get character
+    if character_id:
+        try:
+            character = Character.objects.get(id=character_id, user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+    else:
+        try:
+            character = Character.objects.get(user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+
+    return render(request, 'core/industry_jobs.html', {
+        'character': character,
+    })
+
+
+@login_required
+def industry_job_detail(request: HttpRequest, job_id: int) -> HttpResponse:
+    """View detailed information about a single industry job."""
+    return render(request, 'core/industry_job_detail.html', {
+        'job_id': job_id,
+    })
+
+
+@login_required
+def industry_jobs(request: HttpRequest, character_id: int) -> HttpResponse:
+    """View industry jobs for a specific character."""
+    from core.models import Character
+
+    try:
+        character = Character.objects.get(id=character_id, user=request.user)
+    except Character.DoesNotExist:
+        return render(request, 'core/error.html', {
+            'message': 'Character not found',
+        }, status=404)
+
+    return render(request, 'core/industry_jobs.html', {
+        'character': character,
+    })
 
 
 # CSV Export Views

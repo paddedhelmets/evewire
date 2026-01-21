@@ -86,12 +86,18 @@ urlpatterns = [
     path('character/<int:character_id>/assets/export/', views.assets_export, name='character_assets_export'),
 
     # Contracts
+    path('contracts/', views.contracts_list, name='contracts'),
+    path('character/<int:character_id>/contracts/', views.contracts_list, name='character_contracts'),
+    path('contracts/<int:contract_id>/', views.contract_detail, name='contract_detail'),
     path('contracts/export/', views.contracts_export, name='contracts_export'),
     path('character/<int:character_id>/contracts/export/', views.contracts_export, name='character_contracts_export'),
 
-    # Industry Jobs
+    # Industry
+    path('industry/', views.industry_summary, name='industry_summary'),
     path('industry/jobs/', views.industry_jobs_list, name='industry_jobs_list'),
-    path('character/<int:character_id>/industry/jobs/', views.industry_jobs_list, name='character_industry_jobs_list'),
+    path('industry/jobs/<int:job_id>/', views.industry_job_detail, name='industry_job_detail'),
+    path('character/<int:character_id>/industry/', views.industry_summary, name='character_industry_summary'),
+    path('character/<int:character_id>/industry/jobs/', views.industry_jobs, name='character_industry_jobs'),
     path('industry/jobs/export/', views.industry_jobs_export, name='industry_jobs_export'),
     path('character/<int:character_id>/industry/jobs/export/', views.industry_jobs_export, name='character_industry_jobs_export'),
 ]
