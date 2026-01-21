@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}Industry Summary - evewire{% endblock %}
+
+{% block content %}
+<h1>Industry Summary</h1>
+
+<!-- Slot Utilization Cards -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+    <!-- Manufacturing Slots -->
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <h2 style="margin: 0;">Manufacturing</h2>
+            <span style="padding: 4px 8px; border-radius: 3px; background: {% if mfg_color == 'red' %}#f7e6e6; color: #c00{% elif mfg_color == 'yellow' %}#fff3cd; color: #856404{% else %}#e6f7e6; color: #080{% endif %}; font-size: 0.85rem;">
+                {% if mfg_color == 'red' %}High Utilization{% elif mfg_color == 'yellow' %}Moderate{% else %}Available{% endif %}
+            </span>
+        </div>
+        <p style="font-size: 2rem; font-weight: bold; margin: 0.5rem 0;">
+            {{ total_active_mfg }} / {{ total_mfg_slots }}
+        </p>
+        <div style="background: #eee; height: 20px; border-radius: 4px; overflow: hidden;">
+            <div style="background: {% if mfg_color == 'red' %}#c00{% elif mfg_color == 'yellow' %}#ffc107{% else %}#080{% endif %}; height: 100%; width: {{ mfg_utilization }}%;"></div>
+        </div>
+        <p style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">{{ mfg_utilization|floatformat:0 }}% utilized</p>
+    </div>
+
+    <!-- Research Slots -->
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <h2 style="margin: 0;">Research & Labs</h2>
+            <span style="padding: 4px 8px; border-radius: 3px; background: {% if research_color == 'red' %}#f7e6e6; color: #c00{% elif research_color == 'yellow' %}#fff3cd; color: #856404{% else %}#e6f7e6; color: #080{% endif %}; font-size: 0.85rem;">
+                {% if research_color == 'red' %}High Utilization{% elif research_color == 'yellow' %}Moderate{% else %}Available{% endif %}
+            </span>
+        </div>
+        <p style="font-size: 2rem; font-weight: bold; margin: 0.5rem 0;">
+            {{ total_active_research }} / {{ total_research_slots }}
+        </p>
+        <div style="background: #eee; height: 20px; border-radius: 4px; overflow: hidden;">
+            <div style="background: {% if research_color == 'red' %}#c00{% elif research_color == 'yellow' %}#ffc107{% else %}#080{% endif %}; height: 100%; width: {{ research_utilization }}%;"></div>
+        </div>
+        <p style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">{{ research_utilization|floatformat:0 }}% utilized</p>
+    </div>
+</div>
+
+<!-- Quick Links -->
+<div class="card">
+    <h2>Quick Links</h2>
+    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+        {% for character in characters %}
+            <a href="{% url 'core:character_detail' character.id %}#industry-jobs" class="btn">
+                {{ character.character_name }} Jobs
+            </a>
+        {% empty %}
+            <span style="color: #666;">No characters. Add a character to get started.</span>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Jobs by Activity Type -->
+{% if activities_by_type %}
+<div class="card">
+    <h2>Active Jobs by Activity Type</h2>
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem;">
+        {% for activity in activities_by_type %}
+            <div style="border: 1px solid #ddd; border-radius: 4px; padding: 0.75rem;">
+                <p style="margin: 0; color: #666; font-size: 0.9rem;">{{ activity.name }}</p>
+                <p style="margin: 0.25rem 0 0 0; font-size: 1.5rem; font-weight: bold;">{{ activity.count }}</p>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Expiring Soon -->
+{% if expiring_soon %}
+<div class="card" style="border-left: 4px solid #ffc107;">
+    <h2 style="color: #856404;">Expiring Soon (within 1 hour)</h2>
+    <p style="color: #666; margin-bottom: 1rem;">{{ expiring_soon|length }} job{{ expiring_soon|length|pluralize }} completing soon</p>
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid #ddd;">
+                <th style="padding: 0.5rem; text-align: left;">Character</th>
+                <th style="padding: 0.5rem; text-align: left;">Activity</th>
+                <th style="padding: 0.5rem; text-align: left;">Product</th>
+                <th style="padding: 0.5rem; text-align: left;">End Date</th>
+                <th style="padding: 0.5rem; text-align: left;">System</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for job in expiring_soon %}
+            <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 0.5rem;">
+                    <a href="{% url 'core:character_detail' job.character.id %}#industry-jobs">{{ job.character.character_name }}</a>
+                </td>
+                <td style="padding: 0.5rem;">{{ job.activity_name }}</td>
+                <td style="padding: 0.5rem;">{{ job.product_name }}</td>
+                <td style="padding: 0.5rem; font-size: 0.9rem;">{{ job.end_date|date:"M d H:i" }}</td>
+                <td style="padding: 0.5rem; font-size: 0.9rem;">{{ job.solar_system_id }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if not characters %}
+<div class="card">
+    <p style="color: #666;">No characters found. <a href="{% url 'core:add_character' %}" class="btn">Add a Character</a> to get started.</p>
+</div>
+{% endif %}
+{% endblock %}

@@ -2003,29 +2003,78 @@ def set_main_character(request: HttpRequest, character_id: int) -> HttpResponse:
 # Industry Views
 
 @login_required
-def industry_summary(request: HttpRequest, character_id: int = None) -> HttpResponse:
-    """View industry summary across all characters or a specific character."""
+def industry_summary(request: HttpRequest) -> HttpResponse:
+    """Industry summary view showing slot utilization across all characters."""
     from core.models import Character
+    from django.utils import timezone
+    from collections import Counter
 
-    # Get character
-    if character_id:
-        try:
-            character = Character.objects.get(id=character_id, user=request.user)
-        except Character.DoesNotExist:
-            return render(request, 'core/error.html', {
-                'message': 'Character not found',
-            }, status=404)
-    else:
-        try:
-            character = Character.objects.get(user=request.user)
-        except Character.DoesNotExist:
-            return render(request, 'core/error.html', {
-                'message': 'Character not found',
-            }, status=404)
+    characters = request.user.characters.all()
 
-    return render(request, 'core/industry_summary.html', {
-        'character': character,
-    })
+    # Aggregate stats across all characters
+    total_mfg_slots = sum(c.manufacturing_slots for c in characters)
+    total_research_slots = sum(c.research_slots for c in characters)
+    total_active_mfg = sum(c.active_manufacturing_jobs for c in characters)
+    total_active_research = sum(c.active_research_jobs for c in characters)
+
+    # Calculate utilization percentages
+    mfg_utilization = (total_active_mfg / total_mfg_slots * 100) if total_mfg_slots > 0 else 0
+    research_utilization = (total_active_research / total_research_slots * 100) if total_research_slots > 0 else 0
+
+    # Determine color class for utilization
+    def utilization_color(util):
+        if util >= 80:
+            return 'red'
+        elif util >= 50:
+            return 'yellow'
+        return 'green'
+
+    # Get jobs expiring soon (within 1 hour)
+    expiring_soon = []
+    one_hour_from_now = timezone.now() + timezone.timedelta(hours=1)
+    for character in characters:
+        for job in character.industry_jobs.filter(status=1).select_related('character'):
+            if job.end_date <= one_hour_from_now:
+                expiring_soon.append(job)
+    expiring_soon.sort(key=lambda j: j.end_date)
+
+    # Count active jobs by activity type
+    from core.character.models import IndustryJob
+    activity_counts = Counter()
+    for character in characters:
+        jobs = character.industry_jobs.filter(status=1).values_list('activity_id', flat=True)
+        activity_counts.update(jobs)
+
+    activity_names = {
+        1: 'Manufacturing',
+        2: 'TE Research',
+        3: 'TE Research (Legacy)',
+        4: 'ME Research',
+        5: 'Copying',
+        7: 'Reverse Engineering',
+        8: 'Invention',
+    }
+
+    activities_by_type = [
+        {'id': aid, 'name': activity_names.get(aid, f'Activity {aid}'), 'count': count}
+        for aid, count in sorted(activity_counts.items())
+    ]
+
+    context = {
+        'characters': characters,
+        'total_mfg_slots': total_mfg_slots,
+        'total_research_slots': total_research_slots,
+        'total_active_mfg': total_active_mfg,
+        'total_active_research': total_active_research,
+        'mfg_utilization': mfg_utilization,
+        'research_utilization': research_utilization,
+        'mfg_color': utilization_color(mfg_utilization),
+        'research_color': utilization_color(research_utilization),
+        'expiring_soon': expiring_soon,
+        'activities_by_type': activities_by_type,
+    }
+
+    return render(request, 'core/industry_summary.html', context)
 
 
 @login_required
