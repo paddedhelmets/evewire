@@ -46,4 +46,10 @@ urlpatterns = [
     path('character/<int:character_id>/market/orders/', views.market_orders, name='character_market_orders'),
     path('market/orders/history/', views.market_orders_history, name='market_orders_history'),
     path('character/<int:character_id>/market/orders/history/', views.market_orders_history, name='character_market_orders_history'),
+
+    # Trade Analysis
+    path('trade/', views.trade_overview, name='trade_overview'),
+    path('character/<int:character_id>/trade/', views.trade_overview, name='character_trade_overview'),
+    path('trade/item/<int:type_id>/', views.trade_item_detail, name='trade_item_detail'),
+    path('character/<int:character_id>/trade/item/<int:type_id>/', views.trade_item_detail, name='character_trade_item_detail'),
 ]

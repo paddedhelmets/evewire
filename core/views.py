@@ -1028,3 +1028,231 @@ def market_orders_history(request: HttpRequest, character_id: int = None) -> Htt
         'order_type': order_type,
         'state_filter': state_filter,
     })
+
+
+# Trade Analysis Views
+
+@login_required
+def trade_overview(request: HttpRequest, character_id: int = None) -> HttpResponse:
+    """Trade overview showing profit/loss summary and top items."""
+    from core.models import Character
+    from core.trade.services import TradeAnalyzer
+    from core.trade.models import Campaign
+    from django.utils import timezone
+    from datetime import timedelta
+
+    # Get character
+    if character_id:
+        try:
+            character = Character.objects.get(id=character_id, user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+    else:
+        try:
+            character = Character.objects.get(user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+
+    # Get timeframe filter
+    timeframe = request.GET.get('timeframe', 'all')
+    campaign_id = request.GET.get('campaign')
+    year = request.GET.get('year')
+    month = request.GET.get('month')
+
+    summaries = []
+    start_date = None
+    end_date = None
+    timeframe_label = "All Time"
+
+    if campaign_id:
+        # Use campaign date range
+        try:
+            campaign = Campaign.objects.get(id=campaign_id, user=request.user)
+            summaries = TradeAnalyzer.analyze_campaign(campaign)
+            start_date = campaign.start_date
+            end_date = campaign.end_date
+            timeframe_label = campaign.title
+        except Campaign.DoesNotExist:
+            pass
+    elif year and month:
+        # Use specific month
+        start_date = timezone.datetime(int(year), int(month), 1).replace(tzinfo=timezone.utc)
+        if int(month) == 12:
+            end_date = timezone.datetime(int(year) + 1, 1, 1).replace(tzinfo=timezone.utc) - timedelta(seconds=1)
+        else:
+            end_date = timezone.datetime(int(year), int(month) + 1, 1).replace(tzinfo=timezone.utc) - timedelta(seconds=1)
+        summaries = TradeAnalyzer.analyze_timeframe(character, start_date, end_date)
+        timeframe_label = f"{year}-{month.zfill(2)}"
+    elif timeframe == '30d':
+        start_date = timezone.now() - timedelta(days=30)
+        end_date = timezone.now()
+        summaries = TradeAnalyzer.analyze_timeframe(character, start_date, end_date)
+        timeframe_label = "Last 30 Days"
+    elif timeframe == '90d':
+        start_date = timezone.now() - timedelta(days=90)
+        end_date = timezone.now()
+        summaries = TradeAnalyzer.analyze_timeframe(character, start_date, end_date)
+        timeframe_label = "Last 90 Days"
+    elif timeframe == '12m':
+        start_date = timezone.now() - timedelta(days=365)
+        end_date = timezone.now()
+        summaries = TradeAnalyzer.analyze_timeframe(character, start_date, end_date)
+        timeframe_label = "Last 12 Months"
+    else:
+        # All time - use overview stats for efficiency
+        stats = TradeAnalyzer.get_overview_stats(character)
+        summaries = TradeAnalyzer.analyze_timeframe(
+            character,
+            start_date=timezone.datetime(2000, 1, 1).replace(tzinfo=timezone.utc),
+            end_date=timezone.now()
+        )
+
+    # Calculate overview stats
+    total_buy = sum(s.buy_total for s in summaries)
+    total_sell = sum(s.sell_total for s in summaries)
+    net_balance = total_sell - total_buy
+
+    # Get top items
+    top_profitable = [s for s in summaries if s.balance > 0][:10]
+    top_losses = [s for s in summaries if s.balance < 0][:10]
+    top_volume = sorted(summaries, key=lambda x: x.buy_total + x.sell_total, reverse=True)[:10]
+
+    # Get available campaigns and months
+    campaigns = Campaign.objects.filter(user=request.user).order_by('-start_date')
+    monthly_summaries = TradeAnalyzer.get_monthly_summaries(character)
+
+    return render(request, 'core/trade_overview.html', {
+        'character': character,
+        'summaries': summaries,
+        'total_buy': total_buy,
+        'total_sell': total_sell,
+        'net_balance': net_balance,
+        'top_profitable': top_profitable,
+        'top_losses': top_losses,
+        'top_volume': top_volume,
+        'campaigns': campaigns,
+        'monthly_summaries': monthly_summaries,
+        'timeframe': timeframe,
+        'timeframe_label': timeframe_label,
+        'campaign_id': campaign_id,
+    })
+
+
+@login_required
+def trade_item_detail(request: HttpRequest, character_id: int, type_id: int) -> HttpResponse:
+    """Detailed view for a single item's trading history."""
+    from core.models import Character
+    from core.character.models import WalletTransaction
+    from core.eve.models import ItemType
+    from django.utils import timezone
+    from datetime import timedelta
+
+    # Get character
+    try:
+        character = Character.objects.get(id=character_id, user=request.user)
+    except Character.DoesNotExist:
+        return render(request, 'core/error.html', {
+            'message': 'Character not found',
+        }, status=404)
+
+    # Get timeframe filter
+    timeframe = request.GET.get('timeframe', 'all')
+    campaign_id = request.GET.get('campaign')
+    year = request.GET.get('year')
+    month = request.GET.get('month')
+
+    # Build date range
+    if campaign_id:
+        from core.trade.models import Campaign
+        try:
+            campaign = Campaign.objects.get(id=campaign_id, user=request.user)
+            start_date = campaign.start_date
+            end_date = campaign.end_date
+        except Campaign.DoesNotExist:
+            start_date = None
+            end_date = None
+    elif year and month:
+        start_date = timezone.datetime(int(year), int(month), 1).replace(tzinfo=timezone.utc)
+        if int(month) == 12:
+            end_date = timezone.datetime(int(year) + 1, 1, 1).replace(tzinfo=timezone.utc) - timedelta(seconds=1)
+        else:
+            end_date = timezone.datetime(int(year), int(month) + 1, 1).replace(tzinfo=timezone.utc) - timedelta(seconds=1)
+    elif timeframe == '30d':
+        start_date = timezone.now() - timedelta(days=30)
+        end_date = timezone.now()
+    elif timeframe == '90d':
+        start_date = timezone.now() - timedelta(days=90)
+        end_date = timezone.now()
+    elif timeframe == '12m':
+        start_date = timezone.now() - timedelta(days=365)
+        end_date = timezone.now()
+    else:
+        start_date = None
+        end_date = None
+
+    # Get transactions for this item
+    transactions = WalletTransaction.objects.filter(
+        character=character,
+        type_id=type_id
+    )
+
+    if start_date and end_date:
+        transactions = transactions.filter(date__range=(start_date, end_date))
+
+    transactions = transactions.order_by('-date')
+
+    # Calculate statistics
+    buys = transactions.filter(is_buy=True)
+    sells = transactions.filter(is_buy=False)
+
+    buy_count = buys.count()
+    sell_count = sells.count()
+
+    buy_quantity = sum(t.quantity for t in buys)
+    sell_quantity = sum(t.quantity for t in sells)
+
+    buy_total = sum(t.quantity * t.unit_price for t in buys)
+    sell_total = sum(t.quantity * t.unit_price for t in sells)
+
+    buy_avg = buy_total / buy_quantity if buy_quantity > 0 else 0
+    sell_avg = sell_total / sell_quantity if sell_quantity > 0 else 0
+
+    balance = sell_total - buy_total
+    diff = buy_quantity - sell_quantity  # Unsold stock
+
+    profit_per_unit = sell_avg - buy_avg
+    profit_pct = (profit_per_unit / buy_avg * 100) if buy_avg > 0 else 0
+    projected = balance + (diff * sell_avg)
+
+    # Get item info
+    try:
+        item = ItemType.objects.get(id=type_id)
+        item_name = item.name
+    except ItemType.DoesNotExist:
+        item_name = f"Type {type_id}"
+
+    return render(request, 'core/trade_item_detail.html', {
+        'character': character,
+        'type_id': type_id,
+        'item_name': item_name,
+        'transactions': transactions,
+        'buy_count': buy_count,
+        'sell_count': sell_count,
+        'buy_quantity': buy_quantity,
+        'sell_quantity': sell_quantity,
+        'buy_total': buy_total,
+        'sell_total': sell_total,
+        'buy_avg': buy_avg,
+        'sell_avg': sell_avg,
+        'balance': balance,
+        'diff': diff,
+        'profit_per_unit': profit_per_unit,
+        'profit_pct': profit_pct,
+        'projected': projected,
+        'timeframe': timeframe,
+        'campaign_id': campaign_id,
+    })

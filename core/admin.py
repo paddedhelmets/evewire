@@ -8,6 +8,7 @@ from mptt.admin import MPTTModelAdmin
 from .models import User, Character, AuditLog
 from .eve.models import ItemType, SolarSystem, Station, Region, Faction, Corporation, Alliance
 from .character.models import CharacterSkill, SkillQueueItem, CharacterAsset, WalletJournalEntry, WalletTransaction, MarketOrder
+from .trade.models import Campaign
 
 
 @admin.register(User)
@@ -217,3 +218,24 @@ class MarketOrderAdmin(admin.ModelAdmin):
     search_fields = ['character__user__eve_character_name', 'type_id', 'order_id']
     readonly_fields = ['synced_at']
     ordering = ['-issued']
+
+
+# Trade analysis models
+
+@admin.register(Campaign)
+class CampaignAdmin(admin.ModelAdmin):
+    """Admin interface for Campaign model."""
+
+    list_display = ['title', 'user', 'start_date', 'end_date', 'created_at']
+    list_filter = ['created_at', 'start_date']
+    search_fields = ['title', 'slug', 'user__eve_character_name']
+    readonly_fields = ['created_at']
+    filter_horizontal = ['characters']
+    prepopulated_fields = {'slug': ('title',)}
+
+    fieldsets = (
+        (None, {'fields': ('user', 'title', 'slug', 'description')}),
+        ('Date Range', {'fields': ('start_date', 'end_date')}),
+        ('Filters', {'fields': ('characters',)}),
+        ('Metadata', {'fields': ('created_at',)}),
+    )

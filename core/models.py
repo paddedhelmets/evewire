@@ -426,3 +426,4 @@ class AuditLog(models.Model):
 from core.eve.models import *  # noqa: E402, F401, F403
 from core.character.models import *  # noqa: E402, F401, F403
 from core.doctrines.models import *  # noqa: E402, F401, F403
+from core.trade.models import *  # noqa: E402, F401, F403
