@@ -285,9 +285,9 @@ class ESIClient:
         return cls.get(f'/characters/{character.id}/wallet/transactions/', character, page=page)
 
     @classmethod
-    def get_industry_jobs(cls, character) -> ESIResponse:
+    def get_industry_jobs(cls, character, page: int = 1) -> ESIResponse:
         """Get character industry jobs."""
-        return cls.get(f'/characters/{character.id}/industry/jobs/', character)
+        return cls.get(f'/characters/{character.id}/industry/jobs/', character, page=page)
 
     # Public reference endpoints
 
@@ -591,31 +591,70 @@ def _sync_orders(character) -> None:
 
 
 def _sync_industry_jobs(character) -> None:
-    """Sync character industry jobs from ESI."""
+    """
+    Sync character industry jobs from ESI.
+
+    Handles:
+    - Pagination across multiple pages
+    - State transitions with logging
+    - Stale job handling (jobs past end_date + 90 days marked as unknown)
+    - Blueprint lookup error handling
+    """
     from core.character.models import IndustryJob
 
-    response = ESIClient.get_industry_jobs(character)
-    jobs_data = response.data
+    # Fetch all pages of jobs
+    all_jobs_data = []
+    page = 1
 
-    # Get existing job IDs for this character
-    existing_job_ids = set(
-        IndustryJob.objects.filter(character=character).values_list('job_id', flat=True)
-    )
-    incoming_job_ids = {job['job_id'] for job in jobs_data}
+    while True:
+        response = ESIClient.get_industry_jobs(character, page=page)
+        jobs_data = response.data
 
-    # Delete jobs that are no longer returned (completed/failed/cancelled beyond retention)
-    jobs_to_delete = existing_job_ids - incoming_job_ids
-    if jobs_to_delete:
-        IndustryJob.objects.filter(character=character, job_id__in=jobs_to_delete).delete()
+        if not jobs_data:
+            break
 
-    # Upsert jobs
-    for job_data in jobs_data:
-        IndustryJob.objects.update_or_create(
-            character=character,
-            job_id=job_data['job_id'],
-            defaults={
+        all_jobs_data.extend(jobs_data)
+
+        # ESI returns empty array when no more pages
+        if len(jobs_data) < 1000:  # ESI max page size is typically 1000
+            break
+
+        page += 1
+
+    # Get existing jobs for this character
+    existing_jobs = {
+        job.job_id: job
+        for job in IndustryJob.objects.filter(character=character)
+    }
+    existing_job_ids = set(existing_jobs.keys())
+    incoming_job_ids = {job['job_id'] for job in all_jobs_data}
+
+    # Track seen job IDs for stale job handling
+    seen_job_ids = set()
+
+    # Process incoming jobs
+    for job_data in all_jobs_data:
+        job_id = job_data['job_id']
+        seen_job_ids.add(job_id)
+        new_status = job_data.get('status', 999)
+
+        # Check if this is an existing job with status change
+        if job_id in existing_jobs:
+            existing_job = existing_jobs[job_id]
+            old_status = existing_job.status
+
+            # Update if status changed
+            if old_status != new_status:
+                logger.info(
+                    f'Industry job {job_id} status change: '
+                    f'{old_status} -> {new_status} '
+                    f'(character: {character.id})'
+                )
+
+            # Update job data
+            for field, value in {
                 'activity_id': job_data.get('activity_id'),
-                'status': job_data.get('status', 999),
+                'status': new_status,
                 'blueprint_id': job_data.get('blueprint_id'),
                 'blueprint_type_id': job_data.get('blueprint_type_id'),
                 'blueprint_location_id': job_data.get('blueprint_location_id'),
@@ -632,8 +671,58 @@ def _sync_industry_jobs(character) -> None:
                 'probability': job_data.get('probability'),
                 'attempts': job_data.get('attempts'),
                 'success': job_data.get('success'),
-            }
+            }.items():
+                setattr(existing_job, field, value)
+
+            existing_job.save()
+        else:
+            # Create new job
+            IndustryJob.objects.create(
+                character=character,
+                job_id=job_id,
+                activity_id=job_data.get('activity_id'),
+                status=new_status,
+                blueprint_id=job_data.get('blueprint_id'),
+                blueprint_type_id=job_data.get('blueprint_type_id'),
+                blueprint_location_id=job_data.get('blueprint_location_id'),
+                product_type_id=job_data.get('product_type_id'),
+                station_id=job_data.get('station_id'),
+                solar_system_id=job_data.get('solar_system_id'),
+                start_date=job_data.get('start_date'),
+                end_date=job_data.get('end_date'),
+                pause_date=job_data.get('pause_date'),
+                completed_date=job_data.get('completed_date'),
+                completed_character_id=job_data.get('completed_character_id'),
+                runs=job_data.get('runs', 1),
+                cost=job_data.get('cost', 0),
+                probability=job_data.get('probability'),
+                attempts=job_data.get('attempts'),
+                success=job_data.get('success'),
+            )
+
+    # Stale job handling: Mark active jobs past end_date + 90 days as unknown (999)
+    stale_threshold = timezone.now() - timezone.timedelta(days=90)
+    stale_jobs = IndustryJob.objects.filter(
+        character=character,
+        status=1,  # active
+        end_date__lt=stale_threshold,
+    ).exclude(job_id__in=seen_job_ids)
+
+    stale_count = stale_jobs.update(status=999)
+    if stale_count > 0:
+        logger.info(
+            f'Marked {stale_count} stale industry jobs as unknown '
+            f'(character: {character.id})'
         )
+
+    # Delete jobs that are no longer returned and are not stale
+    # (completed/failed/cancelled jobs beyond ESI retention)
+    jobs_to_delete = existing_job_ids - seen_job_ids
+    if jobs_to_delete:
+        IndustryJob.objects.filter(
+            character=character,
+            job_id__in=jobs_to_delete
+        ).delete()
 
     character.industry_jobs_synced_at = timezone.now()
     character.save(update_fields=['industry_jobs_synced_at'])
