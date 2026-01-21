@@ -86,28 +86,60 @@ def logout_view(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def dashboard(request: HttpRequest) -> HttpResponse:
-    """Main dashboard showing user's characters."""
+    """Main dashboard showing user's characters with aggregated stats."""
     from core.models import Character
     from django.contrib import messages
+    from django.db.models import Sum, Q
 
     # Get all characters for this user
-    characters = request.user.characters.all()
+    characters = request.user.characters.select_related().all()
 
     # Redirect to characters list if user has no characters
     if not characters.exists():
         messages.info(request, 'Please add a character to get started.')
         return redirect('characters')
 
-    # For backward compatibility, show first character's detail
-    # Or redirect to character list if multiple
-    if characters.count() == 1:
-        character = characters.first()
-        return render(request, 'core/dashboard.html', {
-            'character': character,
+    # Calculate aggregated stats
+    total_wallet = characters.aggregate(
+        total=Sum('wallet_balance')
+    )['total'] or 0
+
+    total_sp = characters.aggregate(
+        total=Sum('total_sp')
+    )['total'] or 0
+
+    # Count active skill queues across all characters
+    active_skill_queues = sum(
+        char.skill_queue.count() for char in characters
+    )
+
+    # Count total active market orders
+    total_orders = sum(
+        char.market_orders.count() for char in characters
+    )
+
+    # Build character data with skill queue info
+    characters_data = []
+    for char in characters:
+        skill_queue = list(char.skill_queue.all())
+        current_skill = skill_queue[0] if skill_queue else None
+        queue_count = len(skill_queue)
+
+        characters_data.append({
+            'character': char,
+            'current_skill': current_skill,
+            'queue_count': queue_count,
+            'orders_count': char.market_orders.count(),
         })
-    else:
-        # Multiple characters - show character list
-        return redirect('characters')
+
+    return render(request, 'core/dashboard.html', {
+        'characters': characters_data,
+        'total_wallet': total_wallet,
+        'total_sp': total_sp,
+        'active_skill_queues': active_skill_queues,
+        'total_orders': total_orders,
+        'characters_count': characters.count(),
+    })
 
 
 @login_required

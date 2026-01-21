@@ -15,112 +15,96 @@
     <a href="{% url 'core:industry_summary' %}" class="btn" style="margin-left: 0.5rem;">Industry</a>
 </div>
 
-{% if character %}
+<!-- Aggregated Stats -->
+<div class="card">
+    <h2>Fleet Overview</h2>
+    <p><strong>Characters:</strong> {{ characters_count }}</p>
+    <p><strong>Total Wallet:</strong> {{ total_wallet|floatformat:2 }} ISK</p>
+    <p><strong>Total SP:</strong> {{ total_sp }}</p>
+    <p><strong>Active Skill Queues:</strong> {{ active_skill_queues }}</p>
+    <p><strong>Total Active Orders:</strong> {{ total_orders }}</p>
+</div>
+
+<!-- Character Cards -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;">
+    {% for char_data in characters %}
     <div class="card">
-        <h2>{{ character.name }}</h2>
-        <p><strong>Character ID:</strong> {{ character.id }}</p>
-        <p><strong>Corporation:</strong> {{ character.corporation_name|default:"N/A" }}</p>
-        {% if character.alliance_name %}
-            <p><strong>Alliance:</strong> {{ character.alliance_name }}</p>
-        {% endif %}
+        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
+            <div>
+                <h3 style="margin: 0;">{{ char_data.character.name }}</h3>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin: 0.25rem 0;">
+                    {{ char_data.character.corporation_name|default:"N/A" }}
+                    {% if char_data.character.alliance_name %} &bull; {{ char_data.character.alliance_name }}{% endif %}
+                </p>
+            </div>
+            <a href="{% url 'core:character_detail' char_data.character.id %}" class="btn" style="padding: 0.25rem 0.75rem; font-size: 0.85rem;">Details</a>
+        </div>
 
-        <h3>Quick Stats</h3>
-        <ul>
-            {% if character.wallet_balance is not None %}
-                <li><strong>Wallet:</strong> {{ character.wallet_balance|floatformat:2 }} ISK</li>
-            {% else %}
-                <li><strong>Wallet:</strong> <a href="{% url 'core:sync_character' character.id %}" class="btn" style="font-size: 0.9rem;">Sync Now</a></li>
-            {% endif %}
-
-            {% if character.total_sp is not None %}
-                <li><strong>Total SP:</strong> {{ character.total_sp|default:"N/A" }}</li>
-            {% endif %}
-
-            {% with skill_queue_count=character.skill_queue.count %}
-                {% if skill_queue_count > 0 %}
-                    <li><strong>Skill Queue:</strong> {{ skill_queue_count }} skill{{ skill_queue_count|pluralize }} training</li>
+        <div style="margin: 1rem 0; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
+            <strong>Quick Stats</strong>
+            <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+                {% if char_data.character.wallet_balance is not None %}
+                    <li>Wallet: {{ char_data.character.wallet_balance|floatformat:2 }} ISK</li>
+                {% else %}
+                    <li>Wallet: <span style="color: var(--text-secondary);">Not synced</span></li>
                 {% endif %}
-            {% endwith %}
-
-            {% with orders_count=character.market_orders.count %}
-                {% if orders_count > 0 %}
-                    <li><strong>Active Orders:</strong> {{ orders_count }}</li>
+                {% if char_data.character.total_sp is not None %}
+                    <li>Total SP: {{ char_data.character.total_sp }}</li>
                 {% endif %}
-            {% endwith %}
-        </ul>
+                <li>Active Orders: {{ char_data.orders_count }}</li>
+            </ul>
+        </div>
 
-        <h3>Last Sync</h3>
-        <p>
-            Status: <strong>{{ character.get_last_sync_status_display }}</strong>
-            {% if character.last_sync %}
-                <br>Time: {{ character.last_sync|date:"Y-m-d H:i:s" }}
-            {% endif %}
-        </p>
-
-        <form method="post" action="{% url 'core:sync_character' character.id %}">
-            {% csrf_token %}
-            <button type="submit" class="btn">Sync Character Data</button>
-        </form>
-    </div>
-
-    <div class="card">
-        <h3>Current Skill Training</h3>
-        {% with current_skill=character.skill_queue.first %}
-            {% if current_skill %}
-                <p><strong>{{ current_skill.skill_name }}</strong> to Level {{ current_skill.finish_level }}</p>
-                <p>Finishes: {{ current_skill.finish_date|date:"Y-m-d H:i" }}</p>
-                <div style="background: #eee; height: 20px; border-radius: 4px; overflow: hidden; margin-top: 0.5rem;">
-                    <div style="background: #0066cc; height: 100%; width: {{ current_skill.progress_percent }}%;"></div>
+        <!-- Skill Queue Status -->
+        <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
+            {% if char_data.current_skill %}
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                    <strong style="font-size: 0.9rem;">Training:</strong>
+                    <span style="font-size: 0.85rem; color: var(--text-secondary);">
+                        {{ char_data.queue_count }} in queue
+                    </span>
                 </div>
-                <p style="font-size: 0.9rem; color: #666;">{{ current_skill.progress_percent|floatformat:1 }}% complete</p>
+                <p style="margin: 0.25rem 0;">{{ char_data.current_skill.skill_name }} <strong>L{{ char_data.current_skill.finish_level }}</strong></p>
+                <p style="margin: 0.25rem 0; font-size: 0.85rem; color: var(--text-secondary);">
+                    Finishes: {{ char_data.current_skill.finish_date|date:"M d H:i" }}
+                </p>
+                <div style="background: #eee; height: 12px; border-radius: 3px; overflow: hidden; margin-top: 0.5rem;">
+                    <div style="background: #0066cc; height: 100%; width: {{ char_data.current_skill.progress_percent }}%;"></div>
+                </div>
+                <p style="font-size: 0.8rem; color: #666; margin-top: 0.25rem;">{{ char_data.current_skill.progress_percent|floatformat:1 }}%</p>
+            {% elif char_data.queue_count > 0 %}
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">
+                    <strong>Queue:</strong> {{ char_data.queue_count }} skill{{ char_data.queue_count|pluralize }} queued
+                </p>
             {% else %}
-                <p style="color: #666;">No skill training. Queue is empty.</p>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">
+                    <strong>Training:</strong> Queue empty
+                </p>
             {% endif %}
-        {% endwith %}
-    </div>
+        </div>
 
-    <div class="card">
-        <h3>Active Market Orders</h3>
-        {% with open_orders=character.market_orders.all %}
-            {% if open_orders %}
-                <table style="width: 100%; border-collapse: collapse;">
-                    <thead>
-                        <tr style="border-bottom: 2px solid #ddd;">
-                            <th style="padding: 0.5rem; text-align: left;">Type</th>
-                            <th style="padding: 0.5rem; text-align: left;">Item</th>
-                            <th style="padding: 0.5rem; text-align: right;">Price</th>
-                            <th style="padding: 0.5rem; text-align: right;">Remaining</th>
-                            <th style="padding: 0.5rem; text-align: left;">Expires</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for order in open_orders|slice:":5" %}
-                        <tr style="border-bottom: 1px solid #eee;">
-                            <td style="padding: 0.5rem;">
-                                <span style="color: {% if order.is_buy_order %}#080{% else %}#c00{% endif %}; font-weight: bold;">
-                                    {% if order.is_buy_order %}BUY{% else %}SELL{% endif %}
-                                </span>
-                            </td>
-                            <td style="padding: 0.5rem;">{{ order.type_name }}</td>
-                            <td style="padding: 0.5rem; text-align: right;">{{ order.price|floatformat:2 }}</td>
-                            <td style="padding: 0.5rem; text-align: right;">{{ order.volume_remain }}/{{ order.volume_total }}</td>
-                            <td style="padding: 0.5rem;">{{ order.expires_at|date:"M d" }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-                {% if open_orders.count > 5 %}
-                    <p style="margin-top: 1rem;"><a href="{% url 'core:character_detail' character.id %}#orders">View all {{ open_orders.count }} orders</a></p>
+        <!-- Sync Status -->
+        <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+            <div style="font-size: 0.85rem;">
+                {% if char_data.character.last_sync_status == 'success' %}
+                    <span style="color: var(--alert-success-text);">{{ char_data.character.get_last_sync_status_display }}</span>
+                {% else %}
+                    <span style="color: var(--alert-error-text);">{{ char_data.character.get_last_sync_status_display }}</span>
                 {% endif %}
-            {% else %}
-                <p style="color: #666;">No active market orders.</p>
-            {% endif %}
-        {% endwith %}
+                {% if char_data.character.last_sync %}
+                    <br><span style="color: var(--text-secondary);">{{ char_data.character.last_sync|date:"M d H:i" }}</span>
+                {% endif %}
+            </div>
+            <form method="post" action="{% url 'core:sync_character' char_data.character.id %}">
+                {% csrf_token %}
+                <button type="submit" class="btn" style="padding: 0.25rem 0.75rem; font-size: 0.85rem;">Sync</button>
+            </form>
+        </div>
     </div>
-{% else %}
-    <div class="card">
-        <h2>No Character Found</h2>
-        <p>Your account doesn't have a linked character. This shouldn't happen - please contact support.</p>
-    </div>
-{% endif %}
+    {% endfor %}
+</div>
+
+<div style="margin-top: 2rem;">
+    <a href="{% url 'core:add_character' %}" class="btn">+ Add Character</a>
+</div>
 {% endblock %}
