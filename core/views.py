@@ -57,10 +57,16 @@ def oauth_callback(request: HttpRequest) -> HttpResponse:
         })
 
     try:
-        user = AuthService.handle_callback(code)
-        login(request, user)
-        logger.info(f'User {user.eve_character_name} logged in via SSO')
-        return redirect('dashboard')
+        # Pass request.user if logged in (for adding character to existing account)
+        request_user = request.user if request.user.is_authenticated else None
+        user = AuthService.handle_callback(code, request_user=request_user)
+
+        # If not already logged in, login the user
+        if not request_user:
+            login(request, user)
+
+        logger.info(f'User {user.display_name} logged in via SSO')
+        return redirect('characters')
 
     except Exception as e:
         logger.error(f'Failed to handle OAuth callback: {e}')
@@ -73,7 +79,7 @@ def oauth_callback(request: HttpRequest) -> HttpResponse:
 @login_required
 def logout_view(request: HttpRequest) -> HttpResponse:
     """Log out the current user."""
-    logger.info(f'User {request.user.eve_character_name} logged out')
+    logger.info(f'User {request.user.display_name} logged out')
     logout(request)
     return redirect('index')
 
@@ -84,25 +90,24 @@ def dashboard(request: HttpRequest) -> HttpResponse:
     from core.models import Character
     from django.contrib import messages
 
-    # For MVP, user has 1:1 character relationship
-    try:
-        character = Character.objects.get(user=request.user)
-    except Character.DoesNotExist:
-        # Attempt to create character from user's SSO data
-        try:
-            character = Character.objects.create(
-                id=request.user.eve_character_id,
-                user=request.user
-            )
-            messages.info(request, 'Character profile created. Please sync your data.')
-        except Exception as e:
-            logger.error(f'Failed to create character for user {request.user.id}: {e}')
-            messages.error(request, 'Could not load character profile. Please try logging in again.')
-            character = None
+    # Get all characters for this user
+    characters = request.user.characters.all()
 
-    return render(request, 'core/dashboard.html', {
-        'character': character,
-    })
+    # Redirect to characters list if user has no characters
+    if not characters.exists():
+        messages.info(request, 'Please add a character to get started.')
+        return redirect('characters')
+
+    # For backward compatibility, show first character's detail
+    # Or redirect to character list if multiple
+    if characters.count() == 1:
+        character = characters.first()
+        return render(request, 'core/dashboard.html', {
+            'character': character,
+        })
+    else:
+        # Multiple characters - show character list
+        return redirect('characters')
 
 
 @login_required
@@ -1919,3 +1924,77 @@ def fitted_ships(request: HttpRequest, character_id: int = None) -> HttpResponse
         'ships': enriched_ships,
         'total_ships': len(ships),
     })
+
+
+# Character Management Views
+
+@login_required
+def characters_list(request: HttpRequest) -> HttpResponse:
+    """View showing all linked characters for the current user."""
+    from core.models import Character
+
+    characters = request.user.characters.all()
+
+    return render(request, 'core/characters.html', {
+        'characters': characters,
+    })
+
+
+@login_required
+def add_character(request: HttpRequest) -> HttpResponse:
+    """Initiate adding a new character via EVE SSO."""
+    from core.services import TokenManager
+
+    sso_url = TokenManager.get_sso_login_url()
+    return redirect(sso_url)
+
+
+@login_required
+@require_http_methods(['POST'])
+def remove_character(request: HttpRequest, character_id: int) -> HttpResponse:
+    """Remove a character from the user's account."""
+    from core.models import Character
+    from django.contrib import messages
+
+    try:
+        character = Character.objects.get(id=character_id, user=request.user)
+    except Character.DoesNotExist:
+        messages.error(request, 'Character not found.')
+        return redirect('characters')
+
+    # Don't allow removing the last character
+    character_count = request.user.characters.count()
+    if character_count <= 1:
+        messages.error(request, 'You cannot remove your last character.')
+        return redirect('characters')
+
+    character_name = character.character_name
+    character.delete()
+
+    messages.success(request, f'Character "{character_name}" has been removed from your account.')
+    return redirect('characters')
+
+
+@login_required
+def set_main_character(request: HttpRequest, character_id: int) -> HttpResponse:
+    """Set a character as the main character (for display purposes)."""
+    from core.models import Character
+    from django.contrib import messages
+
+    try:
+        character = Character.objects.get(id=character_id, user=request.user)
+    except Character.DoesNotExist:
+        messages.error(request, 'Character not found.')
+        return redirect('characters')
+
+    # Update user's first character fields for backward compatibility
+    request.user.eve_character_id = character.id
+    request.user.eve_character_name = character.character_name
+    request.user.corporation_id = character.corporation_id
+    request.user.corporation_name = character.corporation_name
+    request.user.alliance_id = character.alliance_id
+    request.user.alliance_name = character.alliance_name
+    request.user.save()
+
+    messages.success(request, f'"{character.character_name}" set as main character.')
+    return redirect('characters')

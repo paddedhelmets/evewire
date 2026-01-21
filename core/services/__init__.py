@@ -77,16 +77,28 @@ class TokenManager:
 
     @staticmethod
     def get_access_token(user) -> Optional[str]:
-        """Get a valid access token for the user."""
-        cache_key = f'access_token:{user.id}'
+        """Get a valid access token for the user (uses first character)."""
+        from core.models import Character
+        try:
+            character = user.characters.first()
+            if character:
+                return TokenManager.get_access_token_for_character(character)
+        except Exception as e:
+            logger.error(f'Failed to get access token for user {user.id}: {e}')
+        return None
+
+    @staticmethod
+    def get_access_token_for_character(character) -> Optional[str]:
+        """Get a valid access token for a specific character."""
+        cache_key = f'access_token:character:{character.id}'
 
         cached = cache.get(cache_key)
         if cached:
             return cached
 
-        refresh_token = user.get_refresh_token()
+        refresh_token = character.get_refresh_token()
         if not refresh_token:
-            logger.warning(f'No refresh token for user {user.id}')
+            logger.warning(f'No refresh token for character {character.id}')
             return None
 
         try:
@@ -97,13 +109,13 @@ class TokenManager:
             cache_timeout = int(expires_in * 0.9)
             cache.set(cache_key, access_token, timeout=cache_timeout)
 
-            user.token_expires = timezone.now() + timedelta(seconds=expires_in)
-            user.save(update_fields=['token_expires'])
+            character.token_expires = timezone.now() + timedelta(seconds=expires_in)
+            character.save(update_fields=['token_expires'])
 
             return access_token
 
         except Exception as e:
-            logger.error(f'Token refresh failed for user {user.id}: {e}')
+            logger.error(f'Token refresh failed for character {character.id}: {e}')
             return None
 
     @staticmethod
@@ -336,8 +348,14 @@ class AuthService:
     """Service for handling EVE SSO authentication flow."""
 
     @staticmethod
-    def handle_callback(code: str):
-        """Handle EVE SSO OAuth callback."""
+    def handle_callback(code: str, request_user=None):
+        """
+        Handle EVE SSO OAuth callback.
+
+        If request_user is provided (user already logged in), adds the character
+        to their existing account. Otherwise, creates a new user or logs in
+        to existing user with that character.
+        """
         from core.models import User, Character, AuditLog
 
         try:
@@ -355,34 +373,99 @@ class AuthService:
 
         character_id = character_data['CharacterID']
         character_name = character_data['CharacterName']
-
-        user, created = User.objects.get_or_create(
-            eve_character_id=character_id,
-            defaults={
-                'eve_character_name': character_name,
-                'corporation_id': character_data.get('CorporationID'),
-            }
-        )
-
+        corporation_id = character_data.get('CorporationID')
         refresh_token = token_data.get('refresh_token')
-        if refresh_token:
-            user.set_refresh_token(refresh_token)
-
         expires_in = token_data.get('expires_in', 1200)
-        user.token_expires = timezone.now() + timedelta(seconds=expires_in)
-        user.last_login = timezone.now()
-        user.save()
 
-        Character.objects.get_or_create(id=character_id, defaults={'user': user})
+        # Check if this character already exists
+        existing_character = Character.objects.filter(id=character_id).first()
+
+        user = None
+        created = False
+        character_added = False
+
+        if request_user:
+            # User is already logged in - add character to their account
+            user = request_user
+
+            if existing_character and existing_character.user != user:
+                # Character belongs to another user - not allowed
+                raise ValueError(f'This character is already linked to another account')
+
+            if existing_character:
+                # Update existing character's token
+                existing_character.set_refresh_token(refresh_token)
+                existing_character.token_expires = timezone.now() + timedelta(seconds=expires_in)
+                existing_character.character_name = character_name
+                existing_character.corporation_id = corporation_id
+                existing_character.save()
+                character = existing_character
+            else:
+                # Create new character for this user
+                character = Character.objects.create(
+                    id=character_id,
+                    user=user,
+                    character_name=character_name,
+                    corporation_id=corporation_id,
+                )
+                character.set_refresh_token(refresh_token)
+                character.token_expires = timezone.now() + timedelta(seconds=expires_in)
+                character.save()
+                character_added = True
+
+        else:
+            # Not logged in - this is initial login
+            if existing_character:
+                # Character already exists - log in as that user
+                user = existing_character.user
+                # Update token
+                existing_character.set_refresh_token(refresh_token)
+                existing_character.token_expires = timezone.now() + timedelta(seconds=expires_in)
+                existing_character.character_name = character_name
+                existing_character.corporation_id = corporation_id
+                existing_character.save()
+                character = existing_character
+                created = False
+            else:
+                # Create new user with this character
+                user = User(username=User.objects.generate_username())
+                user.last_login = timezone.now()
+                user.save()
+
+                # Create character
+                character = Character.objects.create(
+                    id=character_id,
+                    user=user,
+                    character_name=character_name,
+                    corporation_id=corporation_id,
+                )
+                character.set_refresh_token(refresh_token)
+                character.token_expires = timezone.now() + timedelta(seconds=expires_in)
+                character.save()
+
+                # Update user's first character fields for backward compatibility
+                user.eve_character_id = character_id
+                user.eve_character_name = character_name
+                user.corporation_id = corporation_id
+                user.save()
+                created = True
+
+        # Log the action
+        if character_added:
+            action = 'character_added'
+        elif created:
+            action = 'register'
+        else:
+            action = 'login'
 
         AuditLog.log(
             user,
-            action='login' if not created else 'register',
+            action=action,
             character_id=character_id,
             character_name=character_name,
         )
 
-        logger.info(f'User {"created" if created else "logged in"}: {character_name} ({character_id})')
+        logger.info(f'User action: {action} - {character_name} ({character_id})')
         return user
 
 

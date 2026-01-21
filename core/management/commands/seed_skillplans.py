@@ -19,7 +19,7 @@ class Command(BaseCommand):
 
         # Get or create a test user
         user, created = User.objects.get_or_create(
-            eve_character_id=99999999,
+            username='test_user_seed',
             defaults={
                 'eve_character_name': 'Test User',
                 'corporation_id': 1,
@@ -27,7 +27,16 @@ class Command(BaseCommand):
         )
 
         if created:
-            self.stdout.write(self.style.SUCCESS(f'Created test user: {user.eve_character_name}'))
+            # Create a test character for this user
+            from core.models import Character
+            Character.objects.create(
+                id=99999999,
+                user=user,
+                character_name='Test User',
+                corporation_id=1,
+                corporation_name='Test Corp',
+            )
+            self.stdout.write(self.style.SUCCESS(f'Created test user: {user.display_name}'))
 
         # Sample skill plans from skill-checker README
         # These are Imperium-specific plans, we'll create generic versions

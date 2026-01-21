@@ -13,9 +13,17 @@ urlpatterns = [
     path('logout/', views.logout_view, name='logout'),
     path('oauth/callback/', views.oauth_callback, name='oauth_callback'),
     path('dashboard/', views.dashboard, name='dashboard'),
+    path('theme/toggle/', views.toggle_theme, name='toggle_theme'),
+
+    # Character Management
+    path('characters/', views.characters_list, name='characters'),
+    path('characters/add/', views.add_character, name='add_character'),
+    path('characters/<int:character_id>/remove/', views.remove_character, name='remove_character'),
+    path('characters/<int:character_id>/set-main/', views.set_main_character, name='set_main_character'),
+
+    # Character Detail (legacy URL, kept for compatibility)
     path('character/<int:character_id>/', views.character_detail, name='character_detail'),
     path('character/<int:character_id>/sync/', views.sync_character, name='sync_character'),
-    path('theme/toggle/', views.toggle_theme, name='toggle_theme'),
 
     # Skill plans
     path('plans/', views.skill_plan_list, name='skill_plan_list'),

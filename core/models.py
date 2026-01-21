@@ -50,16 +50,16 @@ def decrypt_token(encrypted: str) -> str:
 class EvewireUserManager(BaseUserManager['User']):
     """Custom user manager for EVE SSO-only authentication."""
 
-    def create_user(self, **extra_fields) -> 'User':
+    def create_user(self, username: str, **extra_fields) -> 'User':
         """Create a new user (no password required)."""
-        if not extra_fields.get('eve_character_id'):
-            raise ValueError('EVE character ID is required')
+        if not username:
+            raise ValueError('Username is required')
 
-        user = self.model(**extra_fields)
+        user = self.model(username=username, **extra_fields)
         user.save(using=self._db)
         return user
 
-    def create_superuser(self, **extra_fields) -> 'User':
+    def create_superuser(self, username: str, **extra_fields) -> 'User':
         """Create a superuser (for admin access)."""
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
@@ -70,42 +70,69 @@ class EvewireUserManager(BaseUserManager['User']):
         if extra_fields.get('is_superuser') is not True:
             raise ValueError('Superuser must have is_superuser=True.')
 
-        return self.create_user(**extra_fields)
+        return self.create_user(username, **extra_fields)
 
     def get_by_eve_character(self, character_id: int) -> Optional['User']:
-        """Get a user by their EVE character ID."""
+        """Get a user by their EVE character ID (via Character model)."""
         try:
-            return self.get(eve_character_id=character_id)
-        except self.model.DoesNotExist:
+            from core.models import Character
+            character = Character.objects.get(id=character_id)
+            return character.user
+        except Character.DoesNotExist:
             return None
+
+    def generate_username(self) -> str:
+        """Generate a unique username for a new user."""
+        import random
+        import string
+        while True:
+            # Generate random username like "pilot_abc123"
+            username = f"pilot_{''.join(random.choices(string.ascii_lowercase + string.digits, k=12))}"
+            if not self.filter(username=username).exists():
+                return username
 
 
 class User(AbstractBaseUser, PermissionsMixin):
     """
     Custom User model for EVE SSO authentication.
 
-    Uses EVE character ID as the primary identifier. No password field.
+    Supports multiple characters per user. Uses auto-generated username.
     Users are created automatically when they first log in via EVE SSO.
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    eve_character_id = models.BigIntegerField(
+
+    # Auto-generated username for Django admin/auth (not displayed in UI)
+    username = models.CharField(
+        max_length=150,
         unique=True,
         db_index=True,
-        help_text=_('EVE Online Character ID (from SSO)')
+        blank=True,
+        default='',
+        help_text=_('Auto-generated username for authentication')
+    )
+
+    # First character info kept for backward compatibility
+    eve_character_id = models.BigIntegerField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=_('EVE Online Character ID of first linked character (deprecated)')
     )
     eve_character_name = models.CharField(
         max_length=255,
-        help_text=_('EVE Online Character Name')
+        blank=True,
+        help_text=_('EVE Online Character Name of first linked character (deprecated)')
     )
     corporation_id = models.BigIntegerField(null=True, blank=True)
     corporation_name = models.CharField(max_length=255, blank=True)
     alliance_id = models.BigIntegerField(null=True, blank=True)
     alliance_name = models.CharField(max_length=255, blank=True)
 
+    # Deprecated - moved to Character model
     refresh_token = models.TextField(
         blank=True,
-        help_text=_('Encrypted OAuth2 refresh token')
+        help_text=_('Deprecated: Use character.refresh_token instead')
     )
     token_expires = models.DateTimeField(null=True, blank=True)
 
@@ -121,16 +148,27 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     objects = EvewireUserManager()
 
-    USERNAME_FIELD = 'eve_character_id'
-    REQUIRED_FIELDS = ['eve_character_name']
+    USERNAME_FIELD = 'username'
+    REQUIRED_FIELDS = []
 
     class Meta:
         verbose_name = _('user')
         verbose_name_plural = _('users')
-        ordering = ['eve_character_name']
 
     def __str__(self) -> str:
-        return self.eve_character_name
+        # Return the first character's name if available, otherwise username
+        first_char = self.characters.first()
+        if first_char:
+            return first_char.character_name
+        return self.username
+
+    @property
+    def display_name(self) -> str:
+        """Get display name from first character or username."""
+        first_char = self.characters.first()
+        if first_char:
+            return first_char.character_name
+        return self.username
 
     @property
     def is_authenticated(self) -> bool:
@@ -212,14 +250,33 @@ class Character(models.Model):
     """
     EVE Character linked to a user.
 
-    MVP: 1:1 User-Character relationship. Future: support multiple chars per user.
+    Supports multiple characters per user for character management.
 
     This model tracks sync metadata. Actual character data (skills, assets, wallet)
     is stored in relational models in core.character.models.
     """
 
     id = models.BigIntegerField(primary_key=True)
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='character')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='characters')
+
+    # OAuth2 token storage (per-character)
+    refresh_token = models.TextField(
+        blank=True,
+        help_text=_('Encrypted OAuth2 refresh token for this character')
+    )
+    token_expires = models.DateTimeField(null=True, blank=True)
+
+    # Character info from ESI
+    character_name = models.CharField(
+        max_length=255,
+        blank=True,
+        default='',
+        help_text=_('EVE Online Character Name')
+    )
+    corporation_id = models.BigIntegerField(null=True, blank=True)
+    corporation_name = models.CharField(max_length=255, blank=True)
+    alliance_id = models.BigIntegerField(null=True, blank=True)
+    alliance_name = models.CharField(max_length=255, blank=True)
 
     # Wallet balance (cached for quick display)
     wallet_balance = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
@@ -247,18 +304,43 @@ class Character(models.Model):
     class Meta:
         verbose_name = _('character')
         verbose_name_plural = _('characters')
+        ordering = ['character_name']
 
     def __str__(self) -> str:
-        return self.user.eve_character_name
+        return self.character_name
 
     @property
     def name(self) -> str:
-        return self.user.eve_character_name
+        return self.character_name
+
+    def set_refresh_token(self, token: str) -> None:
+        """Encrypt and store refresh token."""
+        self.refresh_token = encrypt_token(token)
+
+    def get_refresh_token(self) -> Optional[str]:
+        """Decrypt and return refresh token."""
+        if not self.refresh_token:
+            return None
+        try:
+            return decrypt_token(self.refresh_token)
+        except Exception as e:
+            logger.error(f'Failed to decrypt token for character {self.id}: {e}')
+            return None
+
+    def has_valid_token(self) -> bool:
+        """Check if the character has a refresh token."""
+        return bool(self.refresh_token)
+
+    def needs_token_refresh(self) -> bool:
+        """Check if access token needs refresh."""
+        if not self.token_expires:
+            return True
+        return timezone.now() >= self.token_expires - timedelta(minutes=5)
 
     def get_access_token(self) -> Optional[str]:
         """Get a valid access token for ESI requests."""
         from core.services import TokenManager
-        return TokenManager.get_access_token(self.user)
+        return TokenManager.get_access_token_for_character(self)
 
     def is_wallet_stale(self, max_age_seconds: int = 3600) -> bool:
         """Check if wallet balance is stale."""
@@ -414,7 +496,7 @@ class AuditLog(models.Model):
         ordering = ['-created_at']
 
     def __str__(self) -> str:
-        user_name = self.user.eve_character_name if self.user else 'Unknown'
+        user_name = self.user.display_name if self.user else 'Unknown'
         return f'{user_name}: {self.action}'
 
     @classmethod

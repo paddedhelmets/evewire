@@ -18,9 +18,9 @@
     <div class="card">
         <h2>{{ character.name }}</h2>
         <p><strong>Character ID:</strong> {{ character.id }}</p>
-        <p><strong>Corporation:</strong> {{ character.user.corporation_name|default:"N/A" }}</p>
-        {% if character.user.alliance_name %}
-            <p><strong>Alliance:</strong> {{ character.user.alliance_name }}</p>
+        <p><strong>Corporation:</strong> {{ character.corporation_name|default:"N/A" }}</p>
+        {% if character.alliance_name %}
+            <p><strong>Alliance:</strong> {{ character.alliance_name }}</p>
         {% endif %}
 
         <h3>Quick Stats</h3>
