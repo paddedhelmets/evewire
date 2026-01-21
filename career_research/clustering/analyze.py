@@ -82,6 +82,7 @@ class ClusterAnalyzer:
         """
         self.db_url = db_url
         self.sde_path = sde_path or "/home/genie/gt/evewire/crew/aura/db.sqlite3"
+        self._ammo_cache = None  # Cache for ammo type IDs
 
     def get_ship_name(self, ship_id: int) -> str:
         """Get ship name from SDE."""
@@ -104,6 +105,21 @@ class ClusterAnalyzer:
         ).fetchone()
         conn.close()
         return row["typeName"] if row else f"Module {type_id}"
+
+    def _is_ammo(self, type_id: int) -> bool:
+        """Check if type_id is ammo/charge (category 8). Uses cache."""
+        if self._ammo_cache is None:
+            # Initialize cache: load all ammo type IDs from category 8
+            import sqlite3
+            conn = sqlite3.connect(self.sde_path)
+            self._ammo_cache = set(
+                row[0] for row in conn.execute(
+                    "SELECT t.typeID FROM invTypes t JOIN invGroups g ON t.groupID = g.groupID WHERE g.categoryID = 8"
+                )
+            )
+            conn.close()
+            logger.info(f"Loaded {len(self._ammo_cache)} ammo type IDs into cache")
+        return type_id in self._ammo_cache
 
     def extract_canonical_fit(self, ship_id: int, cluster_id: int) -> Optional[CanonicalFit]:
         """
@@ -158,7 +174,7 @@ class ClusterAnalyzer:
                     for fit in fits:
                         modules = fit[slot_attr] or []
                         for i, module_id in enumerate(modules):
-                            if module_id:
+                            if module_id and not self._is_ammo(module_id):
                                 position_counts[i][module_id] += 1
 
                     # For each slot position, get the most common module
