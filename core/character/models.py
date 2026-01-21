@@ -510,6 +510,15 @@ class WalletTransaction(models.Model):
         """Calculate total transaction value."""
         return float(self.quantity) * float(self.unit_price)
 
+    @property
+    def type_name(self) -> str:
+        """Get the item type name from ItemType."""
+        from core.eve.models import ItemType
+        try:
+            return ItemType.objects.get(id=self.type_id).name
+        except ItemType.DoesNotExist:
+            return f"Type {self.type_id}"
+
 
 class MarketOrder(models.Model):
     """
