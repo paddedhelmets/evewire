@@ -79,7 +79,7 @@
             <strong>Trained Skills:</strong> {{ character.skills.count }}
         </div>
         <div>
-            <strong>Level 5 Skills:</strong> {{ character.skills.filter|default:""|filter:"skill_level:5"|default:"0" }}
+            <strong>Level 5 Skills:</strong> {{ level5_count }}
         </div>
     </div>
 </div>
