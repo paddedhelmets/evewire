@@ -46,4 +46,12 @@ urlpatterns = [
     path('character/<int:character_id>/market/orders/', views.market_orders, name='character_market_orders'),
     path('market/orders/history/', views.market_orders_history, name='market_orders_history'),
     path('character/<int:character_id>/market/orders/history/', views.market_orders_history, name='character_market_orders_history'),
+
+    # Assets
+    path('assets/', views.assets_list, name='assets_list'),
+    path('character/<int:character_id>/assets/', views.assets_list, name='character_assets_list'),
+    path('assets/summary/', views.assets_summary, name='assets_summary'),
+    path('character/<int:character_id>/assets/summary/', views.assets_summary, name='character_assets_summary'),
+    path('assets/ships/', views.fitted_ships, name='fitted_ships'),
+    path('character/<int:character_id>/assets/ships/', views.fitted_ships, name='character_fitted_ships'),
 ]

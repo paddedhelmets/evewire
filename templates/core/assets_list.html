@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}Assets - {{ character.name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .assets-container {
+        background: var(--bg-secondary);
+        border-radius: 8px;
+        padding: 1.5rem;
+        box-shadow: var(--card-shadow);
+    }
+
+    .assets-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .assets-stats {
+        display: flex;
+        gap: 2rem;
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+    }
+
+    .assets-controls button {
+        background: var(--btn-primary);
+        color: white;
+        border: none;
+        padding: 0.4rem 0.8rem;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.85rem;
+        margin-left: 0.5rem;
+    }
+
+    .assets-controls button:hover {
+        background: var(--btn-primary-hover);
+    }
+
+    .location-section {
+        margin-bottom: 2rem;
+    }
+
+    .location-header {
+        background: var(--bg-primary);
+        padding: 0.75rem 1rem;
+        border-radius: 4px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 0.5rem;
+        border-left: 4px solid var(--btn-primary);
+    }
+
+    .asset-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+    }
+
+    .asset-table th {
+        background: var(--bg-primary);
+        padding: 0.6rem 0.8rem;
+        text-align: left;
+        font-weight: 600;
+        border-bottom: 2px solid var(--border-color);
+        color: var(--text-secondary);
+    }
+
+    .asset-table td {
+        padding: 0.5rem 0.8rem;
+        border-bottom: 1px solid var(--table-border);
+    }
+
+    .asset-table tr:hover {
+        background: var(--bg-primary);
+    }
+
+    .asset-item-name {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .asset-expand {
+        cursor: pointer;
+        user-select: none;
+        width: 16px;
+        height: 16px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-secondary);
+        transition: transform 0.2s;
+    }
+
+    .asset-expand.expanded {
+        transform: rotate(90deg);
+    }
+
+    .asset-expand:hover {
+        color: var(--link-color);
+    }
+
+    .asset-children {
+        display: none;
+    }
+
+    .asset-children.visible {
+        display: table-row;
+    }
+
+    .asset-indent {
+        padding-left: 1.5rem;
+    }
+
+    .asset-indent-2 {
+        padding-left: 3rem;
+    }
+
+    .asset-indent-3 {
+        padding-left: 4.5rem;
+    }
+
+    .blueprint-badge {
+        font-size: 0.7rem;
+        padding: 0.1rem 0.4rem;
+        border-radius: 3px;
+        margin-left: 0.5rem;
+    }
+
+    .blueprint-bpo {
+        background: #d4edda;
+        color: #155724;
+    }
+
+    .blueprint-bpc {
+        background: #fff3cd;
+        color: #856404;
+    }
+
+    [data-theme="dark"] .blueprint-bpo {
+        background: #1e4a2a;
+        color: #6bff6b;
+    }
+
+    [data-theme="dark"] .blueprint-bpc {
+        background: #4a3d1a;
+        color: #ffc107;
+    }
+
+    .singleton-badge {
+        font-size: 0.7rem;
+        padding: 0.1rem 0.4rem;
+        border-radius: 3px;
+        background: #cce5ff;
+        color: #004085;
+    }
+
+    [data-theme="dark"] .singleton-badge {
+        background: #1a3a5c;
+        color: #66b3ff;
+    }
+
+    .location-type {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        color: var(--text-secondary);
+        margin-left: 0.5rem;
+    }
+
+    .no-assets {
+        text-align: center;
+        padding: 3rem;
+        color: var(--text-secondary);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="assets-container">
+    <div class="assets-header">
+        <div>
+            <h2>Assets</h2>
+            <p style="color: var(--text-secondary); margin-top: 0.5rem;">
+                Character: <strong>{{ character.name }}</strong>
+            </p>
+        </div>
+        <div class="assets-stats">
+            <span>Total Items: <strong>{{ total_assets }}</strong></span>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <a href="{% url 'core:assets_list' %}" class="btn" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">List</a>
+            <a href="{% url 'core:assets_summary' %}" class="btn" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">Summary</a>
+            <a href="{% url 'core:fitted_ships' %}" class="btn" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">Fitted Ships</a>
+            <button onclick="expandAll()" style="margin-left: 0.5rem;">Expand All</button>
+            <button onclick="collapseAll()">Collapse All</button>
+        </div>
+    </div>
+
+    {% if location_groups %}
+        {% for (location_id, location_type), assets in location_groups %}
+        <div class="location-section">
+            <div class="location-header">
+                {% if location_type == 'station' %}
+                    Station {{ location_id }}
+                {% elif location_type == 'solar_system' %}
+                    System {{ location_id }}
+                {% elif location_type == 'structure' %}
+                    Structure {{ location_id }}
+                {% else %}
+                    Other Location {{ location_id }}
+                {% endif %}
+                <span class="location-type">{{ location_type }}</span>
+            </div>
+
+            <table class="asset-table">
+                <thead>
+                    <tr>
+                        <th style="width: 40%;">Item</th>
+                        <th style="width: 15%;">Group</th>
+                        <th style="width: 10%;">Flag</th>
+                        <th style="width: 10%; text-align: right;">Quantity</th>
+                        <th style="width: 15%;">Location</th>
+                        <th style="width: 10%;">Singleton</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for asset in assets %}
+                        {% include 'core/asset_row.html' with asset=asset indent=0 %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="no-assets">
+            <p>No assets found for this character.</p>
+            <p>Assets may not have been synced yet.</p>
+        </div>
+    {% endif %}
+</div>
+
+<script>
+function toggleExpand(button) {
+    const targetId = button.getAttribute('data-target');
+    const children = document.querySelectorAll(targetId);
+    const isExpanded = button.classList.contains('expanded');
+
+    if (isExpanded) {
+        button.classList.remove('expanded');
+        button.innerHTML = '&#9654;';  // Right triangle
+        children.forEach(row => row.classList.remove('visible'));
+    } else {
+        button.classList.add('expanded');
+        button.innerHTML = '&#9660;';  // Down triangle
+        children.forEach(row => row.classList.add('visible'));
+    }
+}
+
+function expandAll() {
+    document.querySelectorAll('.asset-expand').forEach(btn => {
+        if (!btn.classList.contains('expanded')) {
+            toggleExpand(btn);
+        }
+    });
+}
+
+function collapseAll() {
+    document.querySelectorAll('.asset-expand.expanded').forEach(btn => {
+        toggleExpand(btn);
+    });
+}
+</script>
+{% endblock %}

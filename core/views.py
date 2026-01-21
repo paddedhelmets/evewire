@@ -1028,3 +1028,253 @@ def market_orders_history(request: HttpRequest, character_id: int = None) -> Htt
         'order_type': order_type,
         'state_filter': state_filter,
     })
+
+
+# Asset Views
+
+@login_required
+def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
+    """View character assets with hierarchical tree display."""
+    from core.models import Character
+    from core.character.models import CharacterAsset
+    from core.eve.models import ItemType
+    from collections import defaultdict
+
+    # Get character
+    if character_id:
+        try:
+            character = Character.objects.get(id=character_id, user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+    else:
+        try:
+            character = Character.objects.get(user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+
+    # Get all assets for this character
+    all_assets = CharacterAsset.objects.filter(character=character).select_related()
+
+    # Build asset lookup map
+    asset_map = {asset.item_id: asset for asset in all_assets}
+
+    # Get top-level assets (no parent) and build hierarchy
+    root_assets = []
+    location_groups = defaultdict(list)
+
+    for asset in all_assets:
+        if not asset.parent_id:
+            # Top-level asset
+            location_key = (asset.location_id, asset.location_type)
+            location_groups[location_key].append(asset)
+        else:
+            # Child asset - will be rendered via parent's descendants
+            pass
+
+    # Sort locations by name
+    sorted_locations = sorted(
+        location_groups.items(),
+        key=lambda x: x[0][1] + str(x[0][0])  # Sort by location_type then location_id
+    )
+
+    return render(request, 'core/assets_list.html', {
+        'character': character,
+        'location_groups': sorted_locations,
+        'total_assets': all_assets.count(),
+    })
+
+
+@login_required
+def assets_summary(request: HttpRequest, character_id: int = None) -> HttpResponse:
+    """View asset summary with per-location aggregates."""
+    from core.models import Character
+    from core.character.models import CharacterAsset
+    from core.eve.models import ItemType
+    from django.db.models import Sum, Count, Q
+    from collections import defaultdict
+    from decimal import Decimal
+
+    # Get character
+    if character_id:
+        try:
+            character = Character.objects.get(id=character_id, user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+    else:
+        try:
+            character = Character.objects.get(user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+
+    # Get all assets with item data
+    all_assets = CharacterAsset.objects.filter(character=character).select_related()
+
+    # Calculate totals
+    total_items = 0
+    total_value = Decimal('0')
+    total_volume = Decimal('0')
+
+    # Group by location
+    location_data = {}
+
+    for asset in all_assets:
+        location_key = (asset.location_id, asset.location_type)
+        if location_key not in location_data:
+            location_data[location_key] = {
+                'location_id': asset.location_id,
+                'location_type': asset.location_type,
+                'location_name': asset.location_name,
+                'total_items': 0,
+                'total_value': Decimal('0'),
+                'total_volume': Decimal('0'),
+            }
+
+        # Get item data
+        try:
+            item = ItemType.objects.get(id=asset.type_id)
+            item_volume = Decimal(str(item.volume or 0))
+            item_value = Decimal(str(asset.get_value()))
+        except ItemType.DoesNotExist:
+            item_volume = Decimal('0')
+            item_value = Decimal('0')
+
+        # Calculate quantity (use 1 for singletons)
+        qty = 1 if asset.is_singleton else asset.quantity
+
+        # Update location totals
+        location_data[location_key]['total_items'] += qty
+        location_data[location_key]['total_value'] += item_value * qty
+        location_data[location_key]['total_volume'] += item_volume * qty
+
+        # Update overall totals
+        total_items += qty
+        total_value += item_value * qty
+        total_volume += item_volume * qty
+
+    # Sort locations by name
+    sorted_locations = sorted(
+        location_data.values(),
+        key=lambda x: (x['location_type'], x['location_name'])
+    )
+
+    return render(request, 'core/assets_summary.html', {
+        'character': character,
+        'locations': sorted_locations,
+        'total_items': total_items,
+        'total_value': float(total_value),
+        'total_volume': float(total_volume),
+    })
+
+
+@login_required
+def fitted_ships(request: HttpRequest, character_id: int = None) -> HttpResponse:
+    """View fitted ships extracted from assets."""
+    from core.models import Character
+    from core.doctrines.services import AssetFitExtractor
+    from core.eve.models import ItemType
+
+    # Get character
+    if character_id:
+        try:
+            character = Character.objects.get(id=character_id, user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+    else:
+        try:
+            character = Character.objects.get(user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+
+    # Extract fitted ships
+    extractor = AssetFitExtractor()
+    ships = extractor.extract_ships(character)
+
+    # Enrich with item names and location details
+    enriched_ships = []
+    for ship in ships:
+        # Get module names
+        high_module_names = []
+        for type_id in ship.high_slots:
+            try:
+                high_module_names.append(ItemType.objects.get(id=type_id).name)
+            except ItemType.DoesNotExist:
+                high_module_names.append(f"Module {type_id}")
+
+        med_module_names = []
+        for type_id in ship.med_slots:
+            try:
+                med_module_names.append(ItemType.objects.get(id=type_id).name)
+            except ItemType.DoesNotExist:
+                med_module_names.append(f"Module {type_id}")
+
+        low_module_names = []
+        for type_id in ship.low_slots:
+            try:
+                low_module_names.append(ItemType.objects.get(id=type_id).name)
+            except ItemType.DoesNotExist:
+                low_module_names.append(f"Module {type_id}")
+
+        rig_module_names = []
+        for type_id in ship.rig_slots:
+            try:
+                rig_module_names.append(ItemType.objects.get(id=type_id).name)
+            except ItemType.DoesNotExist:
+                rig_module_names.append(f"Module {type_id}")
+
+        # Get location name
+        location_name = f"{ship.location_type.title()} {ship.location_id}"
+        if ship.location_type == 'station':
+            try:
+                from core.eve.models import Station
+                location_name = Station.objects.get(id=ship.location_id).name
+            except Station.DoesNotExist:
+                pass
+        elif ship.location_type == 'solar_system':
+            try:
+                from core.eve.models import SolarSystem
+                location_name = SolarSystem.objects.get(id=ship.location_id).name
+            except SolarSystem.DoesNotExist:
+                pass
+
+        enriched_ships.append({
+            'asset_id': ship.asset_id,
+            'ship_name': ship.ship_name,
+            'ship_type_id': ship.ship_type_id,
+            'location_name': location_name,
+            'location_type': ship.location_type,
+            'high_slots': ship.high_slots,
+            'high_slot_names': high_module_names,
+            'high_slot_count': len(ship.high_slots),
+            'med_slots': ship.med_slots,
+            'med_slot_names': med_module_names,
+            'med_slot_count': len(ship.med_slots),
+            'low_slots': ship.low_slots,
+            'low_slot_names': low_module_names,
+            'low_slot_count': len(ship.low_slots),
+            'rig_slots': ship.rig_slots,
+            'rig_slot_names': rig_module_names,
+            'rig_slot_count': len(ship.rig_slots),
+            'subsystem_slots': ship.subsystem_slots,
+            'subsystem_slot_count': len(ship.subsystem_slots),
+            'cargo_count': len(ship.cargo),
+            'drone_bay_count': len(ship.drone_bay),
+            'fighter_bay_count': len(ship.fighter_bay),
+        })
+
+    return render(request, 'core/fitted_ships.html', {
+        'character': character,
+        'ships': enriched_ships,
+        'total_ships': len(ships),
+    })

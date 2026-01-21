@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}Fitted Ships - {{ character.name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .ships-container {
+        background: var(--bg-secondary);
+        border-radius: 8px;
+        padding: 1.5rem;
+        box-shadow: var(--card-shadow);
+    }
+
+    .ships-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+    }
+
+    .ships-count {
+        color: var(--text-secondary);
+    }
+
+    .ship-card {
+        background: var(--bg-primary);
+        border-radius: 6px;
+        padding: 1.25rem;
+        margin-bottom: 1rem;
+    }
+
+    .ship-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: start;
+        margin-bottom: 1rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .ship-name {
+        font-size: 1.2rem;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .ship-location {
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+        margin-top: 0.25rem;
+    }
+
+    .ship-slots {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 1rem;
+    }
+
+    .slot-group {
+        background: var(--bg-secondary);
+        border-radius: 4px;
+        padding: 0.75rem;
+    }
+
+    .slot-header {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        margin-bottom: 0.5rem;
+    }
+
+    .slot-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .slot-list li {
+        font-size: 0.9rem;
+        padding: 0.25rem 0;
+        color: var(--text-primary);
+    }
+
+    .slot-list li::before {
+        content: "• ";
+        color: var(--link-color);
+    }
+
+    .slot-empty {
+        color: var(--text-secondary);
+        font-style: italic;
+        font-size: 0.85rem;
+    }
+
+    .cargo-info {
+        display: flex;
+        gap: 2rem;
+        margin-top: 1rem;
+        padding-top: 0.75rem;
+        border-top: 1px dashed var(--border-color);
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+    }
+
+    .no-ships {
+        text-align: center;
+        padding: 3rem;
+        color: var(--text-secondary);
+    }
+
+    .expand-btn {
+        background: none;
+        border: none;
+        color: var(--link-color);
+        cursor: pointer;
+        font-size: 0.85rem;
+        padding: 0;
+    }
+
+    .expand-btn:hover {
+        text-decoration: underline;
+    }
+
+    .ship-details {
+        display: none;
+        margin-top: 1rem;
+    }
+
+    .ship-details.visible {
+        display: block;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ships-container">
+    <div class="ships-header">
+        <div>
+            <h2>Fitted Ships</h2>
+            <p class="ships-count">Character: <strong>{{ character.name }}</strong></p>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <a href="{% url 'core:assets_list' %}" class="btn" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">List</a>
+            <a href="{% url 'core:assets_summary' %}" class="btn" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">Summary</a>
+            <a href="{% url 'core:fitted_ships' %}" class="btn" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">Fitted Ships</a>
+            <div style="text-align: right; margin-left: 1rem;">
+                <span style="color: var(--text-secondary);">Total Ships:</span>
+                <strong style="font-size: 1.5rem;">{{ total_ships }}</strong>
+            </div>
+        </div>
+    </div>
+
+    {% if ships %}
+        {% for ship in ships %}
+        <div class="ship-card">
+            <div class="ship-header">
+                <div>
+                    <div class="ship-name">{{ ship.ship_name }}</div>
+                    <div class="ship-location">{{ ship.location_name }}</div>
+                </div>
+                <button class="expand-btn" onclick="toggleDetails({{ ship.asset_id }})">
+                    <span id="btn-{{ ship.asset_id }}">Show Details ▼</span>
+                </button>
+            </div>
+
+            <div class="ship-summary">
+                <strong>High:</strong> {{ ship.high_slot_count }} |
+                <strong>Med:</strong> {{ ship.med_slot_count }} |
+                <strong>Low:</strong> {{ ship.low_slot_count }} |
+                <strong>Rigs:</strong> {{ ship.rig_slot_count }}
+                {% if ship.subsystem_slot_count %}| <strong>Subsystems:</strong> {{ ship.subsystem_slot_count }}{% endif %}
+            </div>
+
+            <div id="details-{{ ship.asset_id }}" class="ship-details">
+                <div class="ship-slots">
+                    <div class="slot-group">
+                        <div class="slot-header">High Slots ({{ ship.high_slot_count }}/8)</div>
+                        <ul class="slot-list">
+                            {% for name in ship.high_slot_names %}
+                            <li>{{ name }}</li>
+                            {% empty %}
+                            <li class="slot-empty">No modules fitted</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+
+                    <div class="slot-group">
+                        <div class="slot-header">Med Slots ({{ ship.med_slot_count }}/8)</div>
+                        <ul class="slot-list">
+                            {% for name in ship.med_slot_names %}
+                            <li>{{ name }}</li>
+                            {% empty %}
+                            <li class="slot-empty">No modules fitted</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+
+                    <div class="slot-group">
+                        <div class="slot-header">Low Slots ({{ ship.low_slot_count }}/8)</div>
+                        <ul class="slot-list">
+                            {% for name in ship.low_slot_names %}
+                            <li>{{ name }}</li>
+                            {% empty %}
+                            <li class="slot-empty">No modules fitted</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+
+                    <div class="slot-group">
+                        <div class="slot-header">Rigs ({{ ship.rig_slot_count }}/3-4)</div>
+                        <ul class="slot-list">
+                            {% for name in ship.rig_slot_names %}
+                            <li>{{ name }}</li>
+                            {% empty %}
+                            <li class="slot-empty">No rigs fitted</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+
+                    {% if ship.subsystem_slot_count %}
+                    <div class="slot-group">
+                        <div class="slot-header">Subsystems ({{ ship.subsystem_slot_count }}/5)</div>
+                        <ul class="slot-list">
+                            {% for id in ship.subsystem_slots %}
+                            <li>Subsystem {{ id }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="cargo-info">
+                    {% if ship.cargo_count %}
+                    <span><strong>Cargo:</strong> {{ ship.cargo_count }} item types</span>
+                    {% endif %}
+                    {% if ship.drone_bay_count %}
+                    <span><strong>Drone Bay:</strong> {{ ship.drone_bay_count }} item types</span>
+                    {% endif %}
+                    {% if ship.fighter_bay_count %}
+                    <span><strong>Fighter Bay:</strong> {{ ship.fighter_bay_count }} item types</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="no-ships">
+            <p>No fitted ships found for this character.</p>
+            <p>Ships may not have been synced yet, or no assembled ships exist in assets.</p>
+        </div>
+    {% endif %}
+</div>
+
+<script>
+function toggleDetails(assetId) {
+    const details = document.getElementById('details-' + assetId);
+    const btn = document.getElementById('btn-' + assetId);
+
+    if (details.classList.contains('visible')) {
+        details.classList.remove('visible');
+        btn.innerHTML = 'Show Details ▼';
+    } else {
+        details.classList.add('visible');
+        btn.innerHTML = 'Hide Details ▲';
+    }
+}
+</script>
+{% endblock %}
