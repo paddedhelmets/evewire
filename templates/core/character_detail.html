@@ -253,6 +253,77 @@
     {% endwith %}
 </div>
 
+<div class="card" id="contracts">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+        <h2>Contracts</h2>
+        <a href="{% url 'core:character_contracts' character.id %}" style="font-size: 0.9rem;">View All Contracts →</a>
+    </div>
+    {% with contracts=character.contracts.all|dictsort:"date_issued"|slice:":10" %}
+        {% if contracts %}
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1rem;">
+                <div style="border: 1px solid #ddd; border-radius: 4px; padding: 0.75rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                        <span style="font-size: 0.9rem; color: #666;">Outstanding</span>
+                        <span style="font-weight: bold; color: #0066cc;">{{ character.contracts.all|selectattr:"status"|equal:"outstanding"|list|length }}</span>
+                    </div>
+                </div>
+                <div style="border: 1px solid #ddd; border-radius: 4px; padding: 0.75rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                        <span style="font-size: 0.9rem; color: #666;">In Progress</span>
+                        <span style="font-weight: bold; color: #080;">{{ character.contracts.all|selectattr:"status"|equal:"in_progress"|list|length }}</span>
+                    </div>
+                </div>
+                <div style="border: 1px solid #ddd; border-radius: 4px; padding: 0.75rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                        <span style="font-size: 0.9rem; color: #666;">Completed</span>
+                        <span style="font-weight: bold; color: #666;">{{ character.contracts.all|selectattr:"is_completed"|list|length }}</span>
+                    </div>
+                </div>
+            </div>
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="border-bottom: 2px solid #ddd;">
+                        <th style="padding: 0.5rem; text-align: left;">Type</th>
+                        <th style="padding: 0.5rem; text-align: left;">Title</th>
+                        <th style="padding: 0.5rem; text-align: left;">Status</th>
+                        <th style="padding: 0.5rem; text-align: right;">Value</th>
+                        <th style="padding: 0.5rem; text-align: left;">Expires</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for contract in contracts %}
+                    <tr style="border-bottom: 1px solid #eee; {% if not contract.is_active %}opacity: 0.6;{% endif %}">
+                        <td style="padding: 0.5rem;">{{ contract.type_name }}</td>
+                        <td style="padding: 0.5rem;">
+                            <a href="{% url 'core:contract_detail' contract.contract_id %}">
+                                {{ contract.title|default:contract.type_name }}
+                            </a>
+                        </td>
+                        <td style="padding: 0.5rem;">
+                            <span style="font-size: 0.9rem; padding: 2px 6px; border-radius: 3px; background: {% if contract.is_active %}#e6f7e6{% elif contract.is_completed %}#d4edda{% else %}#f7e6e6{% endif %}; color: {% if contract.is_active %}#080{% elif contract.is_completed %}#155724{% else %}#c00{% endif %};">
+                                {{ contract.status_name }}
+                            </span>
+                            {% if contract.expires_soon %}
+                                <span style="color: #c00; margin-left: 0.25rem;">&excl;</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 0.5rem; text-align: right;">{{ contract.total_value|floatformat:2 }}</td>
+                        <td style="padding: 0.5rem;">{{ contract.date_expired|date:"M d H:i" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% if character.contracts.all.count > 10 %}
+            <p style="margin-top: 0.5rem; font-size: 0.9rem; color: #666;">
+                Showing 10 of {{ character.contracts.all.count }} contracts. <a href="{% url 'core:character_contracts' character.id %}">View all →</a>
+            </p>
+            {% endif %}
+        {% else %}
+            <p style="color: #666;">No contracts.</p>
+        {% endif %}
+    {% endwith %}
+</div>
+
 <div class="card" id="industry-slots">
     <h2>Industry Slots</h2>
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">

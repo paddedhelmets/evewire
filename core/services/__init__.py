@@ -294,6 +294,16 @@ class ESIClient:
         """Get character industry jobs."""
         return cls.get(f'/characters/{character.id}/industry/jobs/', character, page=page)
 
+    @classmethod
+    def get_contracts(cls, character, page: int = 1) -> ESIResponse:
+        """Get character contracts."""
+        return cls.get(f'/characters/{character.id}/contracts/', character, page=page)
+
+    @classmethod
+    def get_contract_items(cls, character, contract_id: int) -> ESIResponse:
+        """Get items in a specific contract."""
+        return cls.get(f'/characters/{character.id}/contracts/{contract_id}/items/', character)
+
     # Public reference endpoints
 
     @classmethod
@@ -395,6 +405,7 @@ def sync_character_data(character) -> bool:
         _sync_orders(character)
         _sync_orders_history(character)
         _sync_industry_jobs(character)
+        _sync_contracts(character)
 
         character.last_sync_status = SyncStatus.SUCCESS
         character.last_sync_error = ''
@@ -1102,3 +1113,205 @@ def _sync_industry_jobs(character) -> None:
 
     character.industry_jobs_synced_at = timezone.now()
     character.save(update_fields=['industry_jobs_synced_at'])
+
+
+def _sync_contracts(character) -> None:
+    """
+    Sync character contracts from ESI.
+
+    Handles:
+    - Pagination across multiple pages
+    - Status transitions with logging
+    - Contract items sync for each contract
+    """
+    from core.character.models import Contract, ContractItem
+
+    # Fetch all pages of contracts
+    all_contracts_data = []
+    page = 1
+
+    while True:
+        response = ESIClient.get_contracts(character, page=page)
+        contracts_data = response.data
+
+        if not contracts_data:
+            break
+
+        all_contracts_data.extend(contracts_data)
+
+        # ESI returns empty array when no more pages
+        if len(contracts_data) < 1000:
+            break
+
+        page += 1
+
+    # Get existing contracts for this character
+    existing_contracts = {
+        contract.contract_id: contract
+        for contract in Contract.objects.filter(character=character)
+    }
+    existing_contract_ids = set(existing_contracts.keys())
+    incoming_contract_ids = {contract['contract_id'] for contract in all_contracts_data}
+
+    # Track seen contract IDs
+    seen_contract_ids = set()
+
+    # Process incoming contracts
+    for contract_data in all_contracts_data:
+        contract_id = contract_data['contract_id']
+        seen_contract_ids.add(contract_id)
+        new_status = contract_data.get('status', 'unknown')
+
+        # Check if this is an existing contract with status change
+        if contract_id in existing_contracts:
+            existing_contract = existing_contracts[contract_id]
+            old_status = existing_contract.status
+
+            # Log status change
+            if old_status != new_status:
+                logger.info(
+                    f'Contract {contract_id} status change: '
+                    f'{old_status} -> {new_status} '
+                    f'(character: {character.id})'
+                )
+
+            # Update contract data
+            for field, value in {
+                'type': contract_data.get('type'),
+                'status': new_status,
+                'title': contract_data.get('title', ''),
+                'for_corporation': contract_data.get('for_corporation', False),
+                'availability': contract_data.get('availability'),
+                'date_issued': contract_data.get('date_issued'),
+                'date_expired': contract_data.get('date_expired'),
+                'date_accepted': contract_data.get('date_accepted'),
+                'date_completed': contract_data.get('date_completed'),
+                'issuer_id': contract_data.get('issuer_id'),
+                'issuer_corporation_id': contract_data.get('issuer_corporation_id'),
+                'assignee_id': contract_data.get('assignee_id'),
+                'acceptor_id': contract_data.get('acceptor_id'),
+                'days_to_complete': contract_data.get('days_to_complete'),
+                'price': contract_data.get('price'),
+                'reward': contract_data.get('reward'),
+                'collateral': contract_data.get('collateral'),
+                'buyout': contract_data.get('buyout'),
+                'volume': contract_data.get('volume'),
+            }.items():
+                setattr(existing_contract, field, value)
+
+            existing_contract.save()
+
+            # Sync contract items for active contracts
+            if existing_contract.is_active:
+                _sync_contract_items(character, existing_contract)
+        else:
+            # Create new contract
+            new_contract = Contract.objects.create(
+                character=character,
+                contract_id=contract_id,
+                type=contract_data.get('type'),
+                status=new_status,
+                title=contract_data.get('title', ''),
+                for_corporation=contract_data.get('for_corporation', False),
+                availability=contract_data.get('availability'),
+                date_issued=contract_data.get('date_issued'),
+                date_expired=contract_data.get('date_expired'),
+                date_accepted=contract_data.get('date_accepted'),
+                date_completed=contract_data.get('date_completed'),
+                issuer_id=contract_data.get('issuer_id'),
+                issuer_corporation_id=contract_data.get('issuer_corporation_id'),
+                assignee_id=contract_data.get('assignee_id'),
+                acceptor_id=contract_data.get('acceptor_id'),
+                days_to_complete=contract_data.get('days_to_complete'),
+                price=contract_data.get('price'),
+                reward=contract_data.get('reward'),
+                collateral=contract_data.get('collateral'),
+                buyout=contract_data.get('buyout'),
+                volume=contract_data.get('volume'),
+            )
+
+            # Sync contract items for active contracts
+            if new_contract.is_active:
+                _sync_contract_items(character, new_contract)
+
+    # Delete contracts that are no longer returned
+    # (ESI retains completed contracts for ~30 days, after which they're gone)
+    contracts_to_delete = existing_contract_ids - seen_contract_ids
+    if contracts_to_delete:
+        Contract.objects.filter(
+            character=character,
+            contract_id__in=contracts_to_delete
+        ).delete()
+
+    character.contracts_synced_at = timezone.now()
+    character.save(update_fields=['contracts_synced_at'])
+
+
+def _sync_contract_items(character, contract) -> None:
+    """
+    Sync items for a specific contract from ESI.
+
+    Only fetches items for contracts where items are relevant
+    (item_exchange, auction, courier contracts).
+    """
+    from core.character.models import ContractItem
+
+    # Skip contracts that don't have items
+    if contract.type == 'loan':
+        return
+
+    try:
+        response = ESIClient.get_contract_items(character, contract.contract_id)
+        items_data = response.data
+    except Exception as e:
+        logger.warning(
+            f'Failed to fetch items for contract {contract.contract_id}: {e}'
+        )
+        return
+
+    if not items_data:
+        return
+
+    # Get existing items for this contract
+    existing_items = {
+        item.item_id: item
+        for item in ContractItem.objects.filter(contract=contract)
+    }
+    existing_item_ids = set(existing_items.keys())
+    incoming_item_ids = {item['item_id'] for item in items_data}
+
+    # Process incoming items
+    for item_data in items_data:
+        item_id = item_data['item_id']
+
+        if item_id in existing_items:
+            # Update existing item
+            existing_item = existing_items[item_id]
+            for field, value in {
+                'type_id': item_data['type_id'],
+                'quantity': item_data.get('quantity', 1),
+                'is_included': item_data.get('is_included', True),
+                'is_singleton': item_data.get('is_singleton', False),
+                'raw_quantity': item_data.get('raw_quantity'),
+            }.items():
+                setattr(existing_item, field, value)
+            existing_item.save()
+        else:
+            # Create new item
+            ContractItem.objects.create(
+                contract=contract,
+                item_id=item_id,
+                type_id=item_data['type_id'],
+                quantity=item_data.get('quantity', 1),
+                is_included=item_data.get('is_included', True),
+                is_singleton=item_data.get('is_singleton', False),
+                raw_quantity=item_data.get('raw_quantity'),
+            )
+
+    # Delete items no longer in contract
+    items_to_delete = existing_item_ids - incoming_item_ids
+    if items_to_delete:
+        ContractItem.objects.filter(
+            contract=contract,
+            item_id__in=items_to_delete
+        ).delete()
