@@ -7,6 +7,7 @@ and Character model for tracking EVE characters.
 Data models are split into sub-modules:
 - core.eve.models: Reference data (ItemType, SolarSystem, Station, etc.)
 - core.character.models: Character data (skills, assets, wallet, orders)
+- core.doctrines.models: Doctrine/fleet management (fits, shopping lists)
 """
 
 import uuid
@@ -380,3 +381,4 @@ class AuditLog(models.Model):
 # Import sub-modules for proper model registration
 from core.eve.models import *  # noqa: E402, F401, F403
 from core.character.models import *  # noqa: E402, F401, F403
+from core.doctrines.models import *  # noqa: E402, F401, F403

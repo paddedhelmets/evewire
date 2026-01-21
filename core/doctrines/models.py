@@ -1,0 +1,263 @@
+"""
+Fitting specification models.
+
+Stores canonical fittings from clustering analysis and provides
+services for matching against character assets.
+"""
+
+from django.db import models
+from django.utils.translation import gettext_lazy as _
+from typing import List, Dict, Optional
+
+
+class FittingManager(models.Manager):
+    """Manager for Fitting queries."""
+
+    def for_ship_type(self, ship_type_id: int):
+        """Get fittings for a specific ship type."""
+        return self.get_queryset().filter(ship_type_id=ship_type_id)
+
+    def active(self):
+        """Get active fittings."""
+        return self.get_queryset().filter(is_active=True)
+
+
+class Fitting(models.Model):
+    """
+    A ship fitting specification.
+
+    Represents a canonical fitting extracted from zkillboard clustering,
+    or a manually defined ship fitting.
+    """
+
+    name = models.CharField(max_length=255, db_index=True)
+    description = models.TextField(blank=True)
+
+    # Ship hull
+    ship_type_id = models.IntegerField(db_index=True)  # FK to ItemType
+
+    # Metadata from clustering (optional)
+    cluster_id = models.IntegerField(null=True, blank=True)
+    fit_count = models.IntegerField(null=True, blank=True, help_text="Number of fits in this cluster")
+    avg_similarity = models.FloatField(null=True, blank=True)
+
+    # Fitting management
+    is_active = models.BooleanField(default=True, help_text="Whether this fitting is currently in use")
+    tags = models.JSONField(default=dict, blank=True, help_text="User-defined tags (e.g., {'role': 'logi', 'tier': '1'})")
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = FittingManager()
+
+    class Meta:
+        verbose_name = _('fitting')
+        verbose_name_plural = _('fittings')
+        ordering = ['name']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['ship_type_id', 'cluster_id'],
+                condition=models.Q(cluster_id__isnull=False),
+                name='unique_cluster_per_ship'
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.ship_type_name})"
+
+    @property
+    def ship_type_name(self) -> str:
+        """Get ship type name."""
+        from core.eve.models import ItemType
+        try:
+            return ItemType.objects.get(id=self.ship_type_id).name
+        except ItemType.DoesNotExist:
+            return f"Type {self.ship_type_id}"
+
+    def get_slots(self) -> Dict[str, List[int]]:
+        """
+        Get all module slots as a dict.
+
+        Returns:
+            {
+                'high_slots': [type_id, ...],
+                'med_slots': [type_id, ...],
+                'low_slots': [type_id, ...],
+                'rig_slots': [type_id, ...],
+                'subsystem_slots': [type_id, ...],
+            }
+        """
+        slots = {
+            'high_slots': [],
+            'med_slots': [],
+            'low_slots': [],
+            'rig_slots': [],
+            'subsystem_slots': [],
+        }
+
+        for entry in self.entries.all():
+            if entry.slot_type == 'high':
+                slots['high_slots'].append(entry.module_type_id)
+            elif entry.slot_type == 'med':
+                slots['med_slots'].append(entry.module_type_id)
+            elif entry.slot_type == 'low':
+                slots['low_slots'].append(entry.module_type_id)
+            elif entry.slot_type == 'rig':
+                slots['rig_slots'].append(entry.module_type_id)
+            elif entry.slot_type == 'subsystem':
+                slots['subsystem_slots'].append(entry.module_type_id)
+
+        return slots
+
+
+class FittingEntry(models.Model):
+    """
+    A single module entry in a fitting.
+
+    Represents one slot position in the fitting specification.
+    """
+
+    SLOT_TYPES = [
+        ('high', 'High Slot'),
+        ('med', 'Medium Slot'),
+        ('low', 'Low Slot'),
+        ('rig', 'Rig Slot'),
+        ('subsystem', 'Subsystem Slot'),
+    ]
+
+    fitting = models.ForeignKey(
+        Fitting,
+        on_delete=models.CASCADE,
+        related_name='entries',
+    )
+
+    slot_type = models.CharField(max_length=20, choices=SLOT_TYPES)
+    position = models.IntegerField(help_text="Position within the slot type (0-indexed)")
+
+    module_type_id = models.IntegerField(db_index=True, help_text="ItemType ID for the module")
+
+    # Metadata from clustering
+    usage_count = models.IntegerField(null=True, blank=True, help_text="How many fits had this module")
+    usage_percentage = models.FloatField(null=True, blank=True, help_text="Percentage of fits with this module")
+
+    class Meta:
+        verbose_name = _('fitting entry')
+        verbose_name_plural = _('fitting entries')
+        ordering = ['fitting', 'slot_type', 'position']
+        unique_together = [['fitting', 'slot_type', 'position']]
+
+    def __str__(self) -> str:
+        return f"{self.fitting.name}: {self.slot_type} slot {self.position}"
+
+    @property
+    def module_name(self) -> str:
+        """Get module type name."""
+        from core.eve.models import ItemType
+        try:
+            return ItemType.objects.get(id=self.module_type_id).name
+        except ItemType.DoesNotExist:
+            return f"Module {self.module_type_id}"
+
+
+class FittingMatch(models.Model):
+    """
+    Cached match results for assets against fittings.
+
+    This acts as a materialized view for "which ships match which fittings"
+    queries that would otherwise require complex tree traversal.
+    """
+
+    character = models.ForeignKey(
+        'core.Character',
+        on_delete=models.CASCADE,
+        related_name='fitting_matches',
+    )
+
+    fitting = models.ForeignKey(
+        Fitting,
+        on_delete=models.CASCADE,
+        related_name='asset_matches',
+    )
+
+    # The asset being matched
+    asset_id = models.BigIntegerField(db_index=True, help_text="CharacterAsset.item_id")
+
+    # Match quality
+    is_match = models.BooleanField(default=False, help_text="True if asset matches fitting")
+    match_score = models.FloatField(default=0.0, help_text="Match percentage (0-1)")
+    missing_modules = models.JSONField(default=list, help_text="List of missing module type_ids")
+
+    # Cache metadata
+    calculated_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = _('fitting match')
+        verbose_name_plural = _('fitting matches')
+        ordering = ['-match_score', 'fitting']
+        unique_together = [['character', 'fitting', 'asset_id']]
+        indexes = [
+            models.Index(fields=['character', 'is_match', 'match_score']),
+            models.Index(fields=['calculated_at']),
+        ]
+
+    def __str__(self) -> str:
+        status = "MATCH" if self.is_match else "PARTIAL"
+        return f"{self.character.name}: {self.fitting.name} - {status} ({self.match_score:.1%})"
+
+
+class ShoppingList(models.Model):
+    """
+    A shopping list for fitting fulfillment.
+
+    Represents items needed to fulfill N copies of a fitting at a location.
+    """
+
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('partial', 'Partially Fulfilled'),
+        ('complete', 'Complete'),
+        ('expired', 'Expired'),
+    ]
+
+    character = models.ForeignKey(
+        'core.Character',
+        on_delete=models.CASCADE,
+        related_name='shopping_lists',
+    )
+
+    fitting = models.ForeignKey(
+        Fitting,
+        on_delete=models.CASCADE,
+        related_name='shopping_lists',
+    )
+
+    quantity = models.IntegerField(default=1, help_text="Number of ships to fit out")
+
+    # Target location
+    location_id = models.BigIntegerField(db_index=True, help_text="Station/structure ID")
+    location_type = models.CharField(max_length=20, help_text="station, structure, or solar_system")
+
+    # Status
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+
+    # Cached results
+    total_cost = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    items_to_buy = models.JSONField(default=dict, help_text="{type_id: quantity_needed}")
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    fulfilled_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = _('shopping list')
+        verbose_name_plural = _('shopping lists')
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['character', 'status']),
+            models.Index(fields=['location_id', 'status']),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.character.name}: {self.quantity}x {self.fitting.name} at {self.location_id}"
