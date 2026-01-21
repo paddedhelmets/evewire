@@ -271,6 +271,80 @@ class Character(models.Model):
         age = timezone.now() - self.skills_synced_at
         return age.total_seconds() > max_age_seconds
 
+    # Industry job slot calculation methods
+    # Skill IDs: Industry (3380), Advanced Industry (3388)
+
+    INDUSTRY_SKILL_ID = 3380
+    ADVANCED_INDUSTRY_SKILL_ID = 3388
+
+    def get_skill_level(self, skill_id: int) -> int:
+        """Get the level of a specific skill."""
+        try:
+            return self.skills.get(skill_id=skill_id).skill_level
+        except CharacterSkill.DoesNotExist:
+            return 0
+
+    @property
+    def manufacturing_slots(self) -> int:
+        """Get max manufacturing slots from Industry skill (1 slot per level)."""
+        # Base slots + skill level
+        return 1 + self.get_skill_level(self.INDUSTRY_SKILL_ID)
+
+    @property
+    def research_slots(self) -> int:
+        """Get max research/lab slots from Advanced Industry skill (1 slot per level)."""
+        # Base slots + skill level
+        return 1 + self.get_skill_level(self.ADVANCED_INDUSTRY_SKILL_ID)
+
+    @property
+    def active_manufacturing_jobs(self) -> int:
+        """Count active manufacturing jobs (activity_id=1)."""
+        from core.character.models import IndustryJob
+        return self.industry_jobs.filter(status=1, activity_id=1).count()
+
+    @property
+    def active_research_jobs(self) -> int:
+        """Count active research jobs (ME/TE research, invention, copying)."""
+        from core.character.models import IndustryJob
+        return self.industry_jobs.filter(
+            status=1,
+            activity_id__in=[2, 3, 4, 5, 7, 8]  # TE Research, ME Research, Copying, Invention, RE
+        ).count()
+
+    @property
+    def manufacturing_utilization(self) -> float:
+        """Get manufacturing slot utilization as percentage (0-100)."""
+        if self.manufacturing_slots == 0:
+            return 0.0
+        return (self.active_manufacturing_jobs / self.manufacturing_slots) * 100
+
+    @property
+    def research_utilization(self) -> float:
+        """Get research slot utilization as percentage (0-100)."""
+        if self.research_slots == 0:
+            return 0.0
+        return (self.active_research_jobs / self.research_slots) * 100
+
+    @property
+    def is_manufacturing_nearly_full(self) -> bool:
+        """Check if manufacturing slots are >80% utilized."""
+        return self.manufacturing_utilization > 80.0
+
+    @property
+    def is_research_nearly_full(self) -> bool:
+        """Check if research slots are >80% utilized."""
+        return self.research_utilization > 80.0
+
+    @property
+    def has_available_manufacturing_slot(self) -> bool:
+        """Check if there's an available manufacturing slot."""
+        return self.active_manufacturing_jobs < self.manufacturing_slots
+
+    @property
+    def has_available_research_slot(self) -> bool:
+        """Check if there's an available research slot."""
+        return self.active_research_jobs < self.research_slots
+
 
 class AuditLog(models.Model):
     """Audit log for security-sensitive actions."""
