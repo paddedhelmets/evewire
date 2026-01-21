@@ -217,6 +217,59 @@
     {% endwith %}
 </div>
 
+<div class="card" id="industry-jobs">
+    <h2>Industry Jobs</h2>
+    {% with active_jobs=character.industry_jobs.all|dictsort:"end_date" %}
+        {% if active_jobs %}
+            <p><strong>{{ active_jobs.count }}</strong> job{{ active_jobs.count|pluralize }}</p>
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="border-bottom: 2px solid #ddd;">
+                        <th style="padding: 0.5rem; text-align: left;">Activity</th>
+                        <th style="padding: 0.5rem; text-align: left;">Blueprint</th>
+                        <th style="padding: 0.5rem; text-align: left;">Product</th>
+                        <th style="padding: 0.5rem; text-align: left;">Location</th>
+                        <th style="padding: 0.5rem; text-align: left;">Progress</th>
+                        <th style="padding: 0.5rem; text-align: right;">Time Remaining</th>
+                        <th style="padding: 0.5rem; text-align: left;">End Date</th>
+                        <th style="padding: 0.5rem; text-align: left;">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for job in active_jobs %}
+                    <tr style="border-bottom: 1px solid #eee; {% if not job.is_active %}opacity: 0.6;{% endif %}">
+                        <td style="padding: 0.5rem;">{{ job.activity_name }}</td>
+                        <td style="padding: 0.5rem;">{{ job.blueprint_type_name }}</td>
+                        <td style="padding: 0.5rem;">{{ job.product_name }}</td>
+                        <td style="padding: 0.5rem; font-size: 0.9rem;">{{ job.solar_system_id }}</td>
+                        <td style="padding: 0.5rem; min-width: 150px;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <div style="background: #eee; height: 20px; border-radius: 4px; overflow: hidden; flex: 1;">
+                                    <div style="background: {% if job.is_completed %}#080{% elif job.is_active %}#0066cc{% else %}#666{% endif %}; height: 100%; width: {{ job.progress_percent }}%;"></div>
+                                </div>
+                                <span style="font-size: 0.85rem; color: #666; min-width: 45px; text-align: right;">{{ job.progress_percent|floatformat:0 }}%</span>
+                            </div>
+                            {% if job.is_expiring_soon %}
+                                <span style="display: inline-block; margin-top: 0.25rem; padding: 2px 6px; border-radius: 3px; background: #fff3cd; color: #856404; font-size: 0.75rem;">Expiring Soon</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 0.5rem; text-align: right;">{{ job.time_remaining|format_timedelta }}</td>
+                        <td style="padding: 0.5rem;">{{ job.end_date|date:"M d H:i" }}</td>
+                        <td style="padding: 0.5rem;">
+                            <span style="font-size: 0.9rem; padding: 2px 6px; border-radius: 3px; background: {% if job.status == 1 %}#e6f7e6{% elif job.status == 104 %}#d4edda{% else %}#f7e6e6{% endif %}; color: {% if job.status == 1 %}#080{% elif job.status == 104 %}#155724{% else %}#c00{% endif %};">
+                                {{ job.status_name }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p style="color: #666;">No industry jobs.</p>
+        {% endif %}
+    {% endwith %}
+</div>
+
 <div class="card" id="assets">
     <h2>Assets</h2>
     {% with assets=character.assets.filter(parent__isnull=True) %}
