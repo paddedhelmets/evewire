@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}Wallet Journal - {{ character.name }} - evewire{% endblock %}
+
+{% block content %}
+<h1>Wallet Journal - {{ character.name }}</h1>
+
+<div style="margin-bottom: 1rem;">
+    <a href="{% url 'core:dashboard' %}">Dashboard</a>
+    <span style="margin: 0 0.5rem;">&rarr;</span>
+    <a href="{% url 'core:wallet_journal' %}">Journal</a>
+</div>
+
+<div class="card">
+    <h2>Filters</h2>
+    <form method="get" style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end;">
+        <div>
+            <label for="ref_type" style="display: block; margin-bottom: 0.25rem;">Transaction Type:</label>
+            <select name="ref_type" id="ref_type" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
+                <option value="">All Types</option>
+                {% for type in ref_types %}
+                    <option value="{{ type }}" {% if type == ref_type_filter %}selected{% endif %}>{{ type }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="date_from" style="display: block; margin-bottom: 0.25rem;">From:</label>
+            <input type="date" name="date_from" id="date_from" value="{{ date_from }}" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
+        </div>
+        <div>
+            <label for="date_to" style="display: block; margin-bottom: 0.25rem;">To:</label>
+            <input type="date" name="date_to" id="date_to" value="{{ date_to }}" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
+        </div>
+        <button type="submit" class="btn">Apply Filters</button>
+        <a href="{% url 'core:wallet_journal' %}" class="btn" style="background: var(--text-secondary);">Clear</a>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Current Balance</h2>
+    <p style="font-size: 1.5rem; font-weight: bold;">
+        {% if current_balance %}
+            {{ current_balance|isk_format }}
+        {% else %}
+            N/A
+        {% endif %}
+    </p>
+</div>
+
+{% if entries %}
+<div class="card">
+    <h2>Journal Entries</h2>
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid var(--border-color);">
+                <th style="padding: 0.75rem; text-align: left;">Date</th>
+                <th style="padding: 0.75rem; text-align: left;">Type</th>
+                <th style="padding: 0.75rem; text-align: right;">Amount</th>
+                <th style="padding: 0.75rem; text-align: right;">Balance</th>
+                <th style="padding: 0.75rem; text-align: left;">Description</th>
+                <th style="padding: 0.75rem; text-align: left;">Party</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in entries %}
+            <tr style="border-bottom: 1px solid var(--table-border);">
+                <td style="padding: 0.75rem;">{{ entry.date|date:"Y-m-d H:i" }}</td>
+                <td style="padding: 0.75rem;">
+                    <a href="?ref_type={{ entry.ref_type }}" style="font-size: 0.9rem;">{{ entry.ref_type }}</a>
+                </td>
+                <td style="padding: 0.75rem; text-align: right; font-weight: bold; color: {% if entry.amount > 0 %}var(--alert-success-text){% else %}var(--alert-error-text){% endif %};">
+                    {{ entry.amount|isk_format }}
+                </td>
+                <td style="padding: 0.75rem; text-align: right;">{{ entry.balance|isk_format }}</td>
+                <td style="padding: 0.75rem; max-width: 300px;">
+                    {% if entry.reason %}
+                        {{ entry.reason|truncatewords:20 }}
+                    {% elif entry.description %}
+                        {{ entry.description|truncatewords:20 }}
+                    {% else %}
+                        &mdash;
+                    {% endif %}
+                </td>
+                <td style="padding: 0.75rem;">
+                    {% if entry.first_party_id %}
+                        {{ entry.first_party_id }}
+                    {% else %}
+                        &mdash;
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if entries.has_other_pages %}
+    <div style="margin-top: 1.5rem; display: flex; justify-content: center; gap: 0.5rem; align-items: center;">
+        {% if entries.has_previous %}
+            <a href="?page={{ entries.previous_page_number }}{% if ref_type_filter %}&ref_type={{ ref_type_filter }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}" class="btn">&laquo; Previous</a>
+        {% endif %}
+
+        <span>
+            Page {{ entries.number }} of {{ entries.paginator.num_pages }}
+        </span>
+
+        {% if entries.has_next %}
+            <a href="?page={{ entries.next_page_number }}{% if ref_type_filter %}&ref_type={{ ref_type_filter }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}" class="btn">Next &raquo;</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% else %}
+<div class="card">
+    <p>No journal entries found.</p>
+</div>
+{% endif %}
+
+<div style="margin-bottom: 1rem;">
+    <a href="{% url 'core:wallet_transactions' %}" class="btn">View Transactions</a>
+    <a href="{% url 'core:wallet_balance' %}" class="btn" style="margin-left: 0.5rem;">Balance History</a>
+    <a href="{% url 'core:wallet_summary' %}" class="btn" style="margin-left: 0.5rem;">Income/Expense Summary</a>
+</div>
+{% endblock %}
