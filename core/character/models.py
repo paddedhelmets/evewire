@@ -655,3 +655,172 @@ class SkillPlanEntry(models.Model):
                 raise ValidationError({
                     'recommended_level': 'Recommended level must be greater than required level.'
                 })
+
+
+class IndustryJob(models.Model):
+    """
+    An industry job for a character.
+
+    From ESI: GET /characters/{character_id}/industry/jobs/
+
+    Industry Activity Types:
+    - 1: Manufacturing
+    - 2: Researching Technology (TE)
+    - 3: Researching Technology (TE - legacy)
+    - 4: Researching Material Efficiency (ME)
+    - 5: Copying
+    - 6: Duplicating (legacy)
+    - 7: Reverse Engineering
+    - 8: Invention
+
+    Job Status Values:
+    - 1: active
+    - 2: paused
+    - 102: cancelled
+    - 104: delivered
+    - 105: failed
+    - 999: unknown
+    """
+
+    character = models.ForeignKey(
+        'core.Character',
+        on_delete=models.CASCADE,
+        related_name='industry_jobs'
+    )
+
+    # ESI job fields
+    job_id = models.BigIntegerField(primary_key=True)
+
+    # Job status and activity
+    activity_id = models.SmallIntegerField(db_index=True)
+    status = models.SmallIntegerField(db_index=True)  # 1=active, 2=paused, 102=cancelled, etc.
+
+    # Blueprint info
+    blueprint_id = models.BigIntegerField(db_index=True)
+    blueprint_type_id = models.IntegerField(db_index=True)  # FK to ItemType
+    blueprint_location_id = models.BigIntegerField(null=True, blank=True)
+
+    # Output product (for manufacturing/invention)
+    product_type_id = models.IntegerField(null=True, blank=True, db_index=True)  # FK to ItemType
+
+    # Location
+    station_id = models.BigIntegerField(db_index=True)
+    solar_system_id = models.IntegerField(db_index=True)
+
+    # Timing
+    start_date = models.DateTimeField(db_index=True)
+    end_date = models.DateTimeField(db_index=True)
+    pause_date = models.DateTimeField(null=True, blank=True)
+    completed_date = models.DateTimeField(null=True, blank=True)
+    completed_character_id = models.IntegerField(null=True, blank=True)
+
+    # Job details
+    runs = models.IntegerField()
+    cost = models.DecimalField(max_digits=20, decimal_places=2)
+
+    # Invention-specific fields
+    probability = models.FloatField(null=True, blank=True)
+    attempts = models.SmallIntegerField(null=True, blank=True)
+    success = models.BooleanField(null=True, blank=True)
+
+    # Cache metadata
+    synced_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = _('industry job')
+        verbose_name_plural = _('industry jobs')
+        ordering = ['-start_date']
+
+    def __str__(self) -> str:
+        return f"{self.character.name}: {self.activity_name} - {self.product_name}"
+
+    @property
+    def activity_name(self) -> str:
+        """Get human-readable activity name."""
+        ACTIVITY_NAMES = {
+            1: 'Manufacturing',
+            2: 'TE Research',
+            3: 'TE Research',
+            4: 'ME Research',
+            5: 'Copying',
+            6: 'Duplicating',
+            7: 'Reverse Engineering',
+            8: 'Invention',
+        }
+        return ACTIVITY_NAMES.get(self.activity_id, f'Activity {self.activity_id}')
+
+    @property
+    def status_name(self) -> str:
+        """Get human-readable status name."""
+        STATUS_NAMES = {
+            1: 'active',
+            2: 'paused',
+            102: 'cancelled',
+            104: 'delivered',
+            105: 'failed',
+            999: 'unknown',
+        }
+        return STATUS_NAMES.get(self.status, f'status_{self.status}')
+
+    @property
+    def blueprint_type_name(self) -> str:
+        """Get the blueprint type name from ItemType."""
+        from core.eve.models import ItemType
+        try:
+            return ItemType.objects.get(id=self.blueprint_type_id).name
+        except ItemType.DoesNotExist:
+            return f"BPO {self.blueprint_type_id}"
+
+    @property
+    def product_name(self) -> str:
+        """Get the product type name from ItemType."""
+        if not self.product_type_id:
+            return self.blueprint_type_name
+
+        from core.eve.models import ItemType
+        try:
+            return ItemType.objects.get(id=self.product_type_id).name
+        except ItemType.DoesNotExist:
+            return f"Product {self.product_type_id}"
+
+    @property
+    def is_active(self) -> bool:
+        """Check if this job is currently active."""
+        from django.utils import timezone
+        return self.status == 1 and self.end_date > timezone.now()
+
+    @property
+    def is_completed(self) -> bool:
+        """Check if this job has completed."""
+        return self.status == 104  # delivered
+
+    @property
+    def progress_percent(self) -> float:
+        """Calculate job progress percentage."""
+        from django.utils import timezone
+
+        if self.status != 1:  # Not active
+            if self.status == 104:
+                return 100.0
+            return 0.0
+
+        now = timezone.now()
+        if now >= self.end_date:
+            return 100.0
+        if now <= self.start_date:
+            return 0.0
+
+        total_seconds = (self.end_date - self.start_date).total_seconds()
+        elapsed_seconds = (now - self.start_date).total_seconds()
+
+        if total_seconds <= 0:
+            return 0.0
+
+        return min(100.0, max(0.0, (elapsed_seconds / total_seconds) * 100))
+
+    @property
+    def time_remaining(self):
+        """Get remaining time as timedelta."""
+        from django.utils import timezone
+        remaining = self.end_date - timezone.now()
+        return remaining if remaining.total_seconds() > 0 else timezone.timedelta(0)

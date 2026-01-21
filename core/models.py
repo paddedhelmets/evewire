@@ -180,6 +180,7 @@ class EveScope(models.TextChoices):
     WALLET_READ = 'esi-wallet.read_character_wallet.v1', 'Read Wallet'
     ASSETS_READ = 'esi-assets.read_assets.v1', 'Read Assets'
     ORDERS_READ = 'esi-markets.read_character_orders.v1', 'Read Market Orders'
+    INDUSTRY_JOBS_READ = 'esi-industry.read_character_jobs.v1', 'Read Industry Jobs'
 
     @classmethod
     def mvp_scopes(cls) -> list[str]:
@@ -192,6 +193,7 @@ class EveScope(models.TextChoices):
             cls.WALLET_READ.value[0],
             cls.ASSETS_READ.value[0],
             cls.ORDERS_READ.value[0],
+            cls.INDUSTRY_JOBS_READ.value[0],
         ]
 
 
@@ -225,6 +227,7 @@ class Character(models.Model):
     # Total SP (cached for quick display)
     total_sp = models.IntegerField(null=True, blank=True)
     skills_synced_at = models.DateTimeField(null=True, blank=True)
+    industry_jobs_synced_at = models.DateTimeField(null=True, blank=True)
 
     # Sync status
     last_sync_status = models.CharField(
