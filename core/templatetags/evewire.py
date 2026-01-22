@@ -171,3 +171,20 @@ def equal(value, arg):
         return items if attr == arg else []
     except (TypeError, AttributeError):
         return value
+
+
+@register.filter
+def list_filter(value):
+    """Convert a queryset/iterable to a list. Jinja2 compatibility.
+
+    Note: Registered as 'list_filter' to avoid shadowing Python built-in,
+    but template should use 'list_filter' instead of 'list'.
+    """
+    try:
+        return list(value)
+    except (TypeError, AttributeError):
+        return value
+
+
+# Also register as 'list' for template compatibility
+list_filter = register.filter('list', list_filter)
