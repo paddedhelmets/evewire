@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load evewire %}
 
-{% block title %}Assets - {{ character.name }}{% endblock %}
+{% block title %}{% if character %}Assets - {{ character.name }}{% else %}Assets - All Characters{% endif %}{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -41,6 +41,70 @@
 
     .assets-controls button:hover {
         background: var(--btn-primary-hover);
+    }
+
+    .pilot-filter-bar {
+        background: var(--bg-primary);
+        padding: 1rem;
+        border-radius: 4px;
+        margin-bottom: 1.5rem;
+    }
+
+    .pilot-filter-bar summary {
+        cursor: pointer;
+        font-weight: 600;
+        padding: 0.5rem;
+        user-select: none;
+    }
+
+    .pilot-filter-content {
+        margin-top: 1rem;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        align-items: center;
+    }
+
+    .pilot-checkbox {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem;
+        background: var(--bg-secondary);
+        border-radius: 4px;
+        border: 1px solid var(--border-color);
+    }
+
+    .pilot-checkbox input {
+        margin: 0;
+    }
+
+    .pilot-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+    }
+
+    .pilot-chip {
+        background: var(--btn-primary);
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.85rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .pilot-chip button {
+        background: none;
+        border: none;
+        color: white;
+        cursor: pointer;
+        font-size: 1rem;
+        padding: 0;
+        line-height: 1;
     }
 
     .location-section {
@@ -174,6 +238,12 @@
         margin-left: 0.5rem;
     }
 
+    .pilot-indicator {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        font-style: italic;
+    }
+
     .no-assets {
         text-align: center;
         padding: 3rem;
@@ -188,7 +258,11 @@
         <div>
             <h2>Assets</h2>
             <p style="color: var(--text-secondary); margin-top: 0.5rem;">
-                Character: <strong>{{ character.name }}</strong>
+                {% if character %}
+                    Character: <strong>{{ character.name }}</strong>
+                {% else %}
+                    <strong>All Characters</strong>
+                {% endif %}
             </p>
         </div>
         <div class="assets-stats">
@@ -204,9 +278,40 @@
         </div>
     </div>
 
+    {% if is_account_wide %}
+    <!-- Pilot Filter (account-wide view) -->
+    <div class="pilot-filter-bar">
+        <details{% if pilot_filter %} open{% endif %}>
+            <summary>
+                Filter by Pilot
+                {% if pilot_filter %}
+                    <span style="font-weight: normal; color: var(--text-secondary); margin-left: 0.5rem;">
+                        ({{ pilot_filter|length }} selected)
+                    </span>
+                {% endif %}
+            </summary>
+            <form method="get" class="pilot-filter-content">
+                {% for char in all_characters %}
+                <label class="pilot-checkbox">
+                    <input type="checkbox" name="pilots" value="{{ char.id }}" {% if char.id in pilot_filter %}checked{% endif %}>
+                    {{ char.character_name }}
+                </label>
+                {% endfor %}
+                <button type="submit" class="btn">Apply</button>
+                {% if pilot_filter %}
+                <a href="{% url 'core:assets_list' %}" class="btn" style="background: var(--text-secondary);">Clear</a>
+                {% endif %}
+            </form>
+        </details>
+    </div>
+    {% endif %}
+
     <!-- Location Filter -->
     <div style="background: var(--bg-primary); padding: 1rem; border-radius: 4px; margin-bottom: 1.5rem;">
         <form method="get" style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+            {% for pid in pilot_filter %}
+            <input type="hidden" name="pilots" value="{{ pid }}">
+            {% endfor %}
             <div>
                 <label for="location" style="display: block; margin-bottom: 0.25rem; font-size: 0.9rem;">Filter by Location:</label>
                 <select name="location" id="location" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); min-width: 300px;">
@@ -219,8 +324,8 @@
                 </select>
             </div>
             <button type="submit" class="btn">Apply Filter</button>
-            {% if location_filter %}
-            <a href="{% url 'core:assets_list' %}" class="btn" style="background: var(--text-secondary);">Clear Filter</a>
+            {% if location_filter or pilot_filter %}
+            <a href="{% url 'core:assets_list' %}" class="btn" style="background: var(--text-secondary);">Clear All</a>
             {% endif %}
         </form>
     </div>
@@ -244,7 +349,10 @@
             <table class="asset-table">
                 <thead>
                     <tr>
-                        <th style="width: 40%;">Item</th>
+                        <th style="width: {% if is_account_wide %}30{% else %}40}%;">Item</th>
+                        {% if is_account_wide %}
+                        <th style="width: 10%;">Pilot</th>
+                        {% endif %}
                         <th style="width: 15%;">Group</th>
                         <th style="width: 10%;">Flag</th>
                         <th style="width: 10%; text-align: right;">Quantity</th>

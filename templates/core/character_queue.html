@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}{{ character.name }} - Queue - evewire{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>{{ character.name }} - Skill Queue</h1>
+</div>
+
+<div class="sub-nav">
+    <a href="{% url 'core:character_overview' character.id %}">Overview</a>
+    <a href="{% url 'core:character_skills_page' character.id %}">Skills</a>
+    <a href="{% url 'core:character_queue_page' character.id %}" class="active">Queue</a>
+    <a href="{% url 'core:character_plans_page' character.id %}">Plans</a>
+    <a href="{% url 'core:character_assets_list' character.id %}">Assets</a>
+    <a href="{% url 'core:character_wallet_journal' character.id %}">Wallet</a>
+    <a href="{% url 'core:character_market_orders' character.id %}">Orders</a>
+    <a href="{% url 'core:character_contracts' character.id %}">Contracts</a>
+    <a href="{% url 'core:character_industry_summary' character.id %}">Industry</a>
+</div>
+
+<style>
+    .sub-nav {
+        background: var(--bg-secondary);
+        border-radius: 8px;
+        padding: 0.5rem;
+        margin-bottom: 1.5rem;
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+    .sub-nav a {
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        text-decoration: none;
+        color: var(--text-primary);
+        font-size: 0.9rem;
+    }
+    .sub-nav a:hover { background: rgba(0,0,0,0.05); }
+    .sub-nav a.active { background: var(--btn-primary); color: white; }
+    [data-theme="dark"] .sub-nav a:hover { background: rgba(255,255,255,0.1); }
+
+    .queue-item {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+    .queue-position {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--border-color);
+        min-width: 40px;
+        text-align: center;
+    }
+    .queue-item.training .queue-position {
+        color: #1976d2;
+    }
+    .queue-item.completed .queue-position {
+        color: #43a047;
+    }
+    [data-theme="dark"] .queue-item.training .queue-position { color: #64b5f6; }
+    [data-theme="dark"] .queue-item.completed .queue-position { color: #81c784; }
+
+    .queue-details { flex: 1; }
+    .queue-skill-name {
+        font-weight: 600;
+        font-size: 1.1rem;
+    }
+    .queue-skill-level {
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+    }
+    .queue-progress {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-top: 0.5rem;
+    }
+    .progress-bar {
+        flex: 1;
+        background: var(--border-color);
+        height: 8px;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #1976d2, #42a5f5);
+        transition: width 0.3s;
+    }
+    .queue-item.completed .progress-fill {
+        background: #43a047;
+    }
+    [data-theme="dark"] .queue-item .progress-fill {
+        background: linear-gradient(90deg, #42a5f5, #64b5f6);
+    }
+    [data-theme="dark"] .queue-item.completed .progress-fill {
+        background: #81c784;
+    }
+
+    .queue-meta {
+        text-align: right;
+        min-width: 150px;
+    }
+    .queue-finish {
+        font-weight: 600;
+    }
+    .queue-remaining {
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+    }
+</style>
+
+<div class="card">
+    <h2>Queue Status</h2>
+    <p>
+        <strong>{{ skill_queue|length }}</strong> skill{{ skill_queue|length|pluralize }} in queue
+        {% if skill_queue|length == 50 %}
+        <span style="color: #c62828;">(Full!)</span>
+        {% endif %}
+    </p>
+</div>
+
+{% if skill_queue %}
+    {% for item in skill_queue %}
+    <div class="queue-item {% if item.is_completed %}completed{% elif forloop.first %}training{% endif %}">
+        <div class="queue-position">{{ forloop.counter }}</div>
+        <div class="queue-details">
+            <div class="queue-skill-name">{{ item.skill_name }}</div>
+            <div class="queue-skill-level">
+                Level {{ item.finish_level }}
+                {% if item.level_start_sp > 0 %}(from {{ item.training_start_level }}){% endif %}
+            </div>
+            <div class="queue-progress">
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: {{ item.progress_percent }}%;"></div>
+                </div>
+                <span style="font-size: 0.85rem; color: var(--text-secondary); min-width: 50px;">
+                    {{ item.progress_percent|floatformat:1 }}%
+                </span>
+            </div>
+        </div>
+        <div class="queue-meta">
+            {% if forloop.first and not item.is_completed %}
+            <div class="queue-finish">Training Now</div>
+            <div class="queue-remaining">{{ item.finish_date|date:"M d H:i" }}</div>
+            {% elif item.is_completed %}
+            <div class="queue-finish" style="color: #43a047;">Completed</div>
+            {% else %}
+            <div class="queue-finish">{{ item.finish_date|date:"M d H:i" }}</div>
+            <div class="queue-remaining">
+                {% if item.start_date %}
+                    Starts: {{ item.start_date|date:"M d H:i" }}
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+
+    <div class="card" style="margin-top: 1.5rem;">
+        <h3>Queue Details</h3>
+        <table style="width: 100%; border-collapse: collapse;">
+            <tr style="border-bottom: 1px solid var(--border-color);">
+                <td style="padding: 0.5rem 0;"><strong>Total Skills:</strong></td>
+                <td style="padding: 0.5rem 0;">{{ skill_queue|length }}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid var(--border-color);">
+                <td style="padding: 0.5rem 0;"><strong>Current Skill:</strong></td>
+                <td style="padding: 0.5rem 0;">{{ skill_queue.0.skill_name }} Level {{ skill_queue.0.finish_level }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 0.5rem 0;"><strong>Final Completion:</strong></td>
+                <td style="padding: 0.5rem 0;">{{ skill_queue.last.finish_date|date:"Y-m-d H:i" }}</td>
+            </tr>
+        </table>
+    </div>
+{% else %}
+<div class="card">
+    <h3>Skill Queue Empty</h3>
+    <p style="color: var(--text-secondary);">Your skill queue is empty. Add skills to keep training!</p>
+    <form method="post" action="{% url 'core:sync_character' character.id %}" style="margin-top: 1rem;">
+        {% csrf_token %}
+        <button type="submit" class="btn">Sync Character</button>
+    </form>
+</div>
+{% endif %}
+{% endblock %}

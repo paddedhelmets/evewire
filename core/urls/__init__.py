@@ -21,6 +21,12 @@ urlpatterns = [
     path('characters/<int:character_id>/remove/', views.remove_character, name='remove_character'),
     path('characters/<int:character_id>/set-main/', views.set_main_character, name='set_main_character'),
 
+    # Character pages (new plural URLs)
+    path('characters/<int:character_id>/', views.character_overview, name='character_overview'),
+    path('characters/<int:character_id>/skills', views.character_skills_page, name='character_skills_page'),
+    path('characters/<int:character_id>/queue', views.character_queue_page, name='character_queue_page'),
+    path('characters/<int:character_id>/plans', views.character_plans_page, name='character_plans_page'),
+
     # Character Detail (legacy URL, kept for compatibility)
     path('character/<int:character_id>/', views.character_detail, name='character_detail'),
     path('character/<int:character_id>/sync/', views.sync_character, name='sync_character'),

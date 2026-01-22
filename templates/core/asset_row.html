@@ -23,6 +23,13 @@
             {% endif %}
         </div>
     </td>
+    {% if is_account_wide %}
+    <td>
+        <a href="{% url 'core:character_overview' asset.character_id %}" style="font-size: 0.85rem; color: var(--link-color);">
+            {{ asset.character.character_name }}
+        </a>
+    </td>
+    {% endif %}
     <td style="color: var(--text-secondary); font-size: 0.85rem;">
         {{ asset.type_id }}
     </td>
@@ -47,7 +54,7 @@
 {% if asset.children.exists %}
     {% for child in asset.children.all %}
         <tr class="asset-children asset-children-{{ asset.item_id }}">
-            <td colspan="6" style="padding: 0; border: none;">
+            <td colspan="{% if is_account_wide %}7{% else %}6{% endif %}" style="padding: 0; border: none;">
                 <table class="asset-table" style="margin: 0;">
                     {% include 'core/asset_row.html' with asset=child indent=indent|add:1 %}
                 </table>

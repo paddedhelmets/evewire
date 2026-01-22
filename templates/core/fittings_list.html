@@ -3,16 +3,150 @@
 
 {% block title %}Fittings - evewire{% endblock %}
 
+{% block extra_head %}
+<style>
+    .fittings-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .fittings-actions {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+    }
+
+    .fittings-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+        gap: 1rem;
+    }
+
+    .fitting-card {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 1rem;
+        transition: box-shadow 0.2s;
+    }
+
+    .fitting-card:hover {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    .fitting-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: start;
+        margin-bottom: 0.75rem;
+    }
+
+    .fitting-name {
+        font-weight: 600;
+        font-size: 1.1rem;
+    }
+
+    .fitting-name a {
+        color: inherit;
+        text-decoration: none;
+    }
+
+    .fitting-name a:hover {
+        color: var(--link-color);
+    }
+
+    .fitting-ship {
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+    }
+
+    .fitting-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .fitting-tag {
+        background: var(--btn-primary);
+        color: white;
+        padding: 0.1rem 0.5rem;
+        border-radius: 12px;
+        font-size: 0.75rem;
+    }
+
+    .fitting-matches {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+    }
+
+    .match-chip {
+        font-size: 0.85rem;
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+        background: #e8f5e9;
+        color: #2e7d32;
+    }
+
+    .match-chip.none {
+        background: var(--bg-primary);
+        color: var(--text-secondary);
+    }
+
+    [data-theme="dark"] .match-chip {
+        background: #1b5e20;
+        color: #81c784;
+    }
+
+    [data-theme="dark"] .match-chip.none {
+        background: var(--bg-secondary);
+        color: var(--text-secondary);
+    }
+
+    .fitting-status {
+        font-size: 0.8rem;
+        padding: 0.2rem 0.5rem;
+        border-radius: 3px;
+    }
+
+    .fitting-status.active {
+        background: #e8f5e9;
+        color: #2e7d32;
+    }
+
+    .fitting-status.inactive {
+        background: var(--bg-primary);
+        color: var(--text-secondary);
+    }
+
+    [data-theme="dark"] .fitting-status.active {
+        background: #1b5e20;
+        color: #81c784;
+    }
+
+    [data-theme="dark"] .fitting-status.inactive {
+        background: var(--bg-secondary);
+        color: var(--text-secondary);
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+<div class="fittings-header">
     <h1>Fittings</h1>
-    <div style="display: flex; gap: 1rem; align-items: center;">
-        <a href="{% url 'core:fitting_import' %}">Import</a>
-        <a href="{% url 'core:fitting_bulk_import' %}">Bulk Import</a>
+    <div class="fittings-actions">
+        <a href="{% url 'core:fitting_import' %}" class="btn">Import</a>
+        <a href="{% url 'core:fitting_bulk_import' %}" class="btn">Bulk Import</a>
         {% if character %}
-            <a href="{% url 'core:fitting_matches' character.id %}">View My Matches</a>
+            <a href="{% url 'core:fitting_matches' character.id %}" class="btn">View My Matches</a>
         {% else %}
-            <a href="{% url 'core:fitting_matches' %}">View My Matches</a>
+            <a href="{% url 'core:fitting_matches' %}" class="btn">View My Matches</a>
         {% endif %}
     </div>
 </div>
@@ -23,17 +157,17 @@
         <select name="ship_type" style="padding: 0.5rem;">
             <option value="">All Ships</option>
             {% for ship in ship_types %}
-                <option value="{{ ship.id }}" {% if ship_type_filter == ship.id|stringformat:"s" %}selected{% endif %}>
-                    {{ ship.name }}
-                </option>
+            <option value="{{ ship.id }}" {% if ship_type_filter == ship.id|stringformat:"s" %}selected{% endif %}>
+                {{ ship.name }}
+            </option>
             {% endfor %}
         </select>
         <select name="tag" style="padding: 0.5rem;">
             <option value="">All Tags</option>
             {% for tag in all_tags %}
-                <option value="{{ tag }}" {% if tag_filter == tag %}selected{% endif %}>
-                    {{ tag|title }}
-                </option>
+            <option value="{{ tag }}" {% if tag_filter == tag %}selected{% endif %}>
+                {{ tag|title }}
+            </option>
             {% endfor %}
         </select>
         <input type="text" name="search" placeholder="Search fittings..." value="{{ search_query }}" style="padding: 0.5rem;">
@@ -42,60 +176,56 @@
     </form>
 </div>
 
+{% if ship_type_filter or search_query or tag_filter %}
 <div class="card">
-    <h2>
-        {% if ship_type_filter or search_query or tag_filter %}
-            Filtered Fittings ({{ fittings.count }} result{{ fittings.count|pluralize }})
-        {% else %}
-            All Fittings ({{ fittings.count }} total)
-        {% endif %}
-    </h2>
-
-    {% if fittings %}
-        <table style="width: 100%; border-collapse: collapse;">
-            <thead>
-                <tr style="border-bottom: 2px solid var(--border-color);">
-                    <th style="padding: 0.5rem; text-align: left;">Fitting Name</th>
-                    <th style="padding: 0.5rem; text-align: left;">Ship Type</th>
-                    <th style="padding: 0.5rem; text-align: center;">Tags</th>
-                    <th style="padding: 0.5rem; text-align: center;">Fit Count</th>
-                    <th style="padding: 0.5rem; text-align: center;">Status</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for fitting in fittings %}
-                <tr style="border-bottom: 1px solid var(--table-border);">
-                    <td style="padding: 0.75rem;">
-                        <a href="{% url 'core:fitting_detail' fitting.id %}" style="font-weight: bold;">
-                            {{ fitting.name }}
-                        </a>
-                    </td>
-                    <td style="padding: 0.75rem;">
-                        {{ fitting.ship_type_name }}
-                    </td>
-                    <td style="padding: 0.75rem; text-align: center;">
-                        {% for tag_key, tag_val in fitting.tags.items %}
-                            <span style="background: var(--btn-primary); color: white; padding: 0.1rem 0.5rem; border-radius: 12px; font-size: 0.8rem; margin-right: 0.25rem;">
-                                {{ tag_key }}: {{ tag_val }}
-                            </span>
-                        {% endfor %}
-                    </td>
-                    <td style="padding: 0.75rem; text-align: center;">
-                        {{ fitting.fit_count|default:"-" }}
-                    </td>
-                    <td style="padding: 0.75rem; text-align: center;">
-                        {% if fitting.is_active %}
-                            <span style="color: #080;">● Active</span>
-                        {% else %}
-                            <span style="color: #888;">○ Inactive</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    {% else %}
-        <p style="color: var(--text-secondary);">No fittings match your filter.</p>
-    {% endif %}
+    <h3>Filtered Results ({{ fittings_with_matches|length }} result{{ fittings_with_matches|length|pluralize }})</h3>
 </div>
+{% endif %}
+
+<div class="fittings-grid">
+    {% for item in fittings_with_matches %}
+    <div class="fitting-card">
+        <div class="fitting-header">
+            <div>
+                <div class="fitting-name">
+                    <a href="{% url 'core:fitting_detail' item.fitting.id %}">{{ item.fitting.name }}</a>
+                </div>
+                <div class="fitting-ship">{{ item.fitting.ship_type_name }}</div>
+            </div>
+            <div class="fitting-status {% if item.fitting.is_active %}active{% else %}inactive{% endif %}">
+                {% if item.fitting.is_active %}Active{% else %}Inactive{% endif %}
+            </div>
+        </div>
+
+        {% if item.fitting.tags %}
+        <div class="fitting-tags">
+            {% for tag_key, tag_val in item.fitting.tags.items %}
+            <span class="fitting-tag">{{ tag_key }}: {{ tag_val }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="fitting-matches">
+            {% if item.match_count > 0 %}
+                <strong style="font-size: 0.9rem;">{{ item.match_count }} match{{ item.match_count|pluralize }}:</strong>
+                {% for char_id, count in item.matches_by_character.items %}
+                    {% for char in all_characters %}
+                        {% if char.id == char_id %}
+                        <span class="match-chip">{{ char.character_name }}: {{ count }}</span>
+                        {% endif %}
+                    {% endfor %}
+                {% endfor %}
+            {% else %}
+                <span class="match-chip none">No matching ships</span>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% if not fittings_with_matches %}
+<div class="card">
+    <p style="color: var(--text-secondary);">No fittings match your filter.</p>
+</div>
+{% endif %}
 {% endblock %}

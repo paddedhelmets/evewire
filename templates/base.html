@@ -26,6 +26,8 @@
             --btn-primary: #0066cc;
             --btn-primary-hover: #0052a3;
             --table-border: #eee;
+            --tab-active-bg: rgba(255,255,255,0.15);
+            --tab-active-border: #4da6ff;
         }
 
         [data-theme="dark"] {
@@ -48,6 +50,8 @@
             --btn-primary: #4da6ff;
             --btn-primary-hover: #66b3ff;
             --table-border: #444;
+            --tab-active-bg: rgba(255,255,255,0.1);
+            --tab-active-border: #64b5f6;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -55,10 +59,31 @@
         a { color: var(--link-color); text-decoration: none; }
         a:hover { color: var(--link-hover); text-decoration: underline; }
         .container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
-        header { background: var(--header-bg); color: var(--header-text); padding: 1rem 0; }
-        header nav { display: flex; justify-content: space-between; align-items: center; }
-        header .logo { font-size: 1.5rem; font-weight: bold; }
-        header nav a { color: var(--header-text); margin-left: 1rem; }
+        header { background: var(--header-bg); color: var(--header-text); }
+        .header-top { padding: 1rem 0; }
+        .header-top nav { display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-size: 1.5rem; font-weight: bold; color: var(--header-text); text-decoration: none !important; }
+        .header-top nav a { color: var(--header-text); margin-left: 1rem; }
+        .tabs-container { border-top: 1px solid rgba(255,255,255,0.1); }
+        .tabs { display: flex; gap: 0; overflow-x: auto; }
+        .tab {
+            padding: 1rem 1.5rem;
+            color: var(--header-text);
+            text-decoration: none;
+            border-bottom: 3px solid transparent;
+            transition: all 0.2s;
+            white-space: nowrap;
+            font-size: 0.95rem;
+        }
+        .tab:hover {
+            background: rgba(255,255,255,0.1);
+            text-decoration: none;
+        }
+        .tab.active {
+            border-bottom-color: var(--tab-active-border);
+            background: var(--tab-active-bg);
+            color: #fff;
+        }
         main { padding: 2rem 0; min-height: calc(100vh - 120px); }
         footer { background: var(--footer-bg); color: var(--footer-text); text-align: center; padding: 1rem 0; font-size: 0.9rem; }
         .btn { display: inline-block; padding: 0.5rem 1rem; background: var(--btn-primary); color: white; border-radius: 4px; }
@@ -74,27 +99,44 @@
 </head>
 <body>
     <header>
-        <div class="container">
-            <nav>
-                <div class="logo">evewire</div>
-                <div style="display: flex; align-items: center; gap: 1rem;">
-                    {% if user.is_authenticated %}
-                        <a href="{% url 'core:characters' %}">Characters</a>
-                        <a href="{% url 'core:dashboard' %}">Dashboard</a>
-                        <a href="{% url 'core:fittings_list' %}">Fittings</a>
-                        <form method="post" action="{% url 'core:toggle_theme' %}" style="display: inline;">
-                            {% csrf_token %}
-                            <button type="submit" class="theme-toggle">
-                                {% if user.settings.theme == 'dark' %}☀️ Light{% else %}🌙 Dark{% endif %}
-                            </button>
-                        </form>
-                        <a href="{% url 'core:logout' %}">Logout ({{ user.display_name }})</a>
-                    {% else %}
-                        <a href="{% url 'core:login' %}">Login</a>
-                    {% endif %}
-                </div>
-            </nav>
+        <div class="header-top">
+            <div class="container">
+                <nav>
+                    <a href="{% url 'core:dashboard' %}" class="logo">evewire</a>
+                    <div style="display: flex; align-items: center; gap: 1rem;">
+                        {% if user.is_authenticated %}
+                            <form method="post" action="{% url 'core:toggle_theme' %}" style="display: inline;">
+                                {% csrf_token %}
+                                <button type="submit" class="theme-toggle">
+                                    {% if user.settings.theme == 'dark' %}☀️{% else %}🌙{% endif %}
+                                </button>
+                            </form>
+                            <a href="{% url 'core:characters' %}">+ Add Character</a>
+                            <a href="{% url 'core:logout' %}">Logout</a>
+                        {% else %}
+                            <a href="{% url 'core:login' %}">Login</a>
+                        {% endif %}
+                    </div>
+                </nav>
+            </div>
         </div>
+
+        {% if user.is_authenticated %}
+        <div class="tabs-container">
+            <div class="container">
+                <div class="tabs">
+                    <a href="{% url 'core:dashboard' %}" class="tab {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">Home</a>
+                    <a href="{% url 'core:assets_list' %}" class="tab {% if request.resolver_match.url_name == 'assets_list' or request.resolver_match.url_name == 'character_assets_list' %}active{% endif %}">Assets</a>
+                    <a href="{% url 'core:fittings_list' %}" class="tab {% if request.resolver_match.url_name == 'fittings_list' or request.resolver_match.url_name == 'fitting_detail' %}active{% endif %}">Fittings</a>
+                    <a href="{% url 'core:skill_plan_list' %}" class="tab {% if request.resolver_match.url_name == 'skill_plan_list' or request.resolver_match.url_name == 'skill_plan_detail' %}active{% endif %}">Plans</a>
+                    <a href="{% url 'core:wallet_journal' %}" class="tab {% if request.resolver_match.url_name == 'wallet_journal' or request.resolver_match.url_name == 'wallet_transactions' or request.resolver_match.url_name == 'wallet_balance' or request.resolver_match.url_name == 'wallet_summary' %}active{% endif %}">Wallet</a>
+                    <a href="{% url 'core:market_orders' %}" class="tab {% if request.resolver_match.url_name == 'market_orders' or request.resolver_match.url_name == 'market_orders_history' %}active{% endif %}">Orders</a>
+                    <a href="{% url 'core:contracts' %}" class="tab {% if request.resolver_match.url_name == 'contracts' or request.resolver_match.url_name == 'contract_detail' %}active{% endif %}">Contracts</a>
+                    <a href="{% url 'core:industry_summary' %}" class="tab {% if request.resolver_match.url_name == 'industry_summary' or request.resolver_match.url_name == 'industry_jobs_list' %}active{% endif %}">Industry</a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </header>
 
     <main class="container">

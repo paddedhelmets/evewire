@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}{{ character.name }} - Plans - evewire{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>{{ character.name }} - Skill Plans</h1>
+    <a href="{% url 'core:skill_plan_create' %}" class="btn">+ New Plan</a>
+</div>
+
+<div class="sub-nav">
+    <a href="{% url 'core:character_overview' character.id %}">Overview</a>
+    <a href="{% url 'core:character_skills_page' character.id %}">Skills</a>
+    <a href="{% url 'core:character_queue_page' character.id %}">Queue</a>
+    <a href="{% url 'core:character_plans_page' character.id %}" class="active">Plans</a>
+    <a href="{% url 'core:character_assets_list' character.id %}">Assets</a>
+    <a href="{% url 'core:character_wallet_journal' character.id %}">Wallet</a>
+    <a href="{% url 'core:character_market_orders' character.id %}">Orders</a>
+    <a href="{% url 'core:character_contracts' character.id %}">Contracts</a>
+    <a href="{% url 'core:character_industry_summary' character.id %}">Industry</a>
+</div>
+
+<style>
+    .sub-nav {
+        background: var(--bg-secondary);
+        border-radius: 8px;
+        padding: 0.5rem;
+        margin-bottom: 1.5rem;
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+    .sub-nav a {
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        text-decoration: none;
+        color: var(--text-primary);
+        font-size: 0.9rem;
+    }
+    .sub-nav a:hover { background: rgba(0,0,0,0.05); }
+    .sub-nav a.active { background: var(--btn-primary); color: white; }
+    [data-theme="dark"] .sub-nav a:hover { background: rgba(255,255,255,0.1); }
+
+    .plan-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1rem;
+    }
+
+    .plan-card {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 1.25rem;
+    }
+
+    .plan-card h3 {
+        margin: 0 0 0.5rem 0;
+    }
+
+    .plan-card .description {
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+        margin-bottom: 1rem;
+    }
+
+    .plan-progress {
+        margin-bottom: 1rem;
+    }
+
+    .progress-bar {
+        background: var(--border-color);
+        height: 8px;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+
+    .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #1976d2, #42a5f5);
+        transition: width 0.3s;
+    }
+
+    [data-theme="dark"] .progress-fill {
+        background: linear-gradient(90deg, #42a5f5, #64b5f6);
+    }
+
+    .plan-stats {
+        display: flex;
+        gap: 1rem;
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        margin-bottom: 1rem;
+    }
+
+    .plan-stat {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .plan-card a.btn {
+        font-size: 0.9rem;
+        padding: 0.4rem 0.8rem;
+    }
+</style>
+
+{% if plans %}
+<div class="plan-grid">
+    {% for item in plans %}
+    <div class="plan-card">
+        <h3>{{ item.plan.name }}</h3>
+        {% if item.plan.description %}
+        <p class="description">{{ item.plan.description }}</p>
+        {% endif %}
+
+        {% if item.progress %}
+        <div class="plan-progress">
+            <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 0.25rem;">
+                <span>Progress</span>
+                <span>{{ item.progress.percent_complete|floatformat:0 }}%</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: {{ item.progress.percent_complete }}%;"></div>
+            </div>
+            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                {{ item.progress.completed_count }} / {{ item.progress.total_count }} skills complete
+            </div>
+        </div>
+
+        <div class="plan-stats">
+            <div class="plan-stat">
+                <span>Entries:</span>
+                <strong>{{ item.progress.total_count }}</strong>
+            </div>
+            <div class="plan-stat">
+                <span>Remaining:</span>
+                <strong>{{ item.progress.remaining_count }}</strong>
+            </div>
+        </div>
+        {% else %}
+        <p style="color: var(--text-secondary); font-size: 0.9rem;">No progress data available</p>
+        {% endif %}
+
+        <a href="{% url 'core:skill_plan_detail' item.plan.id %}" class="btn">View Plan →</a>
+    </div>
+    {% endfor %}
+</div>
+
+<div style="margin-top: 2rem;">
+    <a href="{% url 'core:skill_plan_list' %}">View All Plans</a> |
+    <a href="{% url 'core:skill_plan_create' %}">Create New Plan</a>
+</div>
+{% else %}
+<div class="card">
+    <h3>No Skill Plans</h3>
+    <p style="color: var(--text-secondary);">You haven't created any skill plans yet.</p>
+    <div style="margin-top: 1rem;">
+        <a href="{% url 'core:skill_plan_create' %}" class="btn">Create Your First Plan</a>
+        <a href="{% url 'core:skill_plan_import' %}" class="btn" style="margin-left: 0.5rem;">Import from EVE</a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

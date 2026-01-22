@@ -3,143 +3,280 @@
 
 {% block title %}Dashboard - evewire{% endblock %}
 
+{% block extra_head %}
+<style>
+    .char-card-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1rem;
+    }
+
+    @media (max-width: 1400px) {
+        .char-card-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 1100px) {
+        .char-card-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 650px) {
+        .char-card-grid { grid-template-columns: 1fr; }
+    }
+
+    .char-card {
+        background: var(--bg-secondary);
+        border-radius: 8px;
+        padding: 1rem;
+        box-shadow: var(--card-shadow);
+        border: 1px solid var(--border-color);
+        transition: box-shadow 0.2s, transform 0.2s;
+    }
+
+    .char-card:hover {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        transform: translateY(-2px);
+    }
+
+    .char-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: start;
+        margin-bottom: 0.75rem;
+    }
+
+    .char-header h3 {
+        margin: 0;
+        font-size: 1.1rem;
+        font-weight: 600;
+    }
+
+    .char-header .corp-name {
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        margin: 0.25rem 0 0 0;
+    }
+
+    .char-header .char-link {
+        font-size: 0.85rem;
+        color: var(--link-color);
+    }
+
+    .char-stats {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 0.75rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .char-stat {
+        text-align: center;
+        flex: 1;
+    }
+
+    .char-stat-label {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .char-stat-value {
+        font-size: 1rem;
+        font-weight: 600;
+        margin-top: 0.25rem;
+    }
+
+    .isk { color: #f9a825; }
+    .sp { color: #1976d2; }
+
+    .char-training {
+        margin-bottom: 0.5rem;
+    }
+
+    .char-training .skill-name {
+        font-weight: 600;
+        font-size: 0.95rem;
+        display: block;
+    }
+
+    .char-training .skill-target {
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        display: block;
+        margin: 0.1rem 0;
+    }
+
+    .char-training .skill-rate {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+        display: block;
+    }
+
+    .progress-bar-container {
+        background: var(--border-color);
+        height: 6px;
+        border-radius: 3px;
+        overflow: hidden;
+        margin: 0.5rem 0;
+    }
+
+    .progress-bar-container .progress {
+        background: linear-gradient(90deg, #1976d2, #42a5f5);
+        height: 100%;
+        transition: width 0.3s ease;
+    }
+
+    .time-remaining {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+        display: block;
+    }
+
+    .char-alerts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+    }
+
+    .alert {
+        font-size: 0.75rem;
+        padding: 0.2rem 0.5rem;
+        border-radius: 3px;
+        font-weight: 500;
+    }
+
+    .alert.alert-empty {
+        background: #ffebee;
+        color: #c62828;
+    }
+
+    .alert.alert-warning {
+        background: #fff8e1;
+        color: #f57c00;
+    }
+
+    .summary-bar {
+        background: var(--bg-secondary);
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1.5rem;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 2rem;
+        box-shadow: var(--card-shadow);
+    }
+
+    .summary-item {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .summary-label {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .summary-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin-top: 0.25rem;
+    }
+
+    .summary-value.isk { color: #f9a825; }
+    .summary-value.sp { color: #1976d2; }
+    .summary-value.char { color: var(--text-primary); }
+
+    [data-theme="dark"] .progress-bar-container .progress {
+        background: linear-gradient(90deg, #42a5f5, #64b5f6);
+    }
+
+    [data-theme="dark"] .alert.alert-empty {
+        background: #5c2b2b;
+        color: #ef5350;
+    }
+
+    [data-theme="dark"] .alert.alert-warning {
+        background: #5c4a1a;
+        color: #ffa726;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<h1>Dashboard</h1>
-
-<div style="margin-bottom: 1rem;">
-    <a href="{% url 'core:skill_plan_list' %}" class="btn">Skill Plans</a>
-    <a href="{% url 'core:wallet_journal' %}" class="btn" style="margin-left: 0.5rem;">Wallet</a>
-    <a href="{% url 'core:assets_list' %}" class="btn" style="margin-left: 0.5rem;">Assets</a>
-    <a href="{% url 'core:market_orders' %}" class="btn" style="margin-left: 0.5rem;">Market Orders</a>
-    <a href="{% url 'core:contracts' %}" class="btn" style="margin-left: 0.5rem;">Contracts</a>
-    <a href="{% url 'core:industry_summary' %}" class="btn" style="margin-left: 0.5rem;">Industry</a>
-    <a href="{% url 'core:fittings_list' %}" class="btn" style="margin-left: 0.5rem;">Fittings</a>
-</div>
-
-<!-- Aggregated Stats -->
-<div class="card">
-    <h2>Fleet Overview</h2>
-    <p><strong>Characters:</strong> {{ characters_count }}</p>
-    <p><strong>Total Wallet:</strong> {{ total_wallet|floatformat:2 }} ISK</p>
-    <p><strong>Total SP:</strong> {{ total_sp }}</p>
-    <p><strong>Active Skill Queues:</strong> {{ active_skill_queues }}</p>
-    <p><strong>Total Active Orders:</strong> {{ total_orders }}</p>
-</div>
-
-<!-- Industry Slots -->
-<div class="card">
-    <h2>Industry Slots</h2>
-    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
-        <!-- Manufacturing -->
-        <div style="border: 1px solid #ddd; border-radius: 4px; padding: 0.75rem;">
-            <p style="margin: 0 0 0.5rem 0; font-size: 0.9rem; color: #666;">Manufacturing</p>
-            <p style="font-size: 1.25rem; font-weight: bold; margin: 0.25rem 0;">
-                {{ industry_slots.manufacturing.active }} / {{ industry_slots.manufacturing.slots }}
-            </p>
-            <div style="background: #eee; height: 12px; border-radius: 3px; overflow: hidden;">
-                <div style="background: {% if industry_slots.manufacturing.utilization >= 100 %}#c00{% elif industry_slots.manufacturing.utilization > 80 %}#ffc107{% else %}#080{% endif %}; height: 100%; width: {{ industry_slots.manufacturing.utilization }}%;"></div>
-            </div>
-            <p style="font-size: 0.8rem; color: #666; margin-top: 0.25rem;">{{ industry_slots.manufacturing.utilization|floatformat:0 }}%</p>
-        </div>
-        <!-- Science -->
-        <div style="border: 1px solid #ddd; border-radius: 4px; padding: 0.75rem;">
-            <p style="margin: 0 0 0.5rem 0; font-size: 0.9rem; color: #666;">Science / Research</p>
-            <p style="font-size: 1.25rem; font-weight: bold; margin: 0.25rem 0;">
-                {{ industry_slots.science.active }} / {{ industry_slots.science.slots }}
-            </p>
-            <div style="background: #eee; height: 12px; border-radius: 3px; overflow: hidden;">
-                <div style="background: {% if industry_slots.science.utilization >= 100 %}#c00{% elif industry_slots.science.utilization > 80 %}#ffc107{% else %}#080{% endif %}; height: 100%; width: {{ industry_slots.science.utilization }}%;"></div>
-            </div>
-            <p style="font-size: 0.8rem; color: #666; margin-top: 0.25rem;">{{ industry_slots.science.utilization|floatformat:0 }}%</p>
-        </div>
-        <!-- Reactions -->
-        <div style="border: 1px solid #ddd; border-radius: 4px; padding: 0.75rem;">
-            <p style="margin: 0 0 0.5rem 0; font-size: 0.9rem; color: #666;">Reactions</p>
-            <p style="font-size: 1.25rem; font-weight: bold; margin: 0.25rem 0;">
-                {{ industry_slots.reactions.active }} / {{ industry_slots.reactions.slots }}
-            </p>
-            <div style="background: #eee; height: 12px; border-radius: 3px; overflow: hidden;">
-                <div style="background: {% if industry_slots.reactions.utilization >= 100 %}#c00{% elif industry_slots.reactions.utilization > 80 %}#ffc107{% else %}#080{% endif %}; height: 100%; width: {{ industry_slots.reactions.utilization }}%;"></div>
-            </div>
-            <p style="font-size: 0.8rem; color: #666; margin-top: 0.25rem;">{{ industry_slots.reactions.utilization|floatformat:0 }}%</p>
-        </div>
+<!-- Summary Bar -->
+<div class="summary-bar">
+    <div class="summary-item">
+        <span class="summary-label">Characters</span>
+        <span class="summary-value char">{{ characters_count }}</span>
+    </div>
+    <div class="summary-item">
+        <span class="summary-label">Total ISK</span>
+        <span class="summary-value isk">{{ total_wallet|floatformat:0 }}</span>
+    </div>
+    <div class="summary-item">
+        <span class="summary-label">Total SP</span>
+        <span class="summary-value sp">{{ total_sp|commas }}</span>
+    </div>
+    <div class="summary-item">
+        <span class="summary-label">Active Queues</span>
+        <span class="summary-value char">{{ active_skill_queues }}</span>
+    </div>
+    <div class="summary-item">
+        <span class="summary-label">Active Orders</span>
+        <span class="summary-value char">{{ total_orders }}</span>
     </div>
 </div>
 
-<!-- Character Cards -->
-<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;">
+<!-- Character Card Grid -->
+<div class="char-card-grid">
     {% for char_data in characters %}
-    <div class="card">
-        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
+    <div class="char-card">
+        <div class="char-header">
             <div>
-                <h3 style="margin: 0;">{{ char_data.character.name }}</h3>
-                <p style="color: var(--text-secondary); font-size: 0.9rem; margin: 0.25rem 0;">
-                    {{ char_data.character.corporation_name|default:"N/A" }}
-                    {% if char_data.character.alliance_name %} &bull; {{ char_data.character.alliance_name }}{% endif %}
-                </p>
+                <h3><a href="{% url 'core:character_detail' char_data.character.id %}" style="color: inherit; text-decoration: none;">{{ char_data.character.name }}</a></h3>
+                <p class="corp-name">{{ char_data.character.corporation_name|default:"N/A" }}</p>
             </div>
-            <a href="{% url 'core:character_detail' char_data.character.id %}" class="btn" style="padding: 0.25rem 0.75rem; font-size: 0.85rem;">Details</a>
+            <a href="{% url 'core:character_detail' char_data.character.id %}" class="char-link">Details →</a>
         </div>
 
-        <div style="margin: 1rem 0; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
-            <strong>Quick Stats</strong>
-            <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
-                {% if char_data.character.wallet_balance is not None %}
-                    <li>Wallet: {{ char_data.character.wallet_balance|floatformat:2 }} ISK</li>
-                {% else %}
-                    <li>Wallet: <span style="color: var(--text-secondary);">Not synced</span></li>
-                {% endif %}
-                {% if char_data.character.total_sp is not None %}
-                    <li>Total SP: {{ char_data.character.total_sp }}</li>
-                {% endif %}
-                <li>Active Orders: {{ char_data.orders_count }}</li>
-            </ul>
+        <div class="char-stats">
+            <div class="char-stat">
+                <span class="char-stat-label">ISK</span>
+                <span class="char-stat-value isk">{{ char_data.isk_balance|floatformat:0|default:"—" }}</span>
+            </div>
+            <div class="char-stat">
+                <span class="char-stat-label">SP</span>
+                <span class="char-stat-value sp">{{ char_data.total_sp|commas|default:"—" }}</span>
+            </div>
         </div>
 
-        <!-- Skill Queue Status -->
-        <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
-            {% if char_data.current_skill %}
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
-                    <strong style="font-size: 0.9rem;">Training:</strong>
-                    <span style="font-size: 0.85rem; color: var(--text-secondary);">
-                        {{ char_data.queue_count }} in queue
-                    </span>
-                </div>
-                <p style="margin: 0.25rem 0;">{{ char_data.current_skill.skill_name }} <strong>L{{ char_data.current_skill.finish_level }}</strong></p>
-                <p style="margin: 0.25rem 0; font-size: 0.85rem; color: var(--text-secondary);">
-                    Finishes: {{ char_data.current_skill.finish_date|date:"M d H:i" }}
-                </p>
-                <div style="background: #eee; height: 12px; border-radius: 3px; overflow: hidden; margin-top: 0.5rem;">
-                    <div style="background: #0066cc; height: 100%; width: {{ char_data.current_skill.progress_percent }}%;"></div>
-                </div>
-                <p style="font-size: 0.8rem; color: #666; margin-top: 0.25rem;">{{ char_data.current_skill.progress_percent|floatformat:1 }}%</p>
-            {% elif char_data.queue_count > 0 %}
-                <p style="color: var(--text-secondary); font-size: 0.9rem;">
-                    <strong>Queue:</strong> {{ char_data.queue_count }} skill{{ char_data.queue_count|pluralize }} queued
-                </p>
-            {% else %}
-                <p style="color: var(--text-secondary); font-size: 0.9rem;">
-                    <strong>Training:</strong> Queue empty
-                </p>
+        {% if char_data.current_training %}
+        <div class="char-training">
+            <span class="skill-name">{{ char_data.current_training.skill_name }}</span>
+            <span class="skill-target">L{{ char_data.current_training.target_level }} (Rank {{ char_data.current_training.rank }})</span>
+            <span class="skill-rate">@ {{ char_data.current_training.sp_per_hour|commas }} SP/hr</span>
+            <div class="progress-bar-container">
+                <div class="progress" style="width: {{ char_data.current_training.progress_percent }}%"></div>
+            </div>
+            <span class="time-remaining">{{ char_data.current_training.time_remaining }}</span>
+        </div>
+        {% else %}
+        <div class="char-training">
+            <span class="skill-name" style="color: var(--text-secondary);">Not training</span>
+        </div>
+        {% endif %}
+
+        <div class="char-alerts">
+            {% if char_data.queue_status == 'empty' %}
+            <span class="alert alert-empty">Queue Empty!</span>
+            {% elif char_data.queue_status == 'not_full' %}
+            <span class="alert alert-warning">{{ char_data.queue_count }}/50</span>
             {% endif %}
-        </div>
-
-        <!-- Sync Status -->
-        <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
-            <div style="font-size: 0.85rem;">
-                {% if char_data.character.last_sync_status == 'success' %}
-                    <span style="color: var(--alert-success-text);">{{ char_data.character.get_last_sync_status_display }}</span>
-                {% else %}
-                    <span style="color: var(--alert-error-text);">{{ char_data.character.get_last_sync_status_display }}</span>
-                {% endif %}
-                {% if char_data.character.last_sync %}
-                    <br><span style="color: var(--text-secondary);">{{ char_data.character.last_sync|date:"M d H:i" }}</span>
-                {% endif %}
-            </div>
-            <form method="post" action="{% url 'core:sync_character' char_data.character.id %}">
-                {% csrf_token %}
-                <button type="submit" class="btn" style="padding: 0.25rem 0.75rem; font-size: 0.85rem;">Sync</button>
-            </form>
+            {% if char_data.implants_warning %}
+            <span class="alert alert-warning">Check Implants</span>
+            {% endif %}
         </div>
     </div>
     {% endfor %}

@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}{{ character.name }} - Skills - evewire{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ character.name }} - Skills</h1>
+        <p style="color: var(--text-secondary); margin: 0.25rem 0 0 0;">
+            Total SP: {{ character.total_sp|commas|default:"—" }}
+        </p>
+    </div>
+</div>
+
+<div class="sub-nav">
+    <a href="{% url 'core:character_overview' character.id %}">Overview</a>
+    <a href="{% url 'core:character_skills_page' character.id %}" class="active">Skills</a>
+    <a href="{% url 'core:character_queue_page' character.id %}">Queue</a>
+    <a href="{% url 'core:character_plans_page' character.id %}">Plans</a>
+    <a href="{% url 'core:character_assets_list' character.id %}">Assets</a>
+    <a href="{% url 'core:character_wallet_journal' character.id %}">Wallet</a>
+    <a href="{% url 'core:character_market_orders' character.id %}">Orders</a>
+    <a href="{% url 'core:character_contracts' character.id %}">Contracts</a>
+    <a href="{% url 'core:character_industry_summary' character.id %}">Industry</a>
+</div>
+
+<style>
+    .sub-nav {
+        background: var(--bg-secondary);
+        border-radius: 8px;
+        padding: 0.5rem;
+        margin-bottom: 1.5rem;
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+    .sub-nav a {
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        text-decoration: none;
+        color: var(--text-primary);
+        font-size: 0.9rem;
+    }
+    .sub-nav a:hover { background: rgba(0,0,0,0.05); }
+    .sub-nav a.active { background: var(--btn-primary); color: white; }
+    [data-theme="dark"] .sub-nav a:hover { background: rgba(255,255,255,0.1); }
+
+    .skill-group {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        overflow: hidden;
+    }
+    .skill-group-header {
+        background: rgba(0,0,0,0.03);
+        padding: 0.75rem 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    [data-theme="dark"] .skill-group-header { background: rgba(255,255,255,0.05); }
+    .skill-group-header:hover { background: rgba(0,0,0,0.06); }
+    [data-theme="dark"] .skill-group-header:hover { background: rgba(255,255,255,0.08); }
+    .skill-group-content {
+        padding: 0;
+    }
+    .skill-row {
+        display: grid;
+        grid-template-columns: 2fr 1fr 1fr 1fr;
+        padding: 0.5rem 1rem;
+        border-bottom: 1px solid var(--border-color);
+        align-items: center;
+    }
+    .skill-row:last-child { border-bottom: none; }
+    .skill-row:hover { background: rgba(0,0,0,0.02); }
+    [data-theme="dark"] .skill-row:hover { background: rgba(255,255,255,0.03); }
+
+    .level-dots {
+        display: flex;
+        gap: 3px;
+    }
+    .level-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--border-color);
+    }
+    .level-dot.filled {
+        background: #1976d2;
+    }
+    .level-dot.filled.l5 { background: #c62828; }
+    .level-dot.filled.l4 { background: #f57c00; }
+    .level-dot.filled.l3 { background: #f9a825; }
+    .level-dot.filled.l2 { background: #43a047; }
+    .level-dot.filled.l1 { background: #1976d2; }
+
+    [data-theme="dark"] .level-dot.filled.l5 { background: #ef5350; }
+    [data-theme="dark"] .level-dot.filled.l4 { background: #ffa726; }
+    [data-theme="dark"] .level-dot.filled.l3 { background: #ffca28; }
+    [data-theme="dark"] .level-dot.filled.l2 { background: #81c784; }
+    [data-theme="dark"] .level-dot.filled.l1 { background: #64b5f6; }
+</style>
+
+<script>
+function toggleGroup(id) {
+    const content = document.getElementById('group-' + id);
+    const icon = document.getElementById('icon-' + id);
+    if (content.style.display === 'none') {
+        content.style.display = 'block';
+        icon.textContent = '▼';
+    } else {
+        content.style.display = 'none';
+        icon.textContent = '▶';
+    }
+}
+</script>
+
+{% for group in skill_groups %}
+<div class="skill-group">
+    <div class="skill-group-header" onclick="toggleGroup({{ forloop.counter }})">
+        <span>{{ group.name }}</span>
+        <span style="font-size: 0.85rem; color: var(--text-secondary);">
+            {{ group.skills|length }} skills
+        </span>
+    </div>
+    <div class="skill-group-content" id="group-{{ forloop.counter }}">
+        <div class="skill-row" style="font-weight: 600; font-size: 0.85rem; color: var(--text-secondary); background: rgba(0,0,0,0.02);">
+            <span>Skill</span>
+            <span>Level</span>
+            <span>Rank</span>
+            <span>SP</span>
+        </div>
+        {% for item in group.skills %}
+        <div class="skill-row">
+            <span>{{ item.type.name }}</span>
+            <span>
+                <div class="level-dots">
+                    {% for i in "12345" %}
+                        <span class="level-dot {% if forloop.counter <= item.skill.skill_level %}filled l{{ item.skill.skill_level }}{% endif %}"></span>
+                    {% endfor %}
+                </div>
+                <span style="font-size: 0.8rem; margin-left: 0.5rem;">Level {{ item.skill.skill_level }}</span>
+            </span>
+            <span>{{ item.rank }}</span>
+            <span>{{ item.skill.skillpoints_in_skill|commas }}</span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endfor %}
+
+{% empty %}
+<div class="card">
+    <p style="color: var(--text-secondary);">No skills data available. Sync your character to see skills.</p>
+    <form method="post" action="{% url 'core:sync_character' character.id %}" style="margin-top: 1rem;">
+        {% csrf_token %}
+        <button type="submit" class="btn">Sync Now</button>
+    </form>
+</div>
+{% endfor %}
+{% endblock %}

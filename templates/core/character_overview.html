@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}{{ character.name }} - evewire{% endblock %}
+
+{% block extra_head %}
+<style>
+    .overview-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .stat-card {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 1.25rem;
+        text-align: center;
+    }
+
+    .stat-card .label {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .stat-card .value {
+        font-size: 2rem;
+        font-weight: 700;
+        margin-top: 0.5rem;
+    }
+
+    .stat-card .value a {
+        color: inherit;
+    }
+
+    .stat-card.skills .value { color: #1976d2; }
+    .stat-card.assets .value { color: #388e3c; }
+    .stat-card.fittings .value { color: #f57c00; }
+    .stat-card.orders .value { color: #7b1fa2; }
+    .stat-card.contracts .value { color: #c2185b; }
+    .stat-card.industry .value { color: #00838f; }
+
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+    }
+
+    .page-header h1 {
+        margin: 0;
+    }
+
+    .sub-nav {
+        background: var(--bg-secondary);
+        border-radius: 8px;
+        padding: 0.5rem;
+        margin-bottom: 1.5rem;
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .sub-nav a {
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        text-decoration: none;
+        color: var(--text-primary);
+        font-size: 0.9rem;
+    }
+
+    .sub-nav a:hover {
+        background: rgba(0,0,0,0.05);
+    }
+
+    .sub-nav a.active {
+        background: var(--btn-primary);
+        color: white;
+    }
+
+    [data-theme="dark"] .sub-nav a:hover {
+        background: rgba(255,255,255,0.1);
+    }
+
+    [data-theme="dark"] .stat-card.skills .value { color: #64b5f6; }
+    [data-theme="dark"] .stat-card.assets .value { color: #81c784; }
+    [data-theme="dark"] .stat-card.fittings .value { color: #ffb74d; }
+    [data-theme="dark"] .stat-card.orders .value { color: #ba68c8; }
+    [data-theme="dark"] .stat-card.contracts .value { color: #f06292; }
+    [data-theme="dark"] .stat-card.industry .value { color: #4dd0e1; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ character.name }}</h1>
+        <p style="color: var(--text-secondary); margin: 0.25rem 0 0 0;">
+            {{ character.corporation_name|default:"N/A" }}
+            {% if character.alliance_name %} &bull; {{ character.alliance_name }}{% endif %}
+        </p>
+    </div>
+    <form method="post" action="{% url 'core:sync_character' character.id %}" style="display: inline;">
+        {% csrf_token %}
+        <button type="submit" class="btn">Sync</button>
+    </form>
+</div>
+
+<div class="sub-nav">
+    <a href="{% url 'core:character_overview' character.id %}" class="active">Overview</a>
+    <a href="{% url 'core:character_skills_page' character.id %}">Skills</a>
+    <a href="{% url 'core:character_queue_page' character.id %}">Queue</a>
+    <a href="{% url 'core:character_plans_page' character.id %}">Plans</a>
+    <a href="{% url 'core:character_assets_list' character.id %}">Assets</a>
+    <a href="{% url 'core:character_wallet_journal' character.id %}">Wallet</a>
+    <a href="{% url 'core:character_market_orders' character.id %}">Orders</a>
+    <a href="{% url 'core:character_contracts' character.id %}">Contracts</a>
+    <a href="{% url 'core:character_industry_summary' character.id %}">Industry</a>
+</div>
+
+<div class="overview-grid">
+    <div class="stat-card skills">
+        <div class="label">Skills</div>
+        <div class="value">
+            <a href="{% url 'core:character_skills_page' character.id %}">
+                {{ character.skills.count }}<span style="font-size: 1rem; color: var(--text-secondary);"> trained</span>
+            </a>
+        </div>
+        {% if current_skill %}
+        <div style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 0.5rem;">
+            Training {{ current_skill.skill_name }} L{{ current_skill.finish_level }}
+        </div>
+        {% else %}
+        <div style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 0.5rem;">
+            Queue empty
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="stat-card assets">
+        <div class="label">Assets</div>
+        <div class="value">
+            <a href="{% url 'core:character_assets_list' character.id %}">
+                {{ assets_count }}<span style="font-size: 1rem; color: var(--text-secondary);"> items</span>
+            </a>
+        </div>
+    </div>
+
+    <div class="stat-card fittings">
+        <div class="label">Fittings</div>
+        <div class="value">
+            <a href="{% url 'core:fittings_list' %}">
+                {{ fittings_count }}<span style="font-size: 1rem; color: var(--text-secondary);"> total</span>
+            </a>
+        </div>
+    </div>
+
+    <div class="stat-card orders">
+        <div class="label">Orders</div>
+        <div class="value">
+            <a href="{% url 'core:character_market_orders' character.id %}">
+                {{ orders_count }}<span style="font-size: 1rem; color: var(--text-secondary);"> active</span>
+            </a>
+        </div>
+        <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">
+            {{ character.active_market_orders }}/{{ character.market_order_slots }} slots
+        </div>
+    </div>
+
+    <div class="stat-card contracts">
+        <div class="label">Contracts</div>
+        <div class="value">
+            <a href="{% url 'core:character_contracts' character.id %}">
+                {{ contracts_count }}<span style="font-size: 1rem; color: var(--text-secondary);"> outstanding</span>
+            </a>
+        </div>
+    </div>
+
+    <div class="stat-card industry">
+        <div class="label">Industry</div>
+        <div class="value">
+            <a href="{% url 'core:character_industry_jobs' character.id %}">
+                {{ industry_active }}<span style="font-size: 1rem; color: var(--text-secondary);"> / {{ industry_slots }}</span>
+            </a>
+        </div>
+        <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">
+            {% if industry_slots > 0 %}
+                {% widthratio industry_active industry_slots 100 %}% utilized
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Character Info</h2>
+    <table style="width: 100%; border-collapse: collapse;">
+        <tr style="border-bottom: 1px solid var(--border-color);">
+            <td style="padding: 0.75rem 0;"><strong>Total SP:</strong></td>
+            <td style="padding: 0.75rem 0;">{{ character.total_sp|commas|default:"—" }}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid var(--border-color);">
+            <td style="padding: 0.75rem 0;"><strong>Wallet Balance:</strong></td>
+            <td style="padding: 0.75rem 0;">{{ character.wallet_balance|floatformat:2|default:"—" }} ISK</td>
+        </tr>
+        <tr style="border-bottom: 1px solid var(--border-color);">
+            <td style="padding: 0.75rem 0;"><strong>Corporation:</strong></td>
+            <td style="padding: 0.75rem 0;">{{ character.corporation_name|default:"N/A" }}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid var(--border-color);">
+            <td style="padding: 0.75rem 0;"><strong>Alliance:</strong></td>
+            <td style="padding: 0.75rem 0;">{{ character.alliance_name|default:"None" }}</td>
+        </tr>
+        <tr>
+            <td style="padding: 0.75rem 0;"><strong>Last Sync:</strong></td>
+            <td style="padding: 0.75rem 0;">
+                {% if character.last_sync %}
+                    {{ character.last_sync|date:"Y-m-d H:i" }}
+                {% else %}
+                    Never
+                {% endif %}
+            </td>
+        </tr>
+    </table>
+</div>
+{% endblock %}
