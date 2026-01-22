@@ -244,6 +244,7 @@ class SyncStatus(models.TextChoices):
     SUCCESS = 'success', 'Success'
     FAILED = 'failed', 'Failed'
     RATE_LIMITED = 'rate_limited', 'Rate Limited'
+    NEEDS_REAUTH = 'needs_reauth', 'Needs Re-authentication'
 
 
 class Character(models.Model):

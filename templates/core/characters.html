@@ -49,13 +49,23 @@
                         {% else %}
                             <span style="color: var(--text-secondary);">Never</span>
                         {% endif %}
+                        {% if character.last_sync_error %}
+                            <br><small style="color: var(--alert-error-text);">{{ character.last_sync_error|truncatewords:10 }}</small>
+                        {% endif %}
                     </td>
                     <td style="padding: 0.75rem; text-align: center;">
-                        <a href="{% url 'core:character_detail' character.id %}" style="margin-right: 0.5rem;">View</a>
-                        <form method="post" action="{% url 'core:sync_character' character.id %}" style="display: inline;">
-                            {% csrf_token %}
-                            <button type="submit" class="btn" style="padding: 0.25rem 0.5rem; font-size: 0.9rem;">Sync</button>
-                        </form>
+                        {% if character.last_sync_status == 'needs_reauth' %}
+                            <form method="get" action="{% url 'core:reauthenticate_character' character.id %}" style="display: inline;">
+                                {% csrf_token %}
+                                <button type="submit" class="btn" style="background: var(--color-primary); color: white; padding: 0.5rem 1rem; font-size: 0.9rem;">Re-authenticate</button>
+                            </form>
+                        {% else %}
+                            <a href="{% url 'core:character_detail' character.id %}" style="margin-right: 0.5rem;">View</a>
+                            <form method="post" action="{% url 'core:sync_character' character.id %}" style="display: inline;">
+                                {% csrf_token %}
+                                <button type="submit" class="btn" style="padding: 0.25rem 0.5rem; font-size: 0.9rem;">Sync</button>
+                            </form>
+                        {% endif %}
                         {% if characters.count > 1 %}
                             <form method="post" action="{% url 'core:remove_character' character.id %}" style="display: inline; margin-left: 0.5rem;" onsubmit="return confirm('Are you sure you want to remove {{ character.character_name }}? This will remove all their data from your account.');">
                                 {% csrf_token %}

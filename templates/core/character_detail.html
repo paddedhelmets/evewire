@@ -6,11 +6,36 @@
 {% block content %}
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
     <h1>{{ character.name }}</h1>
-    <form method="post" action="{% url 'core:sync_character' character.id %}" style="display: inline;">
-        {% csrf_token %}
-        <button type="submit" class="btn">Sync All Data</button>
-    </form>
+    <div style="display: flex; gap: 0.5rem;">
+        {% if character.last_sync_status == 'needs_reauth' %}
+            <form method="get" action="{% url 'core:reauthenticate_character' character.id %}" style="display: inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn" style="background: var(--color-primary); color: white;">Re-authenticate</button>
+            </form>
+        {% else %}
+            <form method="post" action="{% url 'core:sync_character' character.id %}" style="display: inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn">Sync All Data</button>
+            </form>
+        {% endif %}
+    </div>
 </div>
+
+{% if character.last_sync_status == 'needs_reauth' %}
+<div class="card" style="margin-bottom: 1rem; border-left: 4px solid var(--color-primary); background: #fff3cd;">
+    <h3>⚠️ Authentication Required</h3>
+    <p>This character needs to be re-authenticated through EVE SSO. This usually happens when:</p>
+    <ul>
+        <li>Your access token has expired</li>
+        <li>The character was linked with insufficient scopes</li>
+        <li>The refresh token has become invalid</li>
+    </ul>
+    <p><strong>Click the "Re-authenticate" button above to fix this.</strong></p>
+    {% if character.last_sync_error %}
+        <p style="color: var(--alert-error-text); font-size: 0.9rem;">Error: {{ character.last_sync_error }}</p>
+    {% endif %}
+</div>
+{% endif %}
 
 <div class="card">
     <h2>Character Information</h2>

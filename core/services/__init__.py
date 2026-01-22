@@ -348,15 +348,18 @@ class AuthService:
     """Service for handling EVE SSO authentication flow."""
 
     @staticmethod
-    def handle_callback(code: str, request_user=None):
+    def handle_callback(code: str, request_user=None, reauth_char_id=None):
         """
         Handle EVE SSO OAuth callback.
 
         If request_user is provided (user already logged in), adds the character
         to their existing account. Otherwise, creates a new user or logs in
         to existing user with that character.
+
+        If reauth_char_id is provided, this is a re-authentication flow to fix
+        broken tokens/scopes. Only updates that specific character.
         """
-        from core.models import User, Character, AuditLog
+        from core.models import User, Character, AuditLog, SyncStatus
 
         try:
             token_data = TokenManager.exchange_code_for_token(code)
@@ -384,7 +387,31 @@ class AuthService:
         created = False
         character_added = False
 
-        if request_user:
+        if reauth_char_id:
+            # Re-authentication flow - verify character matches
+            if character_id != reauth_char_id:
+                raise ValueError(f'Character mismatch: expected {reauth_char_id}, got {character_id}')
+
+            if not existing_character:
+                raise ValueError(f'Character {character_id} not found')
+
+            # Verify the logged-in user owns this character
+            if request_user and existing_character.user != request_user:
+                raise ValueError('You do not own this character')
+
+            # Update the character's token and reset sync status
+            existing_character.set_refresh_token(refresh_token)
+            existing_character.token_expires = timezone.now() + timedelta(seconds=expires_in)
+            existing_character.character_name = character_name
+            existing_character.corporation_id = corporation_id
+            existing_character.last_sync_status = SyncStatus.PENDING
+            existing_character.last_sync_error = ''
+            existing_character.save()
+            character = existing_character
+            user = existing_character.user
+            logger.info(f'Re-authenticated character {character_id}')
+
+        elif request_user:
             # User is already logged in - add character to their account
             user = request_user
 
@@ -474,6 +501,7 @@ class AuthService:
 def sync_character_data(character) -> bool:
     """Sync all character data from ESI."""
     from core.models import SyncStatus
+    from requests.exceptions import HTTPError
 
     try:
         character.last_sync_status = SyncStatus.IN_PROGRESS
@@ -498,6 +526,19 @@ def sync_character_data(character) -> bool:
         logger.info(f'Sync completed for character {character.id}')
         return True
 
+    except HTTPError as e:
+        # Check for 401 Unauthorized - indicates invalid/missing scopes or broken refresh token
+        if e.response is not None and e.response.status_code == 401:
+            character.last_sync_status = SyncStatus.NEEDS_REAUTH
+            character.last_sync_error = 'Authentication failed. Please re-authorize this character through EVE SSO.'
+            character.save(update_fields=['last_sync_status', 'last_sync_error'])
+            logger.warning(f'Character {character.id} needs re-authentication: {e}')
+        else:
+            character.last_sync_status = SyncStatus.FAILED
+            character.last_sync_error = str(e)[:500]
+            character.save(update_fields=['last_sync_status', 'last_sync_error'])
+            logger.error(f'Sync failed for character {character.id}: {e}')
+        return False
     except Exception as e:
         character.last_sync_status = SyncStatus.FAILED
         character.last_sync_error = str(e)[:500]

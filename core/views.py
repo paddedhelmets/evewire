@@ -57,9 +57,12 @@ def oauth_callback(request: HttpRequest) -> HttpResponse:
         })
 
     try:
+        # Check if this is a re-authentication flow
+        reauth_char_id = request.session.pop('reauth_character_id', None)
+
         # Pass request.user if logged in (for adding character to existing account)
         request_user = request.user if request.user.is_authenticated else None
-        user = AuthService.handle_callback(code, request_user=request_user)
+        user = AuthService.handle_callback(code, request_user=request_user, reauth_char_id=reauth_char_id)
 
         # If not already logged in, login the user
         if not request_user:
@@ -209,6 +212,28 @@ def sync_character(request: HttpRequest, character_id: int) -> HttpResponse:
     if referer:
         return redirect(referer)
     return redirect('character_detail', character_id=character_id)
+
+
+@login_required
+@require_http_methods(['GET', 'POST'])
+def reauthenticate_character(request: HttpRequest, character_id: int) -> HttpResponse:
+    """Re-authenticate a character through EVE SSO (fixes broken tokens/scopes)."""
+    from core.models import Character
+    from core.services import TokenManager
+    from django.contrib import messages
+
+    try:
+        character = Character.objects.get(id=character_id, user=request.user)
+    except Character.DoesNotExist:
+        messages.error(request, 'Character not found.')
+        return redirect('core:characters')
+
+    # Store character ID in session for OAuth callback
+    request.session['reauth_character_id'] = character.id
+
+    # Generate SSO login URL
+    sso_url = TokenManager.get_sso_login_url()
+    return redirect(sso_url)
 
 
 # Skill Plan Views

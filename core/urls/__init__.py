@@ -24,6 +24,7 @@ urlpatterns = [
     # Character Detail (legacy URL, kept for compatibility)
     path('character/<int:character_id>/', views.character_detail, name='character_detail'),
     path('character/<int:character_id>/sync/', views.sync_character, name='sync_character'),
+    path('character/<int:character_id>/reauthenticate/', views.reauthenticate_character, name='reauthenticate_character'),
 
     # Skill plans
     path('plans/', views.skill_plan_list, name='skill_plan_list'),
