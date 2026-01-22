@@ -77,7 +77,7 @@ class ItemTypeAdmin(admin.ModelAdmin):
     """Admin interface for ItemType model."""
 
     list_display = ['id', 'name', 'group_id', 'category_id', 'published']
-    list_filter = ['published', 'category_id', 'group_id']
+    list_filter = ['published', 'group_id']
     search_fields = ['name', 'id']
     ordering = ['name']
 

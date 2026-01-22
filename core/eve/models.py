@@ -38,13 +38,10 @@ class ItemType(models.Model):
     name = models.CharField(max_length=255, db_index=True)
     description = models.TextField(blank=True)
     group_id = models.IntegerField(db_index=True, null=True)  # FK to invGroups
-    category_id = models.IntegerField(db_index=True, null=True)  # FK to invCategories
     mass = models.FloatField(null=True, blank=True)
     volume = models.FloatField(null=True, blank=True)
     capacity = models.FloatField(null=True, blank=True)
     portion_size = models.IntegerField(null=True, blank=True)
-    base_price = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
-    sell_price = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
     published = models.BooleanField(default=True)
 
     objects = ItemTypeManager()
@@ -56,6 +53,18 @@ class ItemType(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+    @property
+    def category_id(self) -> int | None:
+        """Get category_id from group (derived relationship)."""
+        if self.group_id:
+            from core.eve.models import ItemGroup
+            try:
+                group = ItemGroup.objects.get(id=self.group_id)
+                return group.category_id
+            except ItemGroup.DoesNotExist:
+                pass
+        return None
 
     @property
     def is_ship(self) -> bool:
@@ -271,7 +280,9 @@ class AttributeType(models.Model):
     published = models.BooleanField(default=True)
     display_name = models.CharField(max_length=255, blank=True)
     icon_id = models.IntegerField(null=True, blank=True)
-    data_type = models.IntegerField(null=True, blank=True)
+    unit_id = models.IntegerField(null=True, blank=True)
+    stackable = models.BooleanField(default=True)
+    high_is_good = models.BooleanField(default=True)
 
     class Meta:
         verbose_name = _('attribute type')
@@ -308,6 +319,6 @@ class TypeAttribute(models.Model):
         from core.eve.models import ItemType
         try:
             item = ItemType.objects.get(id=self.type_id)
-            return f"{item.name}: {self.attribute_id} = {self.value}"
+            return f"{item.name}: attr_{self.attribute_id} = {self.value_int or self.value_float}"
         except ItemType.DoesNotExist:
-            return f"Type {self.type_id}: {self.attribute_id}"
+            return f"Type {self.type_id}: attr_{self.attribute_id} = {self.value_int or self.value_float}"

@@ -143,31 +143,22 @@
         <p><strong>Total SP:</strong> {{ character.total_sp }}</p>
         <p style="color: #666; margin-bottom: 1rem;">Last updated: {{ character.skills_synced_at|date:"Y-m-d H:i:s" }}</p>
 
-        <h3>Top Skills (by Level)</h3>
-        <table style="width: 100%; border-collapse: collapse;">
-            <thead>
-                <tr style="border-bottom: 2px solid #ddd;">
-                    <th style="padding: 0.5rem; text-align: left;">Skill</th>
-                    <th style="padding: 0.5rem; text-align: center;">Level</th>
-                    <th style="padding: 0.5rem; text-align: right;">SP</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for skill in character.skills.all|dictsort:"skill_level"|dictsortreversed:"skill_level"|slice:":20" %}
-                <tr style="border-bottom: 1px solid #eee;">
-                    <td style="padding: 0.5rem;">{{ skill.skill_name }}</td>
-                    <td style="padding: 0.5rem; text-align: center;">
-                        <span style="color: {% if skill.skill_level == 5 %}#c00{% elif skill.skill_level == 4 %}#c60{% else %}#666{% endif %}; font-weight: bold;">
-                            {{ skill.skill_level }}
-                        </span>
-                    </td>
-                    <td style="padding: 0.5rem; text-align: right;">{{ skill.skillpoints_in_skill }}</td>
-                </tr>
-                {% empty %}
-                <tr><td colspan="3" style="padding: 0.5rem; color: #666;">No skills found.</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <h3>Skill Groups ({{ total_skill_groups }} groups)</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.75rem;">
+            {% for group in skill_groups %}
+            <div style="border: 1px solid #ddd; border-radius: 4px; padding: 0.75rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                    <strong style="font-size: 0.95rem;">{{ group.name }}</strong>
+                    <span style="font-size: 0.85rem; color: #666;">{{ group.count }} skill{{ group.count|pluralize }}</span>
+                </div>
+                <div style="font-size: 0.9rem; color: #666;">
+                    Max Level: <span style="color: {% if group.max_level == 5 %}#c00{% elif group.max_level == 4 %}#c60{% elif group.max_level == 3 %}#c90{% else %}#666{% endif %}; font-weight: bold;">{{ group.max_level }}</span>
+                </div>
+            </div>
+            {% empty %}
+            <p style="color: #666; grid-column: 1 / -1;">No skill groups found.</p>
+            {% endfor %}
+        </div>
     {% else %}
         <p>No skills data.</p>
     {% endif %}

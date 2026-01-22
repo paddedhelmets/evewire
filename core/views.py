@@ -175,6 +175,9 @@ def dashboard(request: HttpRequest) -> HttpResponse:
 def character_detail(request: HttpRequest, character_id: int) -> HttpResponse:
     """Detailed view of a single character."""
     from core.models import Character
+    from core.character.models import CharacterSkill
+    from core.eve.models import ItemType, ItemGroup
+    from collections import defaultdict
 
     try:
         character = Character.objects.get(id=character_id, user=request.user)
@@ -186,9 +189,32 @@ def character_detail(request: HttpRequest, character_id: int) -> HttpResponse:
     # Pre-filter data that templates can't handle
     root_assets = character.assets.filter(parent__isnull=True)
 
+    # Build skill group summaries
+    skill_groups = defaultdict(lambda: {'count': 0, 'total_level': 0, 'max_level': 0})
+    for skill in character.skills.all():
+        try:
+            item_type = ItemType.objects.get(id=skill.skill_id)
+            group = None
+            if item_type.group_id:
+                group = ItemGroup.objects.filter(id=item_type.group_id).first()
+            if group:
+                skill_groups[group.name]['count'] += 1
+                skill_groups[group.name]['total_level'] += skill.skill_level
+                skill_groups[group.name]['max_level'] = max(skill_groups[group.name]['max_level'], skill.skill_level)
+        except ItemType.DoesNotExist:
+            pass
+
+    # Sort by group name and convert to list for template
+    skill_groups_list = [
+        {'name': name, **data}
+        for name, data in sorted(skill_groups.items())
+    ]
+
     return render(request, 'core/character_detail.html', {
         'character': character,
         'root_assets': root_assets,
+        'skill_groups': skill_groups_list,
+        'total_skill_groups': len(skill_groups_list),
     })
 
 
@@ -564,9 +590,10 @@ def skills_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
         category: Filter to specific skill group name
     """
     from core.character.models import CharacterSkill
-    from core.eve.models import ItemType, ItemGroup
+    from core.eve.models import ItemType, ItemGroup, TypeAttribute, AttributeType
     from core.models import Character
     from core.skill_plans import calculate_training_time
+    import math
 
     # Get character - from URL param or user's first character
     if character_id:
@@ -588,6 +615,21 @@ def skills_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
 
     # Get all skills for this character
     skills_qs = CharacterSkill.objects.filter(character=character).select_related()
+
+    # EVE attribute ID mapping for display
+    ATTRIBUTE_NAMES = {
+        164: 'INT',
+        165: 'PER',
+        166: 'WIL',
+        167: 'CHA',
+        168: 'MEM',
+    }
+
+    def calculate_sp_for_level(rank: int, level: int) -> int:
+        """Calculate total SP required for a given level."""
+        if level == 0:
+            return 0
+        return int(math.pow(2, (2.5 * level) - 2) * 32 * rank)
 
     # Build a list of all skills with group info
     skills_with_groups = []
@@ -611,6 +653,32 @@ def skills_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
                     # Training time calculation may fail if SDE data missing
                     training_time = None
 
+            # Get skill rank (attribute 275)
+            rank_attr = TypeAttribute.objects.filter(
+                type_id=skill.skill_id,
+                attribute_id=275
+            ).first()
+            rank = int(rank_attr.value_int) if rank_attr and rank_attr.value_int else 1
+            if rank_attr and rank_attr.value_float:
+                rank = int(rank_attr.value_float)
+
+            # Get primary/secondary attributes
+            primary_attr = TypeAttribute.objects.filter(
+                type_id=skill.skill_id,
+                attribute_id=180
+            ).first()
+            secondary_attr = TypeAttribute.objects.filter(
+                type_id=skill.skill_id,
+                attribute_id=181
+            ).first()
+
+            primary_name = ATTRIBUTE_NAMES.get(int(primary_attr.value_int) if primary_attr and primary_attr.value_int else None, '')
+            secondary_name = ATTRIBUTE_NAMES.get(int(secondary_attr.value_int) if secondary_attr and secondary_attr.value_int else None, '')
+
+            # Calculate SP for current and next level
+            current_level_sp = calculate_sp_for_level(rank, skill.skill_level)
+            next_level_sp = calculate_sp_for_level(rank, skill.skill_level + 1) if skill.skill_level < 5 else current_level_sp
+
             skill_data = {
                 'skill': skill,
                 'name': item_type.name,
@@ -619,6 +687,12 @@ def skills_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
                 'group_id': item_type.group_id,
                 'group_name': group.name if group else 'Unknown',
                 'training_time': training_time,
+                'rank': rank,
+                'primary_attr': primary_name,
+                'secondary_attr': secondary_name,
+                'sp_current': skill.skillpoints_in_skill,
+                'sp_for_level': current_level_sp,
+                'sp_for_next': next_level_sp,
             }
             # Apply category filter if specified
             if not category_filter or skill_data['group_name'] == category_filter:
@@ -640,6 +714,12 @@ def skills_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
                 'group_id': None,
                 'group_name': 'Unknown',
                 'training_time': training_time,
+                'rank': 1,
+                'primary_attr': '',
+                'secondary_attr': '',
+                'sp_current': skill.skillpoints_in_skill,
+                'sp_for_level': 0,
+                'sp_for_next': 0,
             }
             # Apply category filter (Unknown category only matches if filtering for Unknown)
             if not category_filter or category_filter == 'Unknown':

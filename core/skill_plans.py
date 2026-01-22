@@ -379,14 +379,14 @@ def _get_skill_rank(skill_id: int) -> int:
     Most skills have rank 1, but some have higher ranks.
 
     Looks up from SDE TypeAttribute table:
-    - Attribute ID 182 = skillRank
+    - Attribute ID 275 = Training time multiplier (skill rank)
     """
     from core.eve.models import TypeAttribute
 
     try:
         rank_attr = TypeAttribute.objects.get(
             type_id=skill_id,
-            attribute_id=182  # skillRank
+            attribute_id=275  # Training time multiplier
         )
         # Rank is stored as value_int
         if rank_attr.value_int is not None:
@@ -408,8 +408,8 @@ def _get_skill_attributes(skill_id: int) -> tuple[str, str]:
     Returns tuple of (primary_attribute_name, secondary_attribute_name).
 
     Looks up from SDE TypeAttribute table:
-    - Attribute ID 161 = primaryAttribute
-    - Attribute ID 162 = secondaryAttribute
+    - Attribute ID 180 = Primary attribute
+    - Attribute ID 181 = Secondary attribute
 
     EVE attribute ID mapping:
     - 164 = intelligence
@@ -434,7 +434,7 @@ def _get_skill_attributes(skill_id: int) -> tuple[str, str]:
     try:
         primary_attr_obj = TypeAttribute.objects.get(
             type_id=skill_id,
-            attribute_id=161  # primaryAttribute
+            attribute_id=180  # Primary attribute
         )
         primary_attr_id = int(primary_attr_obj.value_int) if primary_attr_obj.value_int else None
         if primary_attr_id and primary_attr_id in ATTRIBUTE_MAP:
@@ -447,7 +447,7 @@ def _get_skill_attributes(skill_id: int) -> tuple[str, str]:
     try:
         secondary_attr_obj = TypeAttribute.objects.get(
             type_id=skill_id,
-            attribute_id=162  # secondaryAttribute
+            attribute_id=181  # Secondary attribute
         )
         secondary_attr_id = int(secondary_attr_obj.value_int) if secondary_attr_obj.value_int else None
         if secondary_attr_id and secondary_attr_id in ATTRIBUTE_MAP:

@@ -50,7 +50,7 @@
             <tr style="border-bottom: 3px solid var(--border-color, #ddd); background: var(--bg-primary, #f5f5f5);">
                 <th style="padding: 0.75rem; text-align: left;">Skill</th>
                 <th style="padding: 0.75rem; text-align: center; width: 150px;">Level</th>
-                <th style="padding: 0.75rem; text-align: right; width: 120px;">Skill Points</th>
+                <th style="padding: 0.75rem; text-align: right; width: 140px;">SP (current/next)</th>
                 <th style="padding: 0.75rem; text-align: left; width: 120px;">Time to Next</th>
             </tr>
         </thead>
@@ -70,14 +70,21 @@
             <tr style="border-bottom: 1px solid var(--table-border, #eee);">
                 <td style="padding: 0.6rem 0.75rem;">
                     {{ skill.name }}
+                    {% if skill.primary_attr or skill.secondary_attr %}
+                    <span style="color: var(--text-secondary); font-size: 0.85rem;">({{ skill.primary_attr }}/{{ skill.secondary_attr }})</span>
+                    {% endif %}
                 </td>
                 <td style="padding: 0.6rem 0.75rem; text-align: center;">
                     <span style="color: {% if skill.skill.skill_level == 5 %}#c00{% elif skill.skill.skill_level == 4 %}#c60{% elif skill.skill.skill_level == 3 %}#c90{% else %}#666{% endif %}; font-weight: bold; font-size: 1.1rem; letter-spacing: 3px;">
                         {{ skill.level_stars }}
                     </span>
                 </td>
-                <td style="padding: 0.6rem 0.75rem; text-align: right; font-family: monospace;">
-                    {{ skill.skill.skillpoints_in_skill|default:0|commas }}
+                <td style="padding: 0.6rem 0.75rem; text-align: right; font-family: monospace; font-size: 0.9rem;">
+                    {% if skill.skill.skill_level < 5 %}
+                        {{ skill.sp_current|default:0|commas }} / {{ skill.sp_for_next|commas }}
+                    {% else %}
+                        {{ skill.sp_current|default:0|commas }}
+                    {% endif %}
                 </td>
                 <td style="padding: 0.6rem 0.75rem; font-size: 0.9rem;">
                     {% if skill.skill.skill_level == 5 %}

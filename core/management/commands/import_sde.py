@@ -22,18 +22,53 @@ class Command(BaseCommand):
     SDE_URL = "https://www.fuzzwork.co.uk/dump/sqlite-latest.sqlite.bz2"
 
     # Tables we need for skill plans and basic operations
-    REQUIRED_TABLES = [
-        'invTypes',           # All items (skills, ships, modules)
-        'invGroups',          # Item groups
-        'invCategories',      # Item categories
-        'dgmAttributeTypes',  # Attribute definitions
-        'dgmTypeAttributes',  # Item attributes (skill prerequisites!)
-        'chrFactions',        # Factions
-        'chrRaces',           # Races
-        'mapSolarSystems',    # Solar systems
-        'staStations',        # Stations
-        'invNames',           # Item names
-    ]
+    # Maps SDE table name to Django model table name
+    REQUIRED_TABLES = {
+        'invTypes': 'core_itemtype',
+        'invGroups': 'core_itemgroup',
+        'invCategories': 'core_itemcategory',
+        'dgmAttributeTypes': 'core_attributetype',
+        'dgmTypeAttributes': 'core_typeattribute',
+        'chrFactions': 'core_faction',
+        'chrRaces': 'core_itemtype',  # Races are item types
+        'mapSolarSystems': 'core_solarsystem',
+        'staStations': 'core_station',
+    }
+
+    # Column name mappings from SDE to Django (camelCase to snake_case)
+    # Only include columns that exist in the SDE source table
+    COLUMN_MAPPINGS = {
+        'core_typeattribute': {
+            'typeID': 'type_id',
+            'attributeID': 'attribute_id',
+            'valueInt': 'value_int',
+            'valueFloat': 'value_float',
+        },
+        'core_attributetype': {
+            'attributeID': 'id',
+            'attributeName': 'name',
+            'description': 'description',
+            'iconID': 'icon_id',
+            'defaultValue': 'default_value',
+            'published': 'published',
+            'displayName': 'display_name',
+            'unitID': 'unit_id',
+            'stackable': 'stackable',
+            'highIsGood': 'high_is_good',
+            'categoryID': 'category_id',
+        },
+        'core_itemtype': {
+            'typeID': 'id',
+            'typeName': 'name',
+            'description': 'description',
+            'groupID': 'group_id',
+            'mass': 'mass',
+            'volume': 'volume',
+            'capacity': 'capacity',
+            'portionSize': 'portion_size',
+            'published': 'published',
+        },
+    }
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -44,17 +79,18 @@ class Command(BaseCommand):
         parser.add_argument(
             '--tables',
             type=str,
-            help='Comma-separated list of tables to import (default: all required)',
+            help='Comma-separated list of SDE tables to import (default: all required)',
         )
 
     def handle(self, *args, **options):
         # Check which tables to import
         if options['tables']:
             tables = [t.strip() for t in options['tables'].split(',')]
+            table_map = {t: self.REQUIRED_TABLES.get(t, t) for t in tables}
         else:
-            tables = self.REQUIRED_TABLES
+            table_map = self.REQUIRED_TABLES
 
-        self.stdout.write(f'Importing {len(tables)} tables from Fuzzwork SDE SQLite database')
+        self.stdout.write(f'Importing {len(table_map)} tables from Fuzzwork SDE SQLite database')
 
         # Download and extract the SDE database
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -78,21 +114,21 @@ class Command(BaseCommand):
             imported = 0
             skipped = 0
 
-            for table in tables:
-                if self._table_exists(table) and not options['force']:
-                    self.stdout.write(self.style.WARNING(f'{table}: skipped (already exists)'))
+            for sde_table, django_table in table_map.items():
+                if self._table_exists(django_table) and not options['force']:
+                    self.stdout.write(self.style.WARNING(f'{sde_table} -> {django_table}: skipped (already exists)'))
                     skipped += 1
                     continue
 
-                self.stdout.write(f'{table}: importing...')
+                self.stdout.write(f'{sde_table} -> {django_table}: importing...')
 
                 try:
-                    rows = self._copy_table(sde_path, table)
-                    self.stdout.write(self.style.SUCCESS(f'{table}: imported {rows:,} rows'))
+                    rows = self._copy_table(sde_path, sde_table, django_table)
+                    self.stdout.write(self.style.SUCCESS(f'{sde_table} -> {django_table}: imported {rows:,} rows'))
                     imported += 1
                 except Exception as e:
                     import traceback
-                    self.stdout.write(self.style.ERROR(f'{table}: failed - {e}'))
+                    self.stdout.write(self.style.ERROR(f'{sde_table}: failed - {e}'))
                     self.stdout.write(traceback.format_exc())
 
         self.stdout.write(f'\nDone: {imported} imported, {skipped} skipped')
@@ -106,70 +142,115 @@ class Command(BaseCommand):
 
         conn = sqlite3.connect(db_path)
         result = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", [table_name]).fetchone()
+        if result:
+            # Check if table has data
+            count_result = conn.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()
+            conn.close()
+            return count_result[0] > 0
         conn.close()
-        return result is not None
+        return False
 
-    def _copy_table(self, sde_path: str, table_name: str) -> int:
-        """Copy a table from SDE database to our database."""
+    def _copy_table(self, sde_path: str, sde_table: str, django_table: str) -> int:
+        """Copy a table from SDE database to our Django database."""
         import sqlite3
 
         db_path = settings.DATABASES['default']['NAME']
         if db_path is None:
             db_path = str(Path(settings.BASE_DIR) / 'db.sqlite3')
 
-        # Connect to both databases
+        # Connect to SDE database
         sde_conn = sqlite3.connect(sde_path)
         sde_conn.row_factory = sqlite3.Row
+
+        # Connect to our Django database (raw sqlite for direct table manipulation)
+        django_conn = sqlite3.connect(db_path)
+        django_cursor = django_conn.cursor()
 
         # Get table schema and data from SDE
         sde_cursor = sde_conn.cursor()
 
-        # Get table schema
-        sde_cursor.execute(f"SELECT sql FROM sqlite_master WHERE type='table' AND name='{table_name}'")
+        # Get table schema from SDE
+        sde_cursor.execute(f"SELECT sql FROM sqlite_master WHERE type='table' AND name='{sde_table}'")
         schema_row = sde_cursor.fetchone()
 
         if not schema_row:
-            raise ValueError(f"Table {table_name} not found in SDE")
+            sde_conn.close()
+            django_conn.close()
+            raise ValueError(f"Table {sde_table} not found in SDE")
 
-        # Convert MySQL/Fuzzwork schema to SQLite-compatible if needed
+        # Convert MySQL/Fuzzwork schema to Django-compatible format
         create_sql = schema_row['sql']
-        create_sql = create_sql.replace('`', '')  # Remove MySQL backticks
+        # Remove double quotes around identifiers (SQLite uses double quotes for column/table names)
+        create_sql = create_sql.replace('"', '')
         create_sql = create_sql.replace('COLLATE utf8mb4_unicode_ci', '')  # Remove MySQL collation
         create_sql = create_sql.replace('DEFAULT CURRENT_TIMESTAMP', '')  # Remove MySQL defaults
         create_sql = create_sql.replace('ON UPDATE CURRENT_TIMESTAMP', '')  # Remove MySQL triggers
 
-        # Drop existing table if any
-        with connection.cursor() as cursor:
-            cursor.execute(f"DROP TABLE IF EXISTS {table_name}")
+        # Replace the table name in CREATE statement with Django table name
+        # Handle both "CREATE TABLE name" and "CREATE TABLE IF NOT EXISTS name"
+        import re
+        create_sql = re.sub(
+            r'CREATE TABLE (?:IF NOT EXISTS )?\w+ \(',
+            f'CREATE TABLE {django_table} (',
+            create_sql
+        )
 
-        # Create table
-        with connection.cursor() as cursor:
-            cursor.execute(create_sql)
+        # Rename columns to match Django model names (camelCase to snake_case)
+        column_map = self.COLUMN_MAPPINGS.get(django_table, {})
+        for sde_col, django_col in column_map.items():
+            create_sql = re.sub(rf'\b{sde_col}\b', django_col, create_sql)
 
-        # Get row count
-        sde_cursor.execute(f"SELECT COUNT(*) as cnt FROM {table_name}")
-        row_count = sde_cursor.fetchone()['cnt']
+        # Drop existing Django table if any
+        django_cursor.execute(f"DROP TABLE IF EXISTS {django_table}")
+
+        # Create table with Django name
+        django_cursor.execute(create_sql)
+
+        # Get row count from SDE
+        sde_cursor.execute(f"SELECT COUNT(*) as cnt FROM {sde_table}")
+        row_count = sde_cursor.fetchone()[0]
 
         # Copy data in batches
         batch_size = 1000
         offset = 0
         total_copied = 0
 
-        with connection.cursor() as cursor:
-            while True:
-                sde_cursor.execute(f"SELECT * FROM {table_name} LIMIT {batch_size} OFFSET {offset}")
-                rows = sde_cursor.fetchall()
+        # Get column mapping for this table if any
+        column_map = self.COLUMN_MAPPINGS.get(django_table, {})
 
-                if not rows:
-                    break
+        while True:
+            sde_cursor.execute(f"SELECT * FROM {sde_table} LIMIT {batch_size} OFFSET {offset}")
+            rows = sde_cursor.fetchall()
 
-                # Build and execute INSERT statement
-                columns = [desc[0] for desc in sde_cursor.description]
-                placeholders = ', '.join(['?'] * len(columns))
-                insert_sql = f"INSERT INTO {table_name} ({', '.join(columns)}) VALUES ({placeholders})"
+            if not rows:
+                break
 
-                cursor.executemany(insert_sql, rows)
-                total_copied += len(rows)
-                offset += batch_size
+            # Build and execute INSERT statement for Django table
+            # Apply column name mapping if defined
+            original_columns = [desc[0] for desc in sde_cursor.description]
+            if column_map:
+                # Map SDE column names to Django column names
+                target_columns = [column_map.get(col, col) for col in original_columns]
+            else:
+                target_columns = original_columns
+
+            placeholders = ', '.join(['?'] * len(target_columns))
+            insert_sql = f"INSERT INTO {django_table} ({', '.join(target_columns)}) VALUES ({placeholders})"
+
+            django_cursor.executemany(insert_sql, rows)
+            total_copied += len(rows)
+            offset += batch_size
+
+        # Special post-processing for TypeAttribute - add id column for Django
+        if django_table == 'core_typeattribute':
+            self.stdout.write(f'  Adding id column for Django compatibility...')
+            django_cursor.execute(f"ALTER TABLE {django_table} ADD COLUMN id INTEGER")
+            # Populate id with rowid
+            django_cursor.execute(f"UPDATE {django_table} SET id = rowid")
+
+        # Commit changes and close connections
+        django_conn.commit()
+        sde_conn.close()
+        django_conn.close()
 
         return total_copied
