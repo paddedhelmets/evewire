@@ -111,9 +111,9 @@ LOGOUT_REDIRECT_URL = '/'
 EVE_CLIENT_ID = config('EVE_CLIENT_ID', default='')
 EVE_CLIENT_SECRET = config('EVE_CLIENT_SECRET', default='')
 EVE_CALLBACK_URL = config('EVE_CALLBACK_URL', default='http://localhost:8000/oauth/callback/')
-EVE_SSO_LOGIN_URL = 'https://login.eveonline.com/oauth/authorize'
-EVE_SSO_TOKEN_URL = 'https://login.eveonline.com/oauth/token'
-EVE_SSO_VERIFY_URL = 'https://login.eveonline.com/oauth/verify'
+EVE_SSO_LOGIN_URL = 'https://login.eveonline.com/v2/oauth/authorize'
+EVE_SSO_TOKEN_URL = 'https://login.eveonline.com/v2/oauth/token'
+EVE_SSO_VERIFY_URL = 'https://login.eveonline.com/v2/oauth/verify'
 
 # ESI Configuration
 ESI_BASE_URL = 'https://esi.evetech.net/latest'
