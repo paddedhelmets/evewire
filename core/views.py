@@ -516,7 +516,11 @@ def skill_plan_remove_skill(request: HttpRequest, plan_id: int, entry_id: int) -
 
 @login_required
 def skills_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
-    """List skills grouped by category, for a specific character."""
+    """List skills grouped by category, for a specific character.
+
+    Query parameters:
+        category: Filter to specific skill group name
+    """
     from core.character.models import CharacterSkill
     from core.eve.models import ItemType, ItemGroup
     from core.models import Character
@@ -536,6 +540,9 @@ def skills_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
                 'message': 'No characters found. Please add a character first.',
             }, status=404)
 
+    # Get filter parameters
+    category_filter = request.GET.get('category', '')
+
     # Get all skills for this character
     skills_qs = CharacterSkill.objects.filter(character=character).select_related()
 
@@ -552,23 +559,29 @@ def skills_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
                 if group:
                     group_ids_seen.add(group.id)
 
-            skills_with_groups.append({
+            skill_data = {
                 'skill': skill,
                 'name': item_type.name,
                 'group': group,
                 'level_stars': '★' * skill.skill_level + '☆' * (5 - skill.skill_level),
                 'group_id': item_type.group_id,
                 'group_name': group.name if group else 'Unknown',
-            })
+            }
+            # Apply category filter if specified
+            if not category_filter or skill_data['group_name'] == category_filter:
+                skills_with_groups.append(skill_data)
         except ItemType.DoesNotExist:
-            skills_with_groups.append({
+            skill_data = {
                 'skill': skill,
                 'name': f'Skill {skill.skill_id}',
                 'group': None,
                 'level_stars': '★' * skill.skill_level + '☆' * (5 - skill.skill_level),
                 'group_id': None,
                 'group_name': 'Unknown',
-            })
+            }
+            # Apply category filter (Unknown category only matches if filtering for Unknown)
+            if not category_filter or category_filter == 'Unknown':
+                skills_with_groups.append(skill_data)
 
     # Sort by group name, then skill name
     skills_with_groups.sort(key=lambda x: (x['group_name'], x['name']))
@@ -579,13 +592,18 @@ def skills_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
     for s in skills_with_groups:
         grouped[s['group_name']].append(s)
 
+    # Get all available categories for the filter dropdown
+    all_categories = sorted(grouped.keys())
+
     return render(request, 'core/skills_list.html', {
         'character': character,
         'skills': skills_with_groups,
         'grouped_skills': dict(grouped),
-        'total_skills': skills_qs.count(),
+        'total_skills': len(skills_with_groups),
         'total_sp': character.total_sp or 0,
         'total_groups': len(grouped),
+        'category_filter': category_filter,
+        'all_categories': all_categories,
     })
 
 

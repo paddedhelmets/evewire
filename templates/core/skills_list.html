@@ -25,7 +25,26 @@
 </div>
 
 <div class="card" style="margin-top: 1.5rem;">
-    <h2>All Skills ({{ total_skills }} trained)</h2>
+    <h2>Filter</h2>
+    <form method="get" style="display: flex; align-items: center; gap: 1rem;">
+        <div>
+            <label for="category" style="display: block; margin-bottom: 0.25rem;">Category:</label>
+            <select name="category" id="category" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); min-width: 200px;">
+                <option value="">All Categories</option>
+                {% for cat in all_categories %}
+                <option value="{{ cat }}"{% if category_filter == cat %} selected{% endif %}>{{ cat }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="btn">Apply</button>
+        {% if category_filter %}
+        <a href="{% url 'core:skills_list' character.id %}" class="btn" style="background: var(--text-secondary);">Clear</a>
+        {% endif %}
+    </form>
+</div>
+
+<div class="card" style="margin-top: 1.5rem;">
+    <h2>All Skills ({{ total_skills }} trained{% if category_filter %}, filtered by: {{ category_filter }}{% endif %})</h2>
     <table style="width: 100%; border-collapse: collapse;">
         <thead>
             <tr style="border-bottom: 3px solid var(--border-color, #ddd); background: var(--bg-primary, #f5f5f5);">
@@ -37,11 +56,15 @@
         <tbody>
             {% regroup skills by group_name as skills_by_group %}
             {% for group in skills_by_group %}
-            <tr class="group-header">
+            <tr class="group-header" style="cursor: pointer;" onclick="toggleGroup('{{ group.grouper|slugify }}')">
                 <td colspan="3" style="padding: 0.5rem 0.75rem; background: var(--bg-secondary, #e8e8e8); font-weight: 600; color: var(--text-secondary);">
-                    {{ group.grouper }}
+                    <span style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>{{ group.grouper }}</span>
+                        <span class="toggle-icon" id="icon-{{ group.grouper|slugify }}" style="font-size: 0.8rem;">▼</span>
+                    </span>
                 </td>
             </tr>
+            <tbody id="group-{{ group.grouper|slugify }}" class="group-content">
             {% for skill in group.list %}
             <tr style="border-bottom: 1px solid var(--table-border, #eee);">
                 <td style="padding: 0.6rem 0.75rem;">
@@ -57,6 +80,7 @@
                 </td>
             </tr>
             {% endfor %}
+            </tbody>
             {% endfor %}
             {% if not skills %}
             <tr>
@@ -72,6 +96,24 @@
 <style>
 tr.group-header td {
     border-top: 2px solid var(--border-color, #ccc);
+    user-select: none;
+}
+tr.group-header:hover td {
+    background: var(--bg-tertiary, #d8d8d8);
 }
 </style>
+
+<script>
+function toggleGroup(groupId) {
+    const tbody = document.getElementById('group-' + groupId);
+    const icon = document.getElementById('icon-' + groupId);
+    if (tbody.style.display === 'none') {
+        tbody.style.display = '';
+        icon.textContent = '▼';
+    } else {
+        tbody.style.display = 'none';
+        icon.textContent = '▶';
+    }
+}
+</script>
 {% endblock %}
