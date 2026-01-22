@@ -144,7 +144,7 @@ class SkillPlanExporter:
         skill_attrs = TypeAttribute.objects.filter(
             type_id=skill_id,
             attribute_id__in=skill_attribute_map.keys()
-        ).select_related('attribute_id')
+        )
 
         for skill_attr in skill_attrs:
             attr_id = skill_attr.attribute_id
@@ -456,6 +456,146 @@ def _get_skill_attributes(skill_id: int) -> tuple[str, str]:
         pass
 
     return (primary_attr, secondary_attr)
+
+
+def get_prerequisites_for_skill(skill_id: int, target_level: int) -> List[Dict]:
+    """
+    Get all prerequisites for a skill at a specific level.
+
+    Returns a list of prerequisite dicts with skill info and whether
+    they're already satisfied based on current character skills.
+
+    Args:
+        skill_id: The skill to check prerequisites for
+        target_level: The level being trained to
+
+    Returns:
+        List of dicts with keys: skill_id, skill_name, required_level,
+                                current_level, is_met, type (direct/recursive)
+    """
+    from core.character.models import CharacterSkill
+
+    # Start with direct prerequisites
+    direct_prereqs = SkillPlanExporter._get_prerequisites(skill_id)
+
+    # Build full prerequisite tree
+    all_prereqs = []
+    visited = set()
+
+    def add_prereq_recursive(prereq_skill_id: int, required_level: int, depth: int) -> None:
+        """Recursively build prerequisite tree."""
+        if prereq_skill_id in visited:
+            return
+        visited.add(prereq_skill_id)
+
+        # Get skill info
+        try:
+            skill = ItemType.objects.get(id=prereq_skill_id)
+            skill_name = skill.name
+        except ItemType.DoesNotExist:
+            skill_name = f"Skill {prereq_skill_id}"
+
+        # Get current character level (will be 0 if not trained)
+        # This is populated later by the view
+        current_level = 0  # Placeholder
+
+        prereq_info = {
+            'skill_id': prereq_skill_id,
+            'skill_name': skill_name,
+            'required_level': required_level,
+            'current_level': current_level,  # To be filled by caller
+            'is_met': current_level >= required_level,  # To be updated by caller
+            'type': 'direct' if depth == 0 else 'recursive',
+            'depth': depth,
+        }
+        all_prereqs.append(prereq_info)
+
+        # Get this skill's prerequisites recursively
+        if depth < 5:  # Limit recursion depth
+            sub_prereqs = SkillPlanExporter._get_prerequisites(prereq_skill_id)
+            for sub_prereq in sub_prereqs:
+                add_prereq_recursive(
+                    sub_prereq['skill_required'],
+                    sub_prereq['skill_level'],
+                    depth + 1
+                )
+
+    for prereq in direct_prereqs:
+        add_prereq_recursive(prereq['skill_required'], prereq['skill_level'], 0)
+
+    return all_prereqs
+
+
+def check_prerequisites_met(character, skill_id: int, target_level: int,
+                            character_skills: Dict) -> Dict:
+    """
+    Check if all prerequisites are met for training a skill.
+
+    Args:
+        character: The character to check skills for
+        skill_id: The skill to check
+        target_level: The level being trained to
+        character_skills: Dict of {skill_id: CharacterSkill} for the character
+
+    Returns:
+        Dict with keys:
+            - all_met: bool - whether all prerequisites are met
+            - unmet: list of prerequisite dicts that aren't met
+            - total: int - total number of prerequisites
+            - met_count: int - number of prerequisites that are met
+    """
+    prereqs = get_prerequisites_for_skill(skill_id, target_level)
+
+    # Populate current levels from character skills
+    for prereq in prereqs:
+        char_skill = character_skills.get(prereq['skill_id'])
+        prereq['current_level'] = char_skill.skill_level if char_skill else 0
+        prereq['is_met'] = prereq['current_level'] >= prereq['required_level']
+
+    unmet = [p for p in prereqs if not p['is_met']]
+    all_met = len(unmet) == 0
+
+    return {
+        'all_met': all_met,
+        'unmet': unmet,
+        'total': len(prereqs),
+        'met_count': len([p for p in prereqs if p['is_met']]),
+        'all_prereqs': prereqs,
+    }
+
+
+def get_trainable_status(character, skill_id: int, target_level: int,
+                         character_skills: Dict) -> str:
+    """
+    Determine if a skill is trainable now or blocked by prerequisites.
+
+    Returns status string: 'trainable', 'blocked', or 'in_progress'
+
+    Args:
+        character: The character
+        skill_id: The skill to check
+        target_level: Target level
+        character_skills: Dict of {skill_id: CharacterSkill}
+
+    Returns:
+        'trainable': Prerequisites met, can start training immediately
+        'blocked': Prerequisites not met
+        'in_progress': Already training or at target level
+    """
+    # Check current skill level
+    char_skill = character_skills.get(skill_id)
+    current_level = char_skill.skill_level if char_skill else 0
+
+    if current_level >= target_level:
+        return 'in_progress'
+
+    # Check prerequisites
+    prereq_check = check_prerequisites_met(character, skill_id, target_level, character_skills)
+
+    if prereq_check['all_met']:
+        return 'trainable'
+    else:
+        return 'blocked'
 
 
 # Import models for aggregate functions

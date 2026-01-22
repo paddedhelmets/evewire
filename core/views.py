@@ -313,7 +313,7 @@ def skill_plan_detail(request: HttpRequest, plan_id: int) -> HttpResponse:
     """Show a single skill plan with progress for the user's character."""
     from core.character.models import SkillPlan
     from core.models import Character
-    from core.skill_plans import calculate_training_time
+    from core.skill_plans import calculate_training_time, check_prerequisites_met, get_trainable_status
 
     try:
         plan = SkillPlan.objects.get(id=plan_id)
@@ -324,6 +324,9 @@ def skill_plan_detail(request: HttpRequest, plan_id: int) -> HttpResponse:
 
     # Get user's character
     character = get_users_character(request.user)
+
+    # Get filter parameters
+    show_filter = request.GET.get('show', 'all')  # 'all', 'trainable', 'blocked'
 
     # Get progress if character exists
     progress = None
@@ -367,13 +370,34 @@ def skill_plan_detail(request: HttpRequest, plan_id: int) -> HttpResponse:
                 # Training time calculation may fail if SDE data missing
                 training_time = None
 
-        entries.append({
+        # Check prerequisites for required skills
+        prereq_info = None
+        trainable_status = None
+        if character and entry.level:
+            try:
+                prereq_info = check_prerequisites_met(character, entry.skill_id, entry.level, character_skills)
+                trainable_status = get_trainable_status(character, entry.skill_id, entry.level, character_skills)
+            except Exception:
+                # Prerequisite check may fail if SDE data missing
+                pass
+
+        entry_data = {
             'entry': entry,
             'current_level': current_level,
             'status': status,
             'training_time': training_time,
             'target_level': target_level,
-        })
+            'prereq_info': prereq_info,
+            'trainable_status': trainable_status,
+        }
+
+        # Apply filter
+        if show_filter == 'all':
+            entries.append(entry_data)
+        elif show_filter == 'trainable' and trainable_status == 'trainable':
+            entries.append(entry_data)
+        elif show_filter == 'blocked' and trainable_status == 'blocked':
+            entries.append(entry_data)
 
     return render(request, 'core/skill_plan_detail.html', {
         'plan': plan,
@@ -381,6 +405,7 @@ def skill_plan_detail(request: HttpRequest, plan_id: int) -> HttpResponse:
         'progress': progress,
         'character': character,
         'total_training_seconds': total_training_seconds,
+        'show_filter': show_filter,
     })
 
 

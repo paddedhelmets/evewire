@@ -50,6 +50,14 @@
 
 <div class="card">
     <h2>Skills</h2>
+    {% if character %}
+    <div style="margin-bottom: 1rem; display: flex; gap: 1rem; align-items: center;">
+        <span>Show:</span>
+        <a href="{% url 'core:skill_plan_detail' plan.id %}?show=all" style="{% if show_filter == 'all' %}font-weight: bold; color: #000;{% endif %}">All</a>
+        <a href="{% url 'core:skill_plan_detail' plan.id %}?show=trainable" style="{% if show_filter == 'trainable' %}font-weight: bold; color: #000;{% endif %}">Trainable</a>
+        <a href="{% url 'core:skill_plan_detail' plan.id %}?show=blocked" style="{% if show_filter == 'blocked' %}font-weight: bold; color: #000;{% endif %}">Blocked</a>
+    </div>
+    {% endif %}
     {% if entries %}
         <table style="width: 100%; border-collapse: collapse;">
             <thead>
@@ -58,6 +66,7 @@
                     <th style="padding: 0.5rem; text-align: center;">Required</th>
                     <th style="padding: 0.5rem; text-align: center;">Recommended</th>
                     <th style="padding: 0.5rem; text-align: center;">Current</th>
+                    <th style="padding: 0.5rem; text-align: left;">Prerequisites</th>
                     <th style="padding: 0.5rem; text-align: left;">Status</th>
                     <th style="padding: 0.5rem; text-align: left;">Training Time</th>
                     <th style="padding: 0.5rem; text-align: left;">Actions</th>
@@ -65,9 +74,15 @@
             </thead>
             <tbody>
                 {% for item in entries %}
-                <tr style="border-bottom: 1px solid #eee; {% if item.status == 'completed' %}background: #e6f7e6;{% elif item.status == 'not_started' %}opacity: 0.7;{% endif %}">
+                <tr style="border-bottom: 1px solid #eee; {% if item.status == 'completed' %}background: #e6f7e6;{% elif item.trainable_status == 'blocked' %}background: #fff3f3;{% endif %}"
+                    {% if item.prereq_info %}data-prereqs="{{ item.entry.skill_id }}"{% endif %}>
                     <td style="padding: 0.5rem;">
                         <strong>{{ item.entry.skill_name }}</strong>
+                        {% if item.trainable_status == 'blocked' %}
+                            <span style="color: #c00; font-size: 0.8rem; margin-left: 0.5rem;">🔒 Blocked</span>
+                        {% elif item.trainable_status == 'trainable' %}
+                            <span style="color: #080; font-size: 0.8rem; margin-left: 0.5rem;">✓ Ready</span>
+                        {% endif %}
                     </td>
                     <td style="padding: 0.5rem; text-align: center;">
                         {% if item.entry.level %}L{{ item.entry.level }}{% else %}&mdash;{% endif %}
@@ -77,6 +92,23 @@
                     </td>
                     <td style="padding: 0.5rem; text-align: center;">
                         L{{ item.current_level }}
+                    </td>
+                    <td style="padding: 0.5rem;">
+                        {% if item.prereq_info %}
+                            {% if item.prereq_info.all_met %}
+                                <span style="color: #080;">✓ All met</span>
+                            {% else %}
+                                <span style="color: #c00;"
+                                      onmouseover="showPrereqs({{ item.entry.skill_id }}, event)"
+                                      onmouseout="hidePrereqs()"
+                                      style="cursor: help;">
+                                    {{ item.prereq_info.met_count }}/{{ item.prereq_info.total }} met
+                                </span>
+                                <span style="font-size: 0.8rem; color: #999;">(hover)</span>
+                            {% endif %}
+                        {% else %}
+                            <span style="color: #999;">&mdash;</span>
+                        {% endif %}
                     </td>
                     <td style="padding: 0.5rem;">
                         {% if item.status == 'completed' %}
@@ -177,6 +209,65 @@
             }, 300);
         });
     })();
+
+    // Prerequisite tooltip data and functions
+    const prereqData = {
+        {% for item in entries %}
+            {% if item.prereq_info and not item.prereq_info.all_met %}
+            '{{ item.entry.skill_id }}': {
+                skillName: '{{ item.entry.skill_name }}',
+                unmet: [
+                    {% for prereq in item.prereq_info.unmet %}
+                    {
+                        skillName: '{{ prereq.skill_name }}',
+                        requiredLevel: {{ prereq.required_level }},
+                        currentLevel: {{ prereq.current_level }},
+                        type: '{{ prereq.type }}',
+                        depth: {{ prereq.depth }}
+                    }{% if not forloop.last %},{% endif %}
+                    {% endfor %}
+                ]
+            }{% if not forloop.last %},{% endif %}
+            {% endif %}
+        {% endfor %}
+    };
+
+    const prereqTooltip = document.createElement('div');
+    prereqTooltip.style.position = 'absolute';
+    prereqTooltip.style.background = '#fff';
+    prereqTooltip.style.border = '1px solid #ccc';
+    prereqTooltip.style.borderRadius = '4px';
+    prereqTooltip.style.padding = '0.75rem';
+    prereqTooltip.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+    prereqTooltip.style.zIndex = '1000';
+    prereqTooltip.style.maxWidth = '350px';
+    prereqTooltip.style.display = 'none';
+    document.body.appendChild(prereqTooltip);
+
+    function showPrereqs(skillId, event) {
+        const data = prereqData[skillId];
+        if (!data || data.unmet.length === 0) return;
+
+        let html = `<strong style="color: #c00;">Unmet Prerequisites for ${data.skillName}:</strong><ul style="margin: 0.5rem 0 0 1.5rem; padding: 0;">`;
+        for (const prereq of data.unmet) {
+            const indent = ' '.repeat(prereq.depth);
+            const icon = prereq.type === 'direct' ? '🔴' : '↳';
+            html += `<li style="margin-bottom: 0.25rem;">${indent}${icon} ${prereq.skillName} L${prereq.requiredLevel} (have L${prereq.currentLevel})</li>`;
+        }
+        html += '</ul>';
+
+        prereqTooltip.innerHTML = html;
+        prereqTooltip.style.display = 'block';
+
+        // Position tooltip
+        const rect = event.target.getBoundingClientRect();
+        prereqTooltip.style.top = (rect.bottom + window.scrollY + 8) + 'px';
+        prereqTooltip.style.left = Math.max(8, Math.min(rect.left + window.scrollX, window.innerWidth - 360)) + 'px';
+    }
+
+    function hidePrereqs() {
+        prereqTooltip.style.display = 'none';
+    }
     </script>
 </div>
 {% endblock %}
