@@ -225,14 +225,14 @@ class EveScope(models.TextChoices):
     def mvp_scopes(cls) -> list[str]:
         """Return list of scopes required for MVP."""
         return [
-            cls.SKILLS_READ.value[0],
-            cls.SKILL_QUEUE_READ.value[0],
-            cls.CLONES_READ.value[0],
-            cls.IMPLANTS_READ.value[0],
-            cls.WALLET_READ.value[0],
-            cls.ASSETS_READ.value[0],
-            cls.ORDERS_READ.value[0],
-            cls.INDUSTRY_JOBS_READ.value[0],
+            cls.SKILLS_READ.value,
+            cls.SKILL_QUEUE_READ.value,
+            cls.CLONES_READ.value,
+            cls.IMPLANTS_READ.value,
+            cls.WALLET_READ.value,
+            cls.ASSETS_READ.value,
+            cls.ORDERS_READ.value,
+            cls.INDUSTRY_JOBS_READ.value,
         ]
 
 
