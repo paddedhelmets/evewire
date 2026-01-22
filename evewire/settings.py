@@ -140,7 +140,7 @@ Q_CLUSTER = {
     'save_limit': config('Q_SAVE_LIMIT', default=250, cast=int),
     'cpu_affinity': config('Q_CPU_AFFINITY', default=1, cast=int),
     'label': 'Django Q2',
-    'orm': True,  # Use database broker instead of redis
+    'orm': 'default',  # Use database broker with 'default' connection
 }
 
 # Logging
