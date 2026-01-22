@@ -68,6 +68,23 @@ class Command(BaseCommand):
             'portionSize': 'portion_size',
             'published': 'published',
         },
+        'core_itemgroup': {
+            'groupID': 'id',
+            'categoryID': 'category_id',
+            'groupName': 'name',
+            'iconID': 'icon_id',
+            'useBasePrice': 'use_base_price',
+            'anchored': 'anchored',
+            'anchorable': 'anchorable',
+            'fittableNonSingleton': 'fittable_non_singleton',
+            'published': 'published',
+        },
+        'core_itemcategory': {
+            'categoryID': 'id',
+            'categoryName': 'name',
+            'iconID': 'icon_id',
+            'published': 'published',
+        },
     }
 
     def add_arguments(self, parser):
