@@ -121,3 +121,21 @@ def module_name(type_id):
         return item.name
     except (ItemType.DoesNotExist, ValueError, TypeError):
         return f"Module {type_id}"
+
+
+@register.filter
+def reverse(value):
+    """Reverse a list or queryset."""
+    try:
+        return list(value)[::-1]
+    except (TypeError, AttributeError):
+        return value
+
+
+@register.filter
+def dictsortreversed(value, arg):
+    """Sort a list of dictionaries by a key in reverse order."""
+    try:
+        return sorted(value, key=lambda x: str(x.get(arg, '')), reverse=True)
+    except (TypeError, AttributeError):
+        return value
