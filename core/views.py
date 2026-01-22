@@ -1766,7 +1766,7 @@ def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
     """View character assets with hierarchical tree display."""
     from core.models import Character
     from core.character.models import CharacterAsset
-    from core.eve.models import ItemType
+    from core.eve.models import ItemType, Station, SolarSystem
     from collections import defaultdict
 
     # Get character
@@ -1784,8 +1784,19 @@ def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
                 'message': 'Character not found',
             }, status=404)
 
+    # Get location filter
+    location_filter = request.GET.get('location', '')
+
     # Get all assets for this character
     all_assets = CharacterAsset.objects.filter(character=character).select_related()
+
+    # Apply location filter if specified
+    if location_filter:
+        try:
+            location_id = int(location_filter)
+            all_assets = all_assets.filter(location_id=location_id)
+        except (ValueError, TypeError):
+            pass  # Invalid filter, ignore
 
     # Build asset lookup map
     asset_map = {asset.item_id: asset for asset in all_assets}
@@ -1794,14 +1805,40 @@ def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
     root_assets = []
     location_groups = defaultdict(list)
 
+    # Also collect all unique locations for the filter dropdown
+    all_locations = {}
+
     for asset in all_assets:
         if not asset.parent_id:
             # Top-level asset
             location_key = (asset.location_id, asset.location_type)
             location_groups[location_key].append(asset)
-        else:
-            # Child asset - will be rendered via parent's descendants
-            pass
+
+        # Build location name lookup
+        if asset.location_id not in all_locations:
+            location_name = None
+            # Try Station first
+            try:
+                station = Station.objects.get(id=asset.location_id)
+                location_name = station.name
+            except Station.DoesNotExist:
+                pass
+            # Try SolarSystem
+            if not location_name:
+                try:
+                    system = SolarSystem.objects.get(id=asset.location_id)
+                    location_name = system.name
+                except SolarSystem.DoesNotExist:
+                    pass
+            # Fallback
+            if not location_name:
+                location_name = f"Location {asset.location_id} ({asset.location_type})"
+
+            all_locations[asset.location_id] = {
+                'id': asset.location_id,
+                'name': location_name,
+                'type': asset.location_type,
+            }
 
     # Sort locations by name
     sorted_locations = sorted(
@@ -1809,10 +1846,18 @@ def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
         key=lambda x: x[0][1] + str(x[0][0])  # Sort by location_type then location_id
     )
 
+    # Sort available locations for dropdown by name
+    sorted_available_locations = sorted(
+        all_locations.values(),
+        key=lambda x: x['name']
+    )
+
     return render(request, 'core/assets_list.html', {
         'character': character,
         'location_groups': sorted_locations,
         'total_assets': all_assets.count(),
+        'location_filter': location_filter,
+        'available_locations': sorted_available_locations,
     })
 
 
