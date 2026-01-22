@@ -25,4 +25,7 @@ db.sqlite3
 .claude/
 .logs/
 
-# Gas Town (added by gt)
+# Gas Town workspace files
+AGENTS.md
+CLAUDE.md
+internal/
