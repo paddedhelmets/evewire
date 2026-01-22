@@ -518,6 +518,9 @@ def skills_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
                 'message': 'No characters found. Please add a character first.',
             }, status=404)
 
+    # Get category filter
+    category_filter = request.GET.get('category', '').strip()
+
     # Get all skills for this character
     skills_qs = CharacterSkill.objects.filter(character=character).select_related()
 
@@ -534,6 +537,12 @@ def skills_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
                 if group:
                     group_ids_seen.add(group.id)
 
+            # Apply category filter if specified
+            if category_filter and group and group.name != category_filter:
+                continue
+            if category_filter and not group:
+                continue
+
             skills_with_groups.append({
                 'skill': skill,
                 'name': item_type.name,
@@ -543,6 +552,9 @@ def skills_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
                 'group_name': group.name if group else 'Unknown',
             })
         except ItemType.DoesNotExist:
+            # Apply category filter to unknown skills too (exclude them if filter is active)
+            if category_filter:
+                continue
             skills_with_groups.append({
                 'skill': skill,
                 'name': f'Skill {skill.skill_id}',
@@ -561,6 +573,12 @@ def skills_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
     for s in skills_with_groups:
         grouped[s['group_name']].append(s)
 
+    # Get available categories (groups) for the filter dropdown
+    available_categories = sorted(
+        [{'name': g.name, 'id': g.id} for g in ItemGroup.objects.filter(id__in=group_ids_seen)],
+        key=lambda x: x['name']
+    )
+
     return render(request, 'core/skills_list.html', {
         'character': character,
         'skills': skills_with_groups,
@@ -568,6 +586,8 @@ def skills_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
         'total_skills': skills_qs.count(),
         'total_sp': character.total_sp or 0,
         'total_groups': len(grouped),
+        'category_filter': category_filter,
+        'available_categories': available_categories,
     })
 
 

@@ -24,6 +24,27 @@
     </div>
 </div>
 
+<!-- Category Filter -->
+<div class="card" style="margin-top: 1.5rem;">
+    <form method="get" style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+        <div>
+            <label for="category" style="display: block; margin-bottom: 0.25rem; font-size: 0.9rem;">Filter by Category:</label>
+            <select name="category" id="category" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); min-width: 250px;">
+                <option value="">All Categories</option>
+                {% for cat in available_categories %}
+                <option value="{{ cat.name }}" {% if category_filter == cat.name %}selected{% endif %}>
+                    {{ cat.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="btn">Apply Filter</button>
+        {% if category_filter %}
+        <a href="{% url 'core:character_skills' character.id %}" class="btn" style="background: var(--text-secondary);">Clear Filter</a>
+        {% endif %}
+    </form>
+</div>
+
 <div class="card" style="margin-top: 1.5rem;">
     <h2>All Skills ({{ total_skills }} trained)</h2>
     <table style="width: 100%; border-collapse: collapse;">
