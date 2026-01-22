@@ -18,60 +18,60 @@
         <div>
             <strong>Total Skills:</strong> {{ total_skills }}
         </div>
+        <div>
+            <strong>Skill Groups:</strong> {{ total_groups }}
+        </div>
     </div>
 </div>
 
-<div style="margin-top: 1.5rem;">
-    {% for group_name, group_data in skill_groups %}
-    <div class="card" style="margin-bottom: 1rem;">
-        <details open>
-            <summary style="cursor: pointer; padding: 0.75rem; background: var(--bg-primary, #f5f5f5); border-radius: 4px; font-weight: 600;">
-                {{ group_name }} ({{ group_data.skills|length }} skill{{ group_data.skills|length|pluralize }})
-            </summary>
-            <table style="width: 100%; border-collapse: collapse; margin-top: 0.5rem;">
-                <thead>
-                    <tr style="border-bottom: 2px solid var(--border-color, #ddd);">
-                        <th style="padding: 0.5rem; text-align: left;">Skill</th>
-                        <th style="padding: 0.5rem; text-align: center;">Level</th>
-                        <th style="padding: 0.5rem; text-align: right;">Skill Points</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for skill_item in group_data.skills %}
-                    <tr style="border-bottom: 1px solid var(--table-border, #eee);">
-                        <td style="padding: 0.5rem;">
-                            <strong>{{ skill_item.name }}</strong>
-                        </td>
-                        <td style="padding: 0.5rem; text-align: center;">
-                            <span style="color: {% if skill_item.skill.skill_level == 5 %}#c00{% elif skill_item.skill.skill_level == 4 %}#c60{% elif skill_item.skill.skill_level == 3 %}#c90{% else %}#666{% endif %}; font-weight: bold; font-size: 1.1rem; letter-spacing: 2px;">
-                                {{ skill_item.level_stars }}
-                            </span>
-                        </td>
-                        <td style="padding: 0.5rem; text-align: right;">{{ skill_item.skill.skillpoints_in_skill|default:0|commas }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </details>
-    </div>
-    {% endfor %}
+<div class="card" style="margin-top: 1.5rem;">
+    <h2>All Skills ({{ total_skills }} trained)</h2>
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 3px solid var(--border-color, #ddd); background: var(--bg-primary, #f5f5f5);">
+                <th style="padding: 0.75rem; text-align: left;">Skill</th>
+                <th style="padding: 0.75rem; text-align: center; width: 150px;">Level</th>
+                <th style="padding: 0.75rem; text-align: right; width: 120px;">Skill Points</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% regroup skills by group_name as skills_by_group %}
+            {% for group in skills_by_group %}
+            <tr class="group-header">
+                <td colspan="3" style="padding: 0.5rem 0.75rem; background: var(--bg-secondary, #e8e8e8); font-weight: 600; color: var(--text-secondary);">
+                    {{ group.grouper }}
+                </td>
+            </tr>
+            {% for skill in group.list %}
+            <tr style="border-bottom: 1px solid var(--table-border, #eee);">
+                <td style="padding: 0.6rem 0.75rem;">
+                    {{ skill.name }}
+                </td>
+                <td style="padding: 0.6rem 0.75rem; text-align: center;">
+                    <span style="color: {% if skill.skill.skill_level == 5 %}#c00{% elif skill.skill.skill_level == 4 %}#c60{% elif skill.skill.skill_level == 3 %}#c90{% else %}#666{% endif %}; font-weight: bold; font-size: 1.1rem; letter-spacing: 3px;">
+                        {{ skill.level_stars }}
+                    </span>
+                </td>
+                <td style="padding: 0.6rem 0.75rem; text-align: right; font-family: monospace;">
+                    {{ skill.skill.skillpoints_in_skill|default:0|commas }}
+                </td>
+            </tr>
+            {% endfor %}
+            {% endfor %}
+            {% if not skills %}
+            <tr>
+                <td colspan="3" style="padding: 2rem; text-align: center; color: var(--text-secondary);">
+                    No skills found. Please sync your character.
+                </td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
 </div>
 
 <style>
-details > summary {
-    list-style: none;
-}
-details > summary::-webkit-details-marker {
-    display: none;
-}
-details > summary::before {
-    content: '▶ ';
-    display: inline-block;
-    margin-right: 0.5rem;
-    transition: transform 0.2s;
-}
-details[open] > summary::before {
-    transform: rotate(90deg);
+tr.group-header td {
+    border-top: 2px solid var(--border-color, #ccc);
 }
 </style>
 {% endblock %}

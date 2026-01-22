@@ -505,7 +505,6 @@ def skills_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
     from core.character.models import CharacterSkill
     from core.eve.models import ItemType, ItemGroup
     from core.models import Character
-    from collections import defaultdict
 
     # Get character - from URL param or user's first character
     if character_id:
@@ -522,59 +521,56 @@ def skills_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
                 'message': 'No characters found. Please add a character first.',
             }, status=404)
 
-    # Get all skills with ItemType and ItemGroup data
-    skills_qs = CharacterSkill.objects.filter(
-        character=character
-    ).select_related()
+    # Get all skills for this character
+    skills_qs = CharacterSkill.objects.filter(character=character).select_related()
 
-    # Build skill groups: {group: {skills}}
-    skill_groups = defaultdict(lambda: {'group': None, 'skills': []})
-    skill_names = {}  # skill_id -> name cache
-    group_names = {}  # group_id -> name cache
+    # Build a list of all skills with group info
+    skills_with_groups = []
+    group_ids_seen = set()
 
-    # Pre-fetch all item types and groups
-    skill_ids = [s.skill_id for s in skills_qs]
-    item_types = ItemType.objects.filter(id__in=skill_ids).select_related()
-    for it in item_types:
-        skill_names[it.id] = it.name
-
-    group_ids = [it.group_id for it in item_types if it.group_id]
-    item_groups = ItemGroup.objects.filter(id__in=group_ids)
-    for ig in item_groups:
-        group_names[ig.id] = ig.name
-
-    # Organize skills by group
     for skill in skills_qs:
-        skill_name = skill_names.get(skill.skill_id, f'Skill {skill.skill_id}')
-        group_id = None
-        group_name = 'Unknown'
-
-        # Get group info from ItemType
         try:
             item_type = ItemType.objects.get(id=skill.skill_id)
+            group = None
             if item_type.group_id:
-                group_id = item_type.group_id
-                group_name = group_names.get(group_id, f'Group {group_id}')
+                group = ItemGroup.objects.filter(id=item_type.group_id).first()
+                if group:
+                    group_ids_seen.add(group.id)
+
+            skills_with_groups.append({
+                'skill': skill,
+                'name': item_type.name,
+                'group': group,
+                'level_stars': '★' * skill.skill_level + '☆' * (5 - skill.skill_level),
+                'group_id': item_type.group_id,
+                'group_name': group.name if group else 'Unknown',
+            })
         except ItemType.DoesNotExist:
-            pass
+            skills_with_groups.append({
+                'skill': skill,
+                'name': f'Skill {skill.skill_id}',
+                'group': None,
+                'level_stars': '★' * skill.skill_level + '☆' * (5 - skill.skill_level),
+                'group_id': None,
+                'group_name': 'Unknown',
+            })
 
-        skill_groups[group_name]['skills'].append({
-            'skill': skill,
-            'name': skill_name,
-            'level_stars': '★' * skill.skill_level + '☆' * (5 - skill.skill_level),
-        })
+    # Sort by group name, then skill name
+    skills_with_groups.sort(key=lambda x: (x['group_name'], x['name']))
 
-    # Sort skills alphabetically within each group, and groups by name
-    for group_data in skill_groups.values():
-        group_data['skills'].sort(key=lambda x: x['name'])
-
-    sorted_groups = sorted(skill_groups.items(), key=lambda x: x[0])
+    # Group by group_name for template
+    from collections import defaultdict
+    grouped = defaultdict(list)
+    for s in skills_with_groups:
+        grouped[s['group_name']].append(s)
 
     return render(request, 'core/skills_list.html', {
         'character': character,
-        'skill_groups': sorted_groups,
+        'skills': skills_with_groups,
+        'grouped_skills': dict(grouped),
         'total_skills': skills_qs.count(),
         'total_sp': character.total_sp or 0,
+        'total_groups': len(grouped),
     })
 
 

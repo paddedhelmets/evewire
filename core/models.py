@@ -474,6 +474,82 @@ class Character(models.Model):
         """Check if there's an available market order slot."""
         return self.active_market_orders < self.market_order_slots
 
+    # Industry slot calculation methods
+    # Manufacturing: Mass Production (3380) + Adv Mass Production (24325)
+    # Science: Laboratory Operation (24268) + Adv Lab Operation (24270)
+    # Reactions: Mass Reactions (45748) + Adv Mass Reactions (45749)
+    # Each level adds 1 slot to base of 1, max 11 slots per category
+
+    MASS_PRODUCTION_SKILL_ID = 3380
+    ADV_MASS_PRODUCTION_SKILL_ID = 24325
+    LAB_OPERATION_SKILL_ID = 24268
+    ADV_LAB_OPERATION_SKILL_ID = 24270
+    MASS_REACTIONS_SKILL_ID = 45748
+    ADV_MASS_REACTIONS_SKILL_ID = 45749
+
+    @property
+    def manufacturing_slots(self) -> int:
+        """Get max manufacturing slots from Mass Production skills."""
+        base_slots = 1
+        mass_prod_bonus = 1 * self.get_skill_level(self.MASS_PRODUCTION_SKILL_ID)
+        adv_mass_prod_bonus = 1 * self.get_skill_level(self.ADV_MASS_PRODUCTION_SKILL_ID)
+        return base_slots + mass_prod_bonus + adv_mass_prod_bonus
+
+    @property
+    def science_slots(self) -> int:
+        """Get max science/research slots from Laboratory Operation skills."""
+        base_slots = 1
+        lab_op_bonus = 1 * self.get_skill_level(self.LAB_OPERATION_SKILL_ID)
+        adv_lab_op_bonus = 1 * self.get_skill_level(self.ADV_LAB_OPERATION_SKILL_ID)
+        return base_slots + lab_op_bonus + adv_lab_op_bonus
+
+    @property
+    def reaction_slots(self) -> int:
+        """Get max reaction slots from Mass Reactions skills."""
+        base_slots = 1
+        mass_rx_bonus = 1 * self.get_skill_level(self.MASS_REACTIONS_SKILL_ID)
+        adv_mass_rx_bonus = 1 * self.get_skill_level(self.ADV_MASS_REACTIONS_SKILL_ID)
+        return base_slots + mass_rx_bonus + adv_mass_rx_bonus
+
+    @property
+    def active_manufacturing_jobs(self) -> int:
+        """Count active manufacturing jobs."""
+        from core.character.models import IndustryJob
+        return self.industry_jobs.filter(activity_id=1, status__in=[1, 'active']).count()
+
+    @property
+    def active_research_jobs(self) -> int:
+        """Count active research jobs (copying, invention, ME, TE)."""
+        from core.character.models import IndustryJob
+        return self.industry_jobs.filter(activity_id__in=[3, 4, 5, 8], status__in=[1, 'active']).count()
+
+    @property
+    def active_reaction_jobs(self) -> int:
+        """Count active reaction jobs."""
+        from core.character.models import IndustryJob
+        return self.industry_jobs.filter(activity_id=8, status__in=[1, 'active']).count()
+
+    @property
+    def manufacturing_utilization(self) -> float:
+        """Get manufacturing slot utilization as percentage."""
+        if self.manufacturing_slots == 0:
+            return 0.0
+        return (self.active_manufacturing_jobs / self.manufacturing_slots) * 100
+
+    @property
+    def science_utilization(self) -> float:
+        """Get science slot utilization as percentage."""
+        if self.science_slots == 0:
+            return 0.0
+        return (self.active_research_jobs / self.science_slots) * 100
+
+    @property
+    def reaction_utilization(self) -> float:
+        """Get reaction slot utilization as percentage."""
+        if self.reaction_slots == 0:
+            return 0.0
+        return (self.active_reaction_jobs / self.reaction_slots) * 100
+
 
 class AuditLog(models.Model):
     """Audit log for security-sensitive actions."""
