@@ -9,7 +9,7 @@ from django.shortcuts import render, redirect
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_http_methods
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.urls import reverse
 from django.db import models
 
@@ -475,6 +475,29 @@ def skill_plan_add_skill(request: HttpRequest, plan_id: int) -> HttpResponse:
 
     messages.success(request, 'Skill added to plan.')
     return redirect('core:skill_plan_detail', plan_id=plan.id)
+
+
+@login_required
+def skill_search(request: HttpRequest) -> JsonResponse:
+    """Search for skills by name (autocomplete)."""
+    from core.eve.models import ItemType
+
+    query = request.GET.get('q', '').strip()
+    if not query or len(query) < 2:
+        return JsonResponse({'results': []})
+
+    # Search ItemType by name, limited to skills (published skills)
+    skills = ItemType.objects.filter(
+        name__icontains=query,
+        published=True
+    ).values('id', 'name')[:20]
+
+    results = [
+        {'id': str(s['id']), 'name': s['name'], 'text': f"{s['name']} (ID: {s['id']})"}
+        for s in skills
+    ]
+
+    return JsonResponse({'results': results})
 
 
 @login_required
