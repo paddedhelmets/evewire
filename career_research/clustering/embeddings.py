@@ -49,7 +49,7 @@ class FitEmbedder:
             embedding_dim: Force specific dimension (None = auto-detect from skills)
         """
         self.db_url = db_url
-        self.sde_path = sde_path or str(Path(__file__).parent.parent.parent / "db.sqlite3")
+        self.sde_path = sde_path or str(Path('~/data/evewire/eve_sde.sqlite3').expanduser())
         self.embedding_dim = embedding_dim
 
         self.resolver = FitResolver(self.sde_path)

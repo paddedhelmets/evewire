@@ -63,10 +63,13 @@ WSGI_APPLICATION = 'evewire.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
+# EVE SDE path - shared location outside worktree
+EVESDE_PATH = Path('~/data/evewire/eve_sde.sqlite3').expanduser()
+
 DATABASES = {
     'default': {
         'ENGINE': config('DB_ENGINE', default='django.db.backends.sqlite3'),
-        'NAME': config('DB_NAME', default=BASE_DIR / 'db.sqlite3'),
+        'NAME': config('DB_NAME', default=str(EVESDE_PATH)),
         'USER': config('DB_USER', default=''),
         'PASSWORD': config('DB_PASSWORD', default=''),
         'HOST': config('DB_HOST', default=''),

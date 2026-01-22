@@ -107,8 +107,8 @@ class FitResolver:
                      If None, uses the Django app's database.
         """
         if db_path is None:
-            # Use the Django app's database
-            db_path = Path(__file__).parent.parent.parent / "db.sqlite3"
+            # Use the shared EVE SDE database
+            db_path = Path('~/data/evewire/eve_sde.sqlite3').expanduser()
 
         self.db_path = db_path
         self._cache = {}

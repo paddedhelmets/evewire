@@ -8,6 +8,7 @@ import logging
 from typing import Dict, List, Optional, Tuple
 from collections import Counter, defaultdict
 from dataclasses import dataclass
+from pathlib import Path
 
 import psycopg
 from psycopg.rows import dict_row
@@ -81,7 +82,7 @@ class ClusterAnalyzer:
             sde_path: Path to SQLite SDE database for item names
         """
         self.db_url = db_url
-        self.sde_path = sde_path or "/home/genie/gt/evewire/crew/aura/db.sqlite3"
+        self.sde_path = sde_path or str(Path('~/data/evewire/eve_sde.sqlite3').expanduser())
         self._ammo_cache = None  # Cache for ammo type IDs
 
     def get_ship_name(self, ship_id: int) -> str:
