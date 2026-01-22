@@ -137,6 +137,9 @@ class FittingEntry(models.Model):
 
     module_type_id = models.IntegerField(db_index=True, help_text="ItemType ID for the module")
 
+    # Module state
+    is_offline = models.BooleanField(default=False, help_text="Whether this module is fitted offline")
+
     # Metadata from clustering
     usage_count = models.IntegerField(null=True, blank=True, help_text="How many fits had this module")
     usage_percentage = models.FloatField(null=True, blank=True, help_text="Percentage of fits with this module")
@@ -261,3 +264,199 @@ class ShoppingList(models.Model):
 
     def __str__(self) -> str:
         return f"{self.character.name}: {self.quantity}x {self.fitting.name} at {self.location_id}"
+
+
+class FittingCharge(models.Model):
+    """
+    Ammunition or charge loaded in a module slot.
+
+    Represents ammo, scripts, or other consumables loaded into modules.
+    """
+
+    fitting = models.ForeignKey(
+        Fitting,
+        on_delete=models.CASCADE,
+        related_name='charges',
+    )
+
+    fitting_entry = models.ForeignKey(
+        'FittingEntry',
+        on_delete=models.CASCADE,
+        related_name='charges',
+        null=True,
+        blank=True,
+        help_text="The module this charge is loaded into (optional, can be derived from position)",
+    )
+
+    charge_type_id = models.IntegerField(
+        db_index=True,
+        help_text="ItemType ID for the charge",
+    )
+
+    quantity = models.IntegerField(
+        default=1,
+        help_text="Quantity of charges (for cargo/bay storage)",
+    )
+
+    class Meta:
+        verbose_name = _('fitting charge')
+        verbose_name_plural = _('fitting charges')
+        db_table = 'core_fittingcharge'
+        ordering = ['fitting', 'fitting_entry']
+        indexes = [
+            models.Index(fields=['fitting', 'fitting_entry']),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.fitting.name}: Charge {self.charge_type_id}"
+
+    @property
+    def charge_name(self) -> str:
+        """Get charge type name."""
+        from core.eve.models import ItemType
+        try:
+            return ItemType.objects.get(id=self.charge_type_id).name
+        except ItemType.DoesNotExist:
+            return f"Charge {self.charge_type_id}"
+
+
+class FittingDrone(models.Model):
+    """
+    Drone or fighter in a fitting.
+
+    Represents drones in the drone bay or fighters in the fighter bay.
+    """
+
+    DRONE_BAY = 'drone'
+    FIGHTER_BAY = 'fighter'
+
+    BAY_TYPES = [
+        (DRONE_BAY, 'Drone Bay'),
+        (FIGHTER_BAY, 'Fighter Bay'),
+    ]
+
+    fitting = models.ForeignKey(
+        Fitting,
+        on_delete=models.CASCADE,
+        related_name='drones',
+    )
+
+    drone_type_id = models.IntegerField(
+        db_index=True,
+        help_text="ItemType ID for the drone/fighter",
+    )
+
+    bay_type = models.CharField(
+        max_length=10,
+        choices=BAY_TYPES,
+        default=DRONE_BAY,
+        help_text="Which bay this drone is in",
+    )
+
+    quantity = models.IntegerField(
+        help_text="Quantity of this drone in bay",
+    )
+
+    class Meta:
+        verbose_name = _('fitting drone')
+        verbose_name_plural = _('fitting drones')
+        db_table = 'core_fittingdrone'
+        ordering = ['fitting', 'bay_type', 'drone_type_id']
+        indexes = [
+            models.Index(fields=['fitting', 'bay_type']),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.fitting.name}: {self.bay_type} {self.drone_type_id} x{self.quantity}"
+
+    @property
+    def drone_name(self) -> str:
+        """Get drone type name."""
+        from core.eve.models import ItemType
+        try:
+            return ItemType.objects.get(id=self.drone_type_id).name
+        except ItemType.DoesNotExist:
+            return f"Drone {self.drone_type_id}"
+
+
+class FittingCargoItem(models.Model):
+    """
+    Item stored in cargo hold.
+
+    Represents items to be carried in the ship's cargo.
+    """
+
+    fitting = models.ForeignKey(
+        Fitting,
+        on_delete=models.CASCADE,
+        related_name='cargo_items',
+    )
+
+    item_type_id = models.IntegerField(
+        db_index=True,
+        help_text="ItemType ID for the cargo item",
+    )
+
+    quantity = models.IntegerField(
+        help_text="Quantity of this item",
+    )
+
+    class Meta:
+        verbose_name = _('fitting cargo item')
+        verbose_name_plural = _('fitting cargo items')
+        db_table = 'core_fittingcargoitem'
+        ordering = ['fitting', 'item_type_id']
+
+    def __str__(self) -> str:
+        return f"{self.fitting.name}: Cargo {self.item_type_id} x{self.quantity}"
+
+    @property
+    def item_name(self) -> str:
+        """Get item type name."""
+        from core.eve.models import ItemType
+        try:
+            return ItemType.objects.get(id=self.item_type_id).name
+        except ItemType.DoesNotExist:
+            return f"Item {self.item_type_id}"
+
+
+class FittingService(models.Model):
+    """
+    Service module for structure fittings.
+
+    Represents service modules fitted to Upwell structures.
+    """
+
+    fitting = models.ForeignKey(
+        Fitting,
+        on_delete=models.CASCADE,
+        related_name='services',
+    )
+
+    service_type_id = models.IntegerField(
+        db_index=True,
+        help_text="ItemType ID for the service module",
+    )
+
+    position = models.IntegerField(
+        help_text="Service slot position (0-indexed)",
+    )
+
+    class Meta:
+        verbose_name = _('fitting service')
+        verbose_name_plural = _('fitting services')
+        db_table = 'core_fittingservice'
+        ordering = ['fitting', 'position']
+        unique_together = [['fitting', 'position']]
+
+    def __str__(self) -> str:
+        return f"{self.fitting.name}: Service slot {self.position}"
+
+    @property
+    def service_name(self) -> str:
+        """Get service type name."""
+        from core.eve.models import ItemType
+        try:
+            return ItemType.objects.get(id=self.service_type_id).name
+        except ItemType.DoesNotExist:
+            return f"Service {self.service_type_id}"
