@@ -157,6 +157,7 @@ def dashboard(request: HttpRequest) -> HttpResponse:
 def character_detail(request: HttpRequest, character_id: int) -> HttpResponse:
     """Detailed view of a single character."""
     from core.models import Character
+    from collections import defaultdict
 
     try:
         character = Character.objects.get(id=character_id, user=request.user)
@@ -168,9 +169,20 @@ def character_detail(request: HttpRequest, character_id: int) -> HttpResponse:
     # Pre-filter data that templates can't handle
     root_assets = character.assets.filter(parent__isnull=True)
 
+    # Group skills by group for dashboard summary
+    skill_groups = defaultdict(list)
+    for skill in character.skills.all():
+        skill_groups[skill.skill_group_name].append(skill)
+
+    # Sort groups alphabetically and skills within groups
+    sorted_groups = dict(sorted(skill_groups.items(), key=lambda x: x[0]))
+    for group_name in sorted_groups:
+        sorted_groups[group_name] = sorted(sorted_groups[group_name], key=lambda s: s.skill_name)
+
     return render(request, 'core/character_detail.html', {
         'character': character,
         'root_assets': root_assets,
+        'skill_groups': sorted_groups,
     })
 
 
@@ -526,9 +538,7 @@ def skills_list(request: HttpRequest) -> HttpResponse:
         skills_qs = skills_qs.filter(skill_id__in=skill_ids)
 
     if group_id:
-        # Filter by group (need to implement this properly with SDE data)
-        # For now, skip this filter
-        pass
+        skills_qs = skills_qs.filter(skill__group_id=group_id)
 
     if min_level:
         try:
@@ -539,9 +549,20 @@ def skills_list(request: HttpRequest) -> HttpResponse:
 
     skills = skills_qs.order_by('-skill_level', 'skill_id')
 
+    # Group skills by group
+    from collections import defaultdict
+    skill_groups = defaultdict(list)
+    for skill in skills:
+        skill_groups[skill.skill_group_name].append(skill)
+
+    # Sort groups alphabetically and skills within groups alphabetically
+    sorted_groups = dict(sorted(skill_groups.items(), key=lambda x: x[0]))
+    for group_name in sorted_groups:
+        sorted_groups[group_name] = sorted(sorted_groups[group_name], key=lambda s: s.skill_name)
+
     return render(request, 'core/skills_list.html', {
         'character': character,
-        'skills': skills,
+        'skill_groups': sorted_groups,
         'search': search,
         'group': group_id,
         'min_level': min_level,

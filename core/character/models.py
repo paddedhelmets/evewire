@@ -49,6 +49,88 @@ class CharacterSkill(models.Model):
         except ItemType.DoesNotExist:
             return f"Skill {self.skill_id}"
 
+    @property
+    def skill_group_name(self) -> str:
+        """Get the skill group name from ItemType."""
+        from core.eve.models import ItemType, ItemGroup
+        try:
+            item_type = ItemType.objects.get(id=self.skill_id)
+            group = ItemGroup.objects.get(id=item_type.group_id)
+            return group.name
+        except (ItemType.DoesNotExist, ItemGroup.DoesNotExist):
+            return "Unknown"
+
+    @property
+    def skill_group_id(self) -> int:
+        """Get the skill group ID from ItemType."""
+        from core.eve.models import ItemType
+        try:
+            item_type = ItemType.objects.get(id=self.skill_id)
+            return item_type.group_id or 0
+        except ItemType.DoesNotExist:
+            return 0
+
+    @property
+    def primary_attribute(self) -> str:
+        """Get the primary attribute for this skill."""
+        from core.eve.models import TypeAttribute
+        # Attribute ID 180 = primary attribute
+        try:
+            attr = TypeAttribute.objects.get(type_id=self.skill_id, attribute_id=180)
+            return _ATTRIBUTE_ID_TO_NAME.get(attr.value_int or 0, '???')
+        except TypeAttribute.DoesNotExist:
+            return '???'
+
+    @property
+    def secondary_attribute(self) -> str:
+        """Get the secondary attribute for this skill."""
+        from core.eve.models import TypeAttribute
+        # Attribute ID 181 = secondary attribute
+        try:
+            attr = TypeAttribute.objects.get(type_id=self.skill_id, attribute_id=181)
+            return _ATTRIBUTE_ID_TO_NAME.get(attr.value_int or 0, '???')
+        except TypeAttribute.DoesNotExist:
+            return '???'
+
+    @property
+    def skill_rank(self) -> int:
+        """Get the skill rank (time multiplier)."""
+        from core.eve.models import TypeAttribute
+        # Attribute ID 182 = skill rank
+        try:
+            attr = TypeAttribute.objects.get(type_id=self.skill_id, attribute_id=182)
+            return attr.value_int or 1
+        except TypeAttribute.DoesNotExist:
+            return 1
+
+    @property
+    def sp_for_next_level(self) -> int:
+        """Get SP required for next level."""
+        if self.skill_level >= 5:
+            return 0
+
+        # Skill point multipliers per level
+        multipliers = {
+            0: 1,      # Level 0 -> 1
+            1: 1,      # Level 1 -> 2
+            2: 5,      # Level 2 -> 3
+            3: 8,      # Level 3 -> 4
+            4: 14,     # Level 4 -> 5
+        }
+
+        base_sp = self.skill_rank * 256000
+        return base_sp * multipliers.get(self.skill_level, 1)
+
+
+# EVE attribute ID to name mapping
+_ATTRIBUTE_ID_TO_NAME = {
+    164: 'CHA',  # Charisma
+    165: 'INT',  # Intelligence
+    166: 'MEM',  # Memory
+    167: 'WIL',  # Willpower
+    168: 'PER',  # Perception
+}
+
 
 class SkillQueueItem(models.Model):
     """

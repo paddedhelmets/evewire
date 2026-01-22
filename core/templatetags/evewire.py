@@ -188,3 +188,35 @@ def list_filter(value):
 
 # Also register as 'list' for template compatibility
 list_filter = register.filter('list', list_filter)
+
+
+@register.filter
+def skill_stars(level):
+    """Convert skill level (0-5) to star characters."""
+    try:
+        level = int(level)
+        if level < 0:
+            level = 0
+        elif level > 5:
+            level = 5
+        filled = '\u2605' * level  # Black star
+        empty = '\u2606' * (5 - level)  # White star
+        return f'{filled}{empty}'
+    except (ValueError, TypeError):
+        return '\u2606\u2606\u2606\u2606\u2606'
+
+
+@register.filter
+def skill_squares(level):
+    """Convert skill level (0-5) to square characters."""
+    try:
+        level = int(level)
+        if level < 0:
+            level = 0
+        elif level > 5:
+            level = 5
+        filled = '\u25a0' * level  # Black square
+        empty = '\u25a1' * (5 - level)  # White square
+        return f'[{filled}{empty}]'
+    except (ValueError, TypeError):
+        return '[\u25a1\u25a1\u25a1\u25a1\u25a1]'
