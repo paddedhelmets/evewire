@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0022_merge_20260122_1325'),
+        ('core', '0023_remove_attributetype_data_type_and_more'),
     ]
 
     operations = [
