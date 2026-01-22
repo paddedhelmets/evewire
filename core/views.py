@@ -157,8 +157,12 @@ def character_detail(request: HttpRequest, character_id: int) -> HttpResponse:
             'message': 'Character not found',
         }, status=404)
 
+    # Pre-filter data that templates can't handle
+    root_assets = character.assets.filter(parent__isnull=True)
+
     return render(request, 'core/character_detail.html', {
         'character': character,
+        'root_assets': root_assets,
     })
 
 

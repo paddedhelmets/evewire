@@ -454,35 +454,33 @@
 
 <div class="card" id="assets">
     <h2>Assets</h2>
-    {% with assets=character.assets.filter(parent__isnull=True) %}
-        {% if assets %}
-            <p><strong>{{ assets.count }}</strong> top-level asset{{ assets.count|pluralize }}</p>
-            <details>
-                <summary style="cursor: pointer; padding: 0.5rem; background: #f5f5f5; border-radius: 4px; margin-bottom: 1rem;">Show all assets</summary>
-                <ul style="margin-top: 1rem;">
-                    {% for asset in assets %}
-                    <li style="padding: 0.5rem; border-bottom: 1px solid #eee;">
-                        <strong>{{ asset.type_name }}</strong> x{{ asset.quantity }}
-                        <span style="color: #666; font-size: 0.9rem;">@ {{ asset.location_name }}</span>
-                        {% if asset.children.exists %}
-                            <details style="margin-left: 1rem;">
-                                <summary style="cursor: pointer; font-size: 0.9rem; color: #666;">Contents ({{ asset.children.count }} item{{ asset.children.count|pluralize }})</summary>
-                                <ul style="margin-left: 1rem;">
-                                    {% for child in asset.get_descendants %}
-                                    <li style="padding: 0.25rem 0; font-size: 0.9rem;">
-                                        {{ child.type_name }} x{{ child.quantity }}
-                                    </li>
-                                    {% endfor %}
-                                </ul>
-                            </details>
-                        {% endif %}
-                    </li>
-                    {% endfor %}
-                </ul>
-            </details>
-        {% else %}
-            <p style="color: #666;">No assets found.</p>
-        {% endif %}
-    {% endwith %}
+    {% if root_assets %}
+        <p><strong>{{ root_assets.count }}</strong> top-level asset{{ root_assets.count|pluralize }}</p>
+        <details>
+            <summary style="cursor: pointer; padding: 0.5rem; background: #f5f5f5; border-radius: 4px; margin-bottom: 1rem;">Show all assets</summary>
+            <ul style="margin-top: 1rem;">
+                {% for asset in root_assets %}
+                <li style="padding: 0.5rem; border-bottom: 1px solid #eee;">
+                    <strong>{{ asset.type_name }}</strong> x{{ asset.quantity }}
+                    <span style="color: #666; font-size: 0.9rem;">@ {{ asset.location_name }}</span>
+                    {% if asset.children.exists %}
+                        <details style="margin-left: 1rem;">
+                            <summary style="cursor: pointer; font-size: 0.9rem; color: #666;">Contents ({{ asset.children.count }} item{{ asset.children.count|pluralize }})</summary>
+                            <ul style="margin-left: 1rem;">
+                                {% for child in asset.get_descendants %}
+                                <li style="padding: 0.25rem 0; font-size: 0.9rem;">
+                                    {{ child.type_name }} x{{ child.quantity }}
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </details>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+        </details>
+    {% else %}
+        <p style="color: #666;">No assets found.</p>
+    {% endif %}
 </div>
 {% endblock %}
