@@ -7,6 +7,9 @@ Downloads the SDE database and copies required tables into the shared SDE databa
 The shared SDE database location is configured via:
 - settings.EVESDE_PATH (default: ~/data/evewire/eve_sde.sqlite3)
 - DB_NAME environment variable (overrides the default path)
+
+NOTE: Models use db_column to map to SDE column names, so we can copy
+tables directly without any column name transformations.
 """
 
 import os
@@ -34,61 +37,10 @@ class Command(BaseCommand):
         'dgmAttributeTypes': 'core_attributetype',
         'dgmTypeAttributes': 'core_typeattribute',
         'chrFactions': 'core_faction',
-        'chrRaces': 'core_itemtype',  # Races are item types
+        # Note: chrRaces are already in invTypes, not imported separately
         'mapSolarSystems': 'core_solarsystem',
+        'mapRegions': 'core_region',
         'staStations': 'core_station',
-    }
-
-    # Column name mappings from SDE to Django (camelCase to snake_case)
-    # Only include columns that exist in the SDE source table
-    COLUMN_MAPPINGS = {
-        'core_typeattribute': {
-            'typeID': 'type_id',
-            'attributeID': 'attribute_id',
-            'valueInt': 'value_int',
-            'valueFloat': 'value_float',
-        },
-        'core_attributetype': {
-            'attributeID': 'id',
-            'attributeName': 'name',
-            'description': 'description',
-            'iconID': 'icon_id',
-            'defaultValue': 'default_value',
-            'published': 'published',
-            'displayName': 'display_name',
-            'unitID': 'unit_id',
-            'stackable': 'stackable',
-            'highIsGood': 'high_is_good',
-            'categoryID': 'category_id',
-        },
-        'core_itemtype': {
-            'typeID': 'id',
-            'typeName': 'name',
-            'description': 'description',
-            'groupID': 'group_id',
-            'mass': 'mass',
-            'volume': 'volume',
-            'capacity': 'capacity',
-            'portionSize': 'portion_size',
-            'published': 'published',
-        },
-        'core_itemgroup': {
-            'groupID': 'id',
-            'categoryID': 'category_id',
-            'groupName': 'name',
-            'iconID': 'icon_id',
-            'useBasePrice': 'use_base_price',
-            'anchored': 'anchored',
-            'anchorable': 'anchorable',
-            'fittableNonSingleton': 'fittable_non_singleton',
-            'published': 'published',
-        },
-        'core_itemcategory': {
-            'categoryID': 'id',
-            'categoryName': 'name',
-            'iconID': 'icon_id',
-            'published': 'published',
-        },
     }
 
     def add_arguments(self, parser):
@@ -255,7 +207,13 @@ class Command(BaseCommand):
         return False
 
     def _copy_table(self, sde_path: str, sde_table: str, django_table: str) -> int:
-        """Copy a table from SDE database to our Django database."""
+        """
+        Copy a table from SDE database to our Django database.
+
+        NOTE: Models use db_column to map to SDE column names, so we can copy
+        tables directly without column name transformations. The only change
+        needed is renaming the table itself.
+        """
         import sqlite3
 
         db_path = settings.DATABASES['default']['NAME']
@@ -280,13 +238,15 @@ class Command(BaseCommand):
             django_conn.close()
             raise ValueError(f"Table {sde_table} not found in SDE")
 
-        # Convert MySQL/Fuzzwork schema to Django-compatible format
+        # Get the CREATE TABLE statement
         create_sql = schema_row['sql']
+
         # Remove double quotes around identifiers (SQLite uses double quotes for column/table names)
         create_sql = create_sql.replace('"', '')
-        create_sql = create_sql.replace('COLLATE utf8mb4_unicode_ci', '')  # Remove MySQL collation
-        create_sql = create_sql.replace('DEFAULT CURRENT_TIMESTAMP', '')  # Remove MySQL defaults
-        create_sql = create_sql.replace('ON UPDATE CURRENT_TIMESTAMP', '')  # Remove MySQL triggers
+        # Remove MySQL-specific clauses that Fuzzwork might include
+        create_sql = create_sql.replace('COLLATE utf8mb4_unicode_ci', '')
+        create_sql = create_sql.replace('DEFAULT CURRENT_TIMESTAMP', '')
+        create_sql = create_sql.replace('ON UPDATE CURRENT_TIMESTAMP', '')
 
         # Replace the table name in CREATE statement with Django table name
         # Handle both "CREATE TABLE name" and "CREATE TABLE IF NOT EXISTS name"
@@ -297,15 +257,10 @@ class Command(BaseCommand):
             create_sql
         )
 
-        # Rename columns to match Django model names (camelCase to snake_case)
-        column_map = self.COLUMN_MAPPINGS.get(django_table, {})
-        for sde_col, django_col in column_map.items():
-            create_sql = re.sub(rf'\b{sde_col}\b', django_col, create_sql)
-
         # Drop existing Django table if any
         django_cursor.execute(f"DROP TABLE IF EXISTS {django_table}")
 
-        # Create table with Django name
+        # Create table with Django name (keeping SDE column names)
         django_cursor.execute(create_sql)
 
         # Get row count from SDE
@@ -317,8 +272,9 @@ class Command(BaseCommand):
         offset = 0
         total_copied = 0
 
-        # Get column mapping for this table if any
-        column_map = self.COLUMN_MAPPINGS.get(django_table, {})
+        # Get column names from SDE
+        sde_cursor.execute(f"SELECT * FROM {sde_table} LIMIT 1")
+        original_columns = [desc[0] for desc in sde_cursor.description]
 
         while True:
             sde_cursor.execute(f"SELECT * FROM {sde_table} LIMIT {batch_size} OFFSET {offset}")
@@ -327,23 +283,16 @@ class Command(BaseCommand):
             if not rows:
                 break
 
-            # Build and execute INSERT statement for Django table
-            # Apply column name mapping if defined
-            original_columns = [desc[0] for desc in sde_cursor.description]
-            if column_map:
-                # Map SDE column names to Django column names
-                target_columns = [column_map.get(col, col) for col in original_columns]
-            else:
-                target_columns = original_columns
-
-            placeholders = ', '.join(['?'] * len(target_columns))
-            insert_sql = f"INSERT INTO {django_table} ({', '.join(target_columns)}) VALUES ({placeholders})"
+            # Build and execute INSERT statement
+            placeholders = ', '.join(['?'] * len(original_columns))
+            insert_sql = f"INSERT INTO {django_table} ({', '.join(original_columns)}) VALUES ({placeholders})"
 
             django_cursor.executemany(insert_sql, rows)
             total_copied += len(rows)
             offset += batch_size
 
         # Special post-processing for TypeAttribute - add id column for Django
+        # Django models require a primary key named 'id', but SDE uses composite key
         if django_table == 'core_typeattribute':
             self.stdout.write(f'  Adding id column for Django compatibility...')
             django_cursor.execute(f"ALTER TABLE {django_table} ADD COLUMN id INTEGER")
