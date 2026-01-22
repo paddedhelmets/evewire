@@ -270,4 +270,60 @@
     }
     </script>
 </div>
+
+{% if linked_fittings %}
+<div class="card" style="margin-top: 1rem;">
+    <h2>Linked Fittings</h2>
+    <p style="color: #666; margin-bottom: 1rem;">Fittings that use skills from this plan.</p>
+    {% if linked_fittings %}
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 1rem;">
+            {% for fitting_item in linked_fittings %}
+            <div style="border: 1px solid #ddd; border-radius: 4px; padding: 1rem;">
+                <h3 style="margin: 0 0 0.5rem 0;">
+                    {{ fitting_item.fitting.ship_type_name }}
+                </h3>
+                <p style="margin: 0 0 0.5rem 0; font-weight: bold;">
+                    {{ fitting_item.fitting.name }}
+                </p>
+                {% if fitting_item.fitting.description %}
+                <p style="color: #666; font-size: 0.9rem; margin: 0 0 0.5rem 0;">
+                    {{ fitting_item.fitting.description|truncatewords:20 }}
+                </p>
+                {% endif %}
+                {% if character %}
+                <div style="margin-top: 0.5rem;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem; font-size: 0.9rem;">
+                        <span>{{ fitting_item.percent }}% Trained</span>
+                        <span>{{ fitting_item.completed }}/{{ fitting_item.total }} skills</span>
+                    </div>
+                    <div style="background: #eee; height: 8px; border-radius: 4px; overflow: hidden;">
+                        <div style="background: {% if fitting_item.percent == 100 %}#080{% elif fitting_item.percent >= 50 %}#cc0{% else %}#c00{% endif %}; height: 100%; width: {{ fitting_item.percent }}%;"></div>
+                    </div>
+                    {% if fitting_item.required_skills %}
+                    <details style="margin-top: 0.5rem;">
+                        <summary style="cursor: pointer; font-size: 0.9rem;">View required skills</summary>
+                        <div style="margin-top: 0.5rem; max-height: 200px; overflow-y: auto; font-size: 0.85rem;">
+                            {% for skill in fitting_item.required_skills %}
+                            <div style="display: flex; justify-content: space-between; padding: 0.25rem 0; border-bottom: 1px solid #eee;">
+                                <span>{{ skill.skill_name }}</span>
+                                <span style="color: {% if skill.status == 'completed' %}#080{% else %}#c00{% endif %};">
+                                    L{{ skill.current_level }}/L{{ skill.required_level }}
+                                </span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </details>
+                    {% endif %}
+                </div>
+                {% else %}
+                <p style="color: #999; font-size: 0.9rem;">Add a character to see skill requirements</p>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p style="color: #666;">No fittings linked to this plan yet.</p>
+    {% endif %}
+</div>
+{% endif %}
 {% endblock %}

@@ -45,6 +45,14 @@ class Fitting(models.Model):
     is_active = models.BooleanField(default=True, help_text="Whether this fitting is currently in use")
     tags = models.JSONField(default=dict, blank=True, help_text="User-defined tags (e.g., {'role': 'logi', 'tier': '1'})")
 
+    # Link to skill plans that train for this fitting
+    skill_plans = models.ManyToManyField(
+        'core.SkillPlan',
+        related_name='fittings',
+        blank=True,
+        help_text="Skill plans that train the required skills for this fitting",
+    )
+
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

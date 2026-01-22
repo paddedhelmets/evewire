@@ -298,13 +298,54 @@ def reauthenticate_character(request: HttpRequest, character_id: int) -> HttpRes
 def skill_plan_list(request: HttpRequest) -> HttpResponse:
     """List all skill plans for the current user plus reference plans."""
     from core.character.models import SkillPlan
+    from core.skill_plans import calculate_training_time
 
-    user_plans = SkillPlan.objects.filter(owner=request.user, parent__isnull=True, is_reference=False)
-    reference_plans = SkillPlan.objects.filter(parent__isnull=True, is_reference=True)
+    # Get user's character for progress calculation
+    character = get_users_character(request.user)
+
+    # Add progress and training time to each plan
+    def enrich_plans(plans):
+        enriched = []
+        for plan in plans:
+            entry_count = plan.entries.count()
+            progress = None
+            total_training_seconds = 0
+
+            if character:
+                progress = plan.get_progress_for_character(character)
+                # Calculate total training time for incomplete skills
+                character_skills = {s.skill_id: s for s in character.skills.all()}
+                for entry in plan.entries.all():
+                    target_level = entry.level or entry.recommended_level
+                    if target_level:
+                        skill = character_skills.get(entry.skill_id)
+                        current_level = skill.skill_level if skill else 0
+                        if current_level < target_level:
+                            try:
+                                training_time = calculate_training_time(character, entry.skill_id, target_level)
+                                total_training_seconds += training_time['total_seconds']
+                            except Exception:
+                                pass
+
+            enriched.append({
+                'plan': plan,
+                'entry_count': entry_count,
+                'progress': progress,
+                'total_training_seconds': total_training_seconds,
+            })
+        return enriched
+
+    user_plans = enrich_plans(SkillPlan.objects.filter(
+        owner=request.user, parent__isnull=True, is_reference=False
+    ))
+    reference_plans = enrich_plans(SkillPlan.objects.filter(
+        parent__isnull=True, is_reference=True
+    ))
 
     return render(request, 'core/skill_plan_list.html', {
         'user_plans': user_plans,
         'reference_plans': reference_plans,
+        'character': character,
     })
 
 
@@ -399,6 +440,60 @@ def skill_plan_detail(request: HttpRequest, plan_id: int) -> HttpResponse:
         elif show_filter == 'blocked' and trainable_status == 'blocked':
             entries.append(entry_data)
 
+    # Get linked fittings with skill progress
+    from core.doctrines.models import Fitting
+    linked_fittings = []
+    for fitting in plan.fittings.all():
+        # Calculate skill requirements for this fitting
+        fitting_progress = {
+            'fitting': fitting,
+            'required_skills': [],
+            'completed': 0,
+            'total': 0,
+            'percent': 0,
+        }
+
+        if character:
+            # Get all skill requirements from fitting modules
+            from career_research.fit_resolver.resolver import FitResolver
+            resolver = FitResolver()
+
+            # Build fit dict from fitting model
+            fit_data = {
+                'ship': fitting.ship_type_id,
+                'highs': [e.module_type_id for e in fitting.entries.filter(slot_type='high')],
+                'meds': [e.module_type_id for e in fitting.entries.filter(slot_type='med')],
+                'lows': [e.module_type_id for e in fitting.entries.filter(slot_type='low')],
+                'rigs': [e.module_type_id for e in fitting.entries.filter(slot_type='rig')],
+                'subsystems': [e.module_type_id for e in fitting.entries.filter(slot_type='subsystem')],
+            }
+
+            requirements = resolver.resolve_fit_dict(fit_data)
+
+            for req in requirements:
+                skill = character_skills.get(req.skill_id)
+                current_level = skill.skill_level if skill else 0
+                status = 'completed' if current_level >= req.level else 'incomplete'
+
+                fitting_progress['required_skills'].append({
+                    'skill_id': req.skill_id,
+                    'skill_name': req.skill_name,
+                    'required_level': req.level,
+                    'current_level': current_level,
+                    'status': status,
+                })
+
+                if current_level >= req.level:
+                    fitting_progress['completed'] += 1
+                fitting_progress['total'] += 1
+
+            if fitting_progress['total'] > 0:
+                fitting_progress['percent'] = int(
+                    (fitting_progress['completed'] / fitting_progress['total']) * 100
+                )
+
+        linked_fittings.append(fitting_progress)
+
     return render(request, 'core/skill_plan_detail.html', {
         'plan': plan,
         'entries': entries,
@@ -406,6 +501,7 @@ def skill_plan_detail(request: HttpRequest, plan_id: int) -> HttpResponse:
         'character': character,
         'total_training_seconds': total_training_seconds,
         'show_filter': show_filter,
+        'linked_fittings': linked_fittings,
     })
 
 

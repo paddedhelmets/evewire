@@ -17,61 +17,82 @@
 </div>
 
 {% if reference_plans %}
-<div class="card" style="margin-bottom: 1rem;">
+<div style="margin-bottom: 2rem;">
     <h2>Reference Plans</h2>
     <p style="color: #666; margin-bottom: 1rem;">Shared skill plan templates from the alliance. View details to check your progress.</p>
-    <table style="width: 100%; border-collapse: collapse;">
-        <thead>
-            <tr style="border-bottom: 2px solid #ddd;">
-                <th style="padding: 0.5rem; text-align: left;">Plan</th>
-                <th style="padding: 0.5rem; text-align: center;">Entries</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for plan in reference_plans %}
-            <tr style="border-bottom: 1px solid #eee;">
-                <td style="padding: 0.5rem;">
-                    <a href="{% url 'core:skill_plan_detail' plan.id %}" style="font-weight: bold; text-decoration: none;">{{ plan.name }}</a>
-                </td>
-                <td style="padding: 0.5rem; text-align: center;">{{ plan.entries.count }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem;">
+        {% for item in reference_plans %}
+        <div class="card" style="margin: 0;">
+            <h3 style="margin: 0 0 0.5rem 0;">
+                <a href="{% url 'core:skill_plan_detail' item.plan.id %}" style="text-decoration: none; color: inherit;">{{ item.plan.name }}</a>
+            </h3>
+            {% if item.plan.description %}
+            <p style="color: #666; margin: 0 0 0.5rem 0; font-size: 0.9rem;">{{ item.plan.description|truncatewords:15 }}</p>
+            {% endif %}
+            <div style="display: flex; gap: 1rem; font-size: 0.9rem; color: #666; margin-bottom: 0.5rem;">
+                <span>{{ item.entry_count }} skills</span>
+                {% if item.total_training_seconds %}
+                <span>{{ item.total_training_seconds|format_duration }}</span>
+                {% endif %}
+            </div>
+            {% if item.progress %}
+            <div style="margin-top: 0.5rem;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem; font-size: 0.9rem;">
+                    <span>{{ item.progress.percent_complete|floatformat:0 }}% Complete</span>
+                    <span>{{ item.progress.completed }}/{{ item.progress.total_entries }}</span>
+                </div>
+                <div style="background: #eee; height: 8px; border-radius: 4px; overflow: hidden;">
+                    <div style="background: #080; height: 100%; width: {{ item.progress.percent_complete }}%;"></div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
 </div>
 {% endif %}
 
-<div class="card">
+<div>
     <h2>My Plans</h2>
     {% if user_plans %}
-        <table style="width: 100%; border-collapse: collapse;">
-            <thead>
-                <tr style="border-bottom: 2px solid #ddd;">
-                    <th style="padding: 0.5rem; text-align: left;">Plan</th>
-                    <th style="padding: 0.5rem; text-align: left;">Description</th>
-                    <th style="padding: 0.5rem; text-align: center;">Entries</th>
-                    <th style="padding: 0.5rem; text-align: left;">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for plan in user_plans %}
-                <tr style="border-bottom: 1px solid #eee;">
-                    <td style="padding: 0.5rem;">
-                        <a href="{% url 'core:skill_plan_detail' plan.id %}" style="font-weight: bold; text-decoration: none;">{{ plan.name }}</a>
-                    </td>
-                    <td style="padding: 0.5rem; color: #666;">{{ plan.description|default:"&mdash;"|truncatewords:10 }}</td>
-                    <td style="padding: 0.5rem; text-align: center;">{{ plan.entries.count }}</td>
-                    <td style="padding: 0.5rem;">
-                        <a href="{% url 'core:skill_plan_edit' plan.id %}" style="margin-right: 0.5rem;">Edit</a>
-                        <form method="post" action="{% url 'core:skill_plan_delete' plan.id %}" style="display: inline;" onsubmit="return confirm('Delete this plan?');">
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem;">
+            {% for item in user_plans %}
+            <div class="card" style="margin: 0;">
+                <div style="display: flex; justify-content: space-between; align-items: start;">
+                    <h3 style="margin: 0 0 0.5rem 0;">
+                        <a href="{% url 'core:skill_plan_detail' item.plan.id %}" style="text-decoration: none; color: inherit;">{{ item.plan.name }}</a>
+                    </h3>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <a href="{% url 'core:skill_plan_edit' item.plan.id %}" style="font-size: 0.9rem;">Edit</a>
+                        <form method="post" action="{% url 'core:skill_plan_delete' item.plan.id %}" style="display: inline;" onsubmit="return confirm('Delete this plan?');">
                             {% csrf_token %}
-                            <button type="submit" style="background: none; border: none; color: #c00; cursor: pointer; text-decoration: underline;">Delete</button>
+                            <button type="submit" style="background: none; border: none; color: #c00; cursor: pointer; text-decoration: underline; font-size: 0.9rem; padding: 0;">Delete</button>
                         </form>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                    </div>
+                </div>
+                {% if item.plan.description %}
+                <p style="color: #666; margin: 0 0 0.5rem 0; font-size: 0.9rem;">{{ item.plan.description|truncatewords:15 }}</p>
+                {% endif %}
+                <div style="display: flex; gap: 1rem; font-size: 0.9rem; color: #666; margin-bottom: 0.5rem;">
+                    <span>{{ item.entry_count }} skills</span>
+                    {% if item.total_training_seconds %}
+                    <span>{{ item.total_training_seconds|format_duration }}</span>
+                    {% endif %}
+                </div>
+                {% if item.progress %}
+                <div style="margin-top: 0.5rem;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem; font-size: 0.9rem;">
+                        <span>{{ item.progress.percent_complete|floatformat:0 }}% Complete</span>
+                        <span>{{ item.progress.completed }}/{{ item.progress.total_entries }}</span>
+                    </div>
+                    <div style="background: #eee; height: 8px; border-radius: 4px; overflow: hidden;">
+                        <div style="background: #080; height: 100%; width: {{ item.progress.percent_complete }}%;"></div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
     {% else %}
         <p style="color: #666;">No skill plans yet. Create your first plan to track your training goals!</p>
     {% endif %}
