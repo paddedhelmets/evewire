@@ -127,7 +127,7 @@ class FitResolver:
         if "name" not in self._cache[skill_id]:
             with self._get_conn() as conn:
                 row = conn.execute(
-                    "SELECT typeName FROM invTypes WHERE typeID = ?",
+                    "SELECT typeName FROM core_itemtype WHERE typeID = ?",
                     [skill_id]
                 ).fetchone()
                 self._cache[skill_id]["name"] = row["typeName"] if row else None
@@ -153,7 +153,7 @@ class FitResolver:
                     SELECT
                         MAX(CASE WHEN dta.attributeID = ? THEN dta.valueFloat ELSE NULL END) as skill_id,
                         MAX(CASE WHEN dta.attributeID = ? THEN COALESCE(dta.valueInt, dta.valueFloat) ELSE NULL END) as skill_level
-                    FROM dgmTypeAttributes dta
+                    FROM core_typeattribute dta
                     WHERE dta.typeID = ? AND dta.attributeID IN (?, ?)
                 """, [skill_attr, level_attr, item_id, skill_attr, level_attr]).fetchone()
 

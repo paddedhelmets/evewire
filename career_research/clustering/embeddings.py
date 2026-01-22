@@ -62,16 +62,15 @@ class FitEmbedder:
         conn = sqlite3.connect(self.sde_path)
         conn.row_factory = sqlite3.Row
 
-        # Get all skills (groupID 16 is "Skills" but there are other skill groups)
-        # Actually, let's get all items that have skill requirements
+        # Get all skills from the SDE
+        # Skills are items where the group's category is the Skills category
         rows = conn.execute("""
-            SELECT DISTINCT typeID, typeName
-            FROM invTypes
-            WHERE groupID IN (
-                SELECT groupID FROM invGroups
-                WHERE categoryID = 16  -- Skills category
-            )
-            ORDER BY typeID
+            SELECT DISTINCT it.typeID, it.typeName
+            FROM core_itemtype it
+            JOIN core_itemgroup ig ON it.groupID = ig.groupID
+            JOIN core_itemcategory ic ON ig.categoryID = ic.categoryID
+            WHERE ic.categoryName = 'Skill'
+            ORDER BY it.typeID
         """).fetchall()
 
         self.skill_ids = [r['typeID'] for r in rows]
