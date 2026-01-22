@@ -351,11 +351,11 @@
 
 <div class="card" id="industry-slots">
     <h2>Industry Slots</h2>
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
         <!-- Manufacturing Slots -->
         <div style="border: 1px solid #ddd; border-radius: 4px; padding: 1rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                <h3 style="margin: 0;">Manufacturing</h3>
+                <h3 style="margin: 0; font-size: 1rem;">Manufacturing</h3>
                 {% if not character.has_available_manufacturing_slot %}
                     <span style="padding: 4px 8px; border-radius: 3px; background: #f7e6e6; color: #c00; font-size: 0.85rem;">Full</span>
                 {% elif character.is_manufacturing_nearly_full %}
@@ -370,32 +370,53 @@
             <div style="background: #eee; height: 20px; border-radius: 4px; overflow: hidden;">
                 <div style="background: {% if character.manufacturing_utilization >= 100 %}#c00{% elif character.is_manufacturing_nearly_full %}#ffc107{% else %}#080{% endif %}; height: 100%; width: {{ character.manufacturing_utilization }}%;"></div>
             </div>
-            <p style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">{{ character.manufacturing_utilization|floatformat:0 }}% utilized</p>
+            <p style="font-size: 0.85rem; color: #666; margin-top: 0.5rem;">{{ character.manufacturing_utilization|floatformat:0 }}% utilized</p>
         </div>
 
-        <!-- Research Slots -->
+        <!-- Science Slots -->
         <div style="border: 1px solid #ddd; border-radius: 4px; padding: 1rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                <h3 style="margin: 0;">Research & Labs</h3>
-                {% if not character.has_available_research_slot %}
+                <h3 style="margin: 0; font-size: 1rem;">Science / Research</h3>
+                {% if not character.has_available_science_slot %}
                     <span style="padding: 4px 8px; border-radius: 3px; background: #f7e6e6; color: #c00; font-size: 0.85rem;">Full</span>
-                {% elif character.is_research_nearly_full %}
+                {% elif character.is_science_nearly_full %}
                     <span style="padding: 4px 8px; border-radius: 3px; background: #fff3cd; color: #856404; font-size: 0.85rem;">Nearly Full</span>
                 {% else %}
                     <span style="padding: 4px 8px; border-radius: 3px; background: #e6f7e6; color: #080; font-size: 0.85rem;">Available</span>
                 {% endif %}
             </div>
             <p style="font-size: 1.5rem; font-weight: bold; margin: 0.5rem 0;">
-                {{ character.active_research_jobs }} / {{ character.research_slots }}
+                {{ character.active_research_jobs }} / {{ character.science_slots }}
             </p>
             <div style="background: #eee; height: 20px; border-radius: 4px; overflow: hidden;">
-                <div style="background: {% if character.research_utilization >= 100 %}#c00{% elif character.is_research_nearly_full %}#ffc107{% else %}#080{% endif %}; height: 100%; width: {{ character.research_utilization }}%;"></div>
+                <div style="background: {% if character.science_utilization >= 100 %}#c00{% elif character.is_science_nearly_full %}#ffc107{% else %}#080{% endif %}; height: 100%; width: {{ character.science_utilization }}%;"></div>
             </div>
-            <p style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">{{ character.research_utilization|floatformat:0 }}% utilized</p>
+            <p style="font-size: 0.85rem; color: #666; margin-top: 0.5rem;">{{ character.science_utilization|floatformat:0 }}% utilized</p>
+        </div>
+
+        <!-- Reactions Slots -->
+        <div style="border: 1px solid #ddd; border-radius: 4px; padding: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <h3 style="margin: 0; font-size: 1rem;">Reactions</h3>
+                {% if not character.has_available_reaction_slot %}
+                    <span style="padding: 4px 8px; border-radius: 3px; background: #f7e6e6; color: #c00; font-size: 0.85rem;">Full</span>
+                {% elif character.is_reactions_nearly_full %}
+                    <span style="padding: 4px 8px; border-radius: 3px; background: #fff3cd; color: #856404; font-size: 0.85rem;">Nearly Full</span>
+                {% else %}
+                    <span style="padding: 4px 8px; border-radius: 3px; background: #e6f7e6; color: #080; font-size: 0.85rem;">Available</span>
+                {% endif %}
+            </div>
+            <p style="font-size: 1.5rem; font-weight: bold; margin: 0.5rem 0;">
+                {{ character.active_reaction_jobs }} / {{ character.reaction_slots }}
+            </p>
+            <div style="background: #eee; height: 20px; border-radius: 4px; overflow: hidden;">
+                <div style="background: {% if character.reaction_utilization >= 100 %}#c00{% elif character.is_reactions_nearly_full %}#ffc107{% else %}#080{% endif %}; height: 100%; width: {{ character.reaction_utilization }}%;"></div>
+            </div>
+            <p style="font-size: 0.85rem; color: #666; margin-top: 0.5rem;">{{ character.reaction_utilization|floatformat:0 }}% utilized</p>
         </div>
     </div>
-    <p style="font-size: 0.85rem; color: #666; margin-top: 1rem;">
-        Slot limits based on Industry (manufacturing) and Advanced Industry (research) skill levels.
+    <p style="font-size: 0.8rem; color: #666; margin-top: 1rem;">
+        Slot limits based on skill levels: Manufacturing (Mass Production + Adv Mass Production), Science (Lab Operation + Adv Lab Operation), Reactions (Mass Reactions + Adv Mass Reactions).
     </p>
 </div>
 

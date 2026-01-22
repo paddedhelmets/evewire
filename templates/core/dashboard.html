@@ -26,6 +26,46 @@
     <p><strong>Total Active Orders:</strong> {{ total_orders }}</p>
 </div>
 
+<!-- Industry Slots -->
+<div class="card">
+    <h2>Industry Slots</h2>
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
+        <!-- Manufacturing -->
+        <div style="border: 1px solid #ddd; border-radius: 4px; padding: 0.75rem;">
+            <p style="margin: 0 0 0.5rem 0; font-size: 0.9rem; color: #666;">Manufacturing</p>
+            <p style="font-size: 1.25rem; font-weight: bold; margin: 0.25rem 0;">
+                {{ industry_slots.manufacturing.active }} / {{ industry_slots.manufacturing.slots }}
+            </p>
+            <div style="background: #eee; height: 12px; border-radius: 3px; overflow: hidden;">
+                <div style="background: {% if industry_slots.manufacturing.utilization >= 100 %}#c00{% elif industry_slots.manufacturing.utilization > 80 %}#ffc107{% else %}#080{% endif %}; height: 100%; width: {{ industry_slots.manufacturing.utilization }}%;"></div>
+            </div>
+            <p style="font-size: 0.8rem; color: #666; margin-top: 0.25rem;">{{ industry_slots.manufacturing.utilization|floatformat:0 }}%</p>
+        </div>
+        <!-- Science -->
+        <div style="border: 1px solid #ddd; border-radius: 4px; padding: 0.75rem;">
+            <p style="margin: 0 0 0.5rem 0; font-size: 0.9rem; color: #666;">Science / Research</p>
+            <p style="font-size: 1.25rem; font-weight: bold; margin: 0.25rem 0;">
+                {{ industry_slots.science.active }} / {{ industry_slots.science.slots }}
+            </p>
+            <div style="background: #eee; height: 12px; border-radius: 3px; overflow: hidden;">
+                <div style="background: {% if industry_slots.science.utilization >= 100 %}#c00{% elif industry_slots.science.utilization > 80 %}#ffc107{% else %}#080{% endif %}; height: 100%; width: {{ industry_slots.science.utilization }}%;"></div>
+            </div>
+            <p style="font-size: 0.8rem; color: #666; margin-top: 0.25rem;">{{ industry_slots.science.utilization|floatformat:0 }}%</p>
+        </div>
+        <!-- Reactions -->
+        <div style="border: 1px solid #ddd; border-radius: 4px; padding: 0.75rem;">
+            <p style="margin: 0 0 0.5rem 0; font-size: 0.9rem; color: #666;">Reactions</p>
+            <p style="font-size: 1.25rem; font-weight: bold; margin: 0.25rem 0;">
+                {{ industry_slots.reactions.active }} / {{ industry_slots.reactions.slots }}
+            </p>
+            <div style="background: #eee; height: 12px; border-radius: 3px; overflow: hidden;">
+                <div style="background: {% if industry_slots.reactions.utilization >= 100 %}#c00{% elif industry_slots.reactions.utilization > 80 %}#ffc107{% else %}#080{% endif %}; height: 100%; width: {{ industry_slots.reactions.utilization }}%;"></div>
+            </div>
+            <p style="font-size: 0.8rem; color: #666; margin-top: 0.25rem;">{{ industry_slots.reactions.utilization|floatformat:0 }}%</p>
+        </div>
+    </div>
+</div>
+
 <!-- Character Cards -->
 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;">
     {% for char_data in characters %}
