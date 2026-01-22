@@ -18,3 +18,9 @@ requests>=2.31,<3.0
 
 # Cryptography (for token encryption)
 cryptography>=41.0,<42.0
+
+# WSGI Server
+gunicorn>=21.0,<24.0
+
+# Redis (optional broker for django-q2, but needed to avoid import errors)
+redis>=5.0,<6.0
