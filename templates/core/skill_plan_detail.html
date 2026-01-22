@@ -103,7 +103,8 @@
         <h3>Add Skill</h3>
         <form method="post" action="{% url 'core:skill_plan_add_skill' plan.id %}" style="display: flex; gap: 0.5rem; align-items: center;">
             {% csrf_token %}
-            <input type="text" name="skill_id" placeholder="Skill ID" required style="padding: 0.5rem;">
+            <input type="text" id="skill_search" name="skill_id" placeholder="Search skills by name..." required style="padding: 0.5rem; min-width: 300px;" list="skill_results">
+            <datalist id="skill_results"></datalist>
             <select name="level" style="padding: 0.5rem;">
                 <option value="">Required Level</option>
                 <option value="1">1</option>
@@ -123,8 +124,40 @@
             <button type="submit" class="btn">Add Skill</button>
         </form>
         <p style="color: #666; font-size: 0.9rem; margin-top: 0.5rem;">
-            Note: You'll need the Skill ID from the <a href="{% url 'core:skills_list' %}" target="_blank">skills list</a>.
+            Start typing a skill name to search. Results will show the skill name and ID.
         </p>
     </div>
+    <script>
+    (function() {
+        const searchInput = document.getElementById('skill_search');
+        const datalist = document.getElementById('skill_results');
+        let debounceTimer;
+
+        searchInput.addEventListener('input', function() {
+            clearTimeout(debounceTimer);
+            const query = this.value.trim();
+
+            if (query.length < 2) {
+                datalist.innerHTML = '';
+                return;
+            }
+
+            debounceTimer = setTimeout(function() {
+                fetch('{% url "core:skill_search" %}?q=' + encodeURIComponent(query))
+                    .then(response => response.json())
+                    .then(data => {
+                        datalist.innerHTML = '';
+                        data.results.forEach(skill => {
+                            const option = document.createElement('option');
+                            option.value = skill.id;
+                            option.textContent = skill.text;
+                            datalist.appendChild(option);
+                        });
+                    })
+                    .catch(err => console.error('Search failed:', err));
+            }, 300);
+        });
+    })();
+    </script>
 </div>
 {% endblock %}
