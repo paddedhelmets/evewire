@@ -16,6 +16,18 @@ from django.db import models
 logger = logging.getLogger('evewire')
 
 
+def get_users_character(user):
+    """Get user's main character or first character.
+    Returns None if user has no characters.
+    """
+    from core.models import Character
+    characters = Character.objects.filter(user=user)
+    if not characters:
+        return None
+    # Use main character if set, otherwise use first character
+    return characters.filter(main_character=True).first() or characters.first()
+
+
 def index(request: HttpRequest) -> HttpResponse:
     """Landing page - show login button or redirect to dashboard."""
     if request.user.is_authenticated:
@@ -495,15 +507,12 @@ def skill_plan_remove_skill(request: HttpRequest, plan_id: int, entry_id: int) -
 def skills_list(request: HttpRequest) -> HttpResponse:
     """List all skills with search and filtering."""
     from core.character.models import CharacterSkill
-    from core.models import Character
     from core.eve.models import ItemType
 
-    # Get user's character
-    try:
-        character = Character.objects.get(user=request.user)
-    except Character.DoesNotExist:
+    character = get_users_character(request.user)
+    if not character:
         return render(request, 'core/error.html', {
-            'message': 'Character not found. Please log in again.',
+            'message': 'No characters found. Please add a character first.',
         }, status=404)
 
     # Get search/filter parameters
@@ -547,14 +556,12 @@ def skills_list(request: HttpRequest) -> HttpResponse:
 def implants_view(request: HttpRequest) -> HttpResponse:
     """View character implants with slot information."""
     from core.character.models import CharacterImplant
-    from core.models import Character
     from core.eve.models import ItemType
 
-    try:
-        character = Character.objects.get(user=request.user)
-    except Character.DoesNotExist:
+    character = get_users_character(request.user)
+    if not character:
         return render(request, 'core/error.html', {
-            'message': 'Character not found. Please log in again.',
+            'message': 'No characters found. Please add a character first.',
         }, status=404)
 
     # Get all implants for this character
@@ -595,13 +602,11 @@ def implants_view(request: HttpRequest) -> HttpResponse:
 def attributes_view(request: HttpRequest) -> HttpResponse:
     """View character attributes with skill group associations."""
     from core.character.models import CharacterAttributes
-    from core.models import Character
 
-    try:
-        character = Character.objects.get(user=request.user)
-    except Character.DoesNotExist:
+    character = get_users_character(request.user)
+    if not character:
         return render(request, 'core/error.html', {
-            'message': 'Character not found. Please log in again.',
+            'message': 'No characters found. Please add a character first.',
         }, status=404)
 
     try:
