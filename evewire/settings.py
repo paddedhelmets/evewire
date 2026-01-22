@@ -140,7 +140,6 @@ Q_CLUSTER = {
     'save_limit': config('Q_SAVE_LIMIT', default=250, cast=int),
     'cpu_affinity': config('Q_CPU_AFFINITY', default=1, cast=int),
     'label': 'Django Q2',
-    'redis': config('REDIS_URL', default=None),  # Optional: for multi-worker deployments
 }
 
 # Logging
