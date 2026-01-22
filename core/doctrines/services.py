@@ -304,14 +304,14 @@ class FittingMatcher:
 
         # Clear old cached matches
         if fitting:
-            AssetMatch.objects.filter(character=character, fitting=fitting).delete()
+            FittingMatch.objects.filter(character=character, fitting=fitting).delete()
         else:
-            AssetMatch.objects.filter(character=character).delete()
+            FittingMatch.objects.filter(character=character).delete()
 
         # Create new cached matches
         cached = []
         for match in matches:
-            cached.append(AssetMatch(
+            cached.append(FittingMatch(
                 character=character,
                 fitting=match['fitting'],
                 asset_id=match['asset_id'],
@@ -320,7 +320,7 @@ class FittingMatcher:
                 missing_modules=match['missing_modules'],
             ))
 
-        AssetMatch.objects.bulk_create(cached, batch_size=500)
+        FittingMatch.objects.bulk_create(cached, batch_size=500)
 
         logger.info(f"Cached {len(cached)} matches for character {character.id}")
         return len(cached)
