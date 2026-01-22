@@ -64,7 +64,7 @@
                 <td style="padding: 0.75rem; text-align: right;">{{ tx.quantity|localize }}</td>
                 <td style="padding: 0.75rem; text-align: right;">{{ tx.unit_price|format_is }}</td>
                 <td style="padding: 0.75rem; text-align: right; font-weight: bold;">{{ tx.total_value|format_is }}</td>
-                <td style="padding: 0.75rem; font-size: 0.9rem;">{{ tx.location_id }}</td>
+                <td style="padding: 0.75rem; font-size: 0.9rem;">{{ tx.location_name }}</td>
             </tr>
             {% endfor %}
         </tbody>

@@ -519,6 +519,26 @@ class WalletTransaction(models.Model):
         except ItemType.DoesNotExist:
             return f"Type {self.type_id}"
 
+    @property
+    def location_name(self) -> str:
+        """Get human-readable location name from Station or SolarSystem."""
+        from core.eve.models import Station, SolarSystem
+
+        # Try Station first (NPC stations)
+        try:
+            return Station.objects.get(id=self.location_id).name
+        except Station.DoesNotExist:
+            pass
+
+        # Try SolarSystem (for structures, etc.)
+        try:
+            return SolarSystem.objects.get(id=self.location_id).name
+        except SolarSystem.DoesNotExist:
+            pass
+
+        # Fallback to ID with indicator
+        return f"Location {self.location_id}"
+
 
 class MarketOrder(models.Model):
     """
