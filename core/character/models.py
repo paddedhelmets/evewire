@@ -519,6 +519,29 @@ class WalletTransaction(models.Model):
         except ItemType.DoesNotExist:
             return f"Type {self.type_id}"
 
+    @property
+    def location_name(self) -> str:
+        """Get human-readable location name for the transaction.
+
+        Location IDs can be:
+        - Stations (60000000-64000000 range): Look up in Station model
+        - Structures (1 trillion+): No static data, display as "Structure {id}"
+        """
+        from core.eve.models import Station
+
+        # Station IDs are typically in the 60M-64M range
+        if 60000000 <= self.location_id < 65000000:
+            try:
+                return Station.objects.get(id=self.location_id).name
+            except Station.DoesNotExist:
+                return f"Station {self.location_id}"
+
+        # Structure IDs are 1 trillion+
+        if self.location_id >= 1000000000000:
+            return f"Structure {self.location_id}"
+
+        return f"Location {self.location_id}"
+
 
 class MarketOrder(models.Model):
     """
