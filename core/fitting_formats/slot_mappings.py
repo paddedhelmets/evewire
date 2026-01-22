@@ -8,73 +8,7 @@ based on their group membership.
 
 Generated from SDE: core_itemgroup table (categoryID = 7 = Modules)
 
-For complete/recent mappings, regenerate with:
-  python3 <<'EOF'
-  import sqlite3
-  conn = sqlite3.connect('db.sqlite3')
-  cursor = conn.cursor()
-
-  # High slots - Weapons, Engineering, Support
-  cursor.execute("""
-      SELECT groupID FROM core_itemgroup
-      WHERE categoryID = 7 AND (
-          groupName LIKE '%Weapon%' OR groupName LIKE '%Launcher%' OR
-          groupName LIKE '%Cloak%' OR groupName LIKE '%Warp%' OR
-          groupName LIKE '%Salvager%' OR groupName LIKE '%Tractor%' OR
-          groupName LIKE '%Probe Launcher%' OR groupName LIKE '%Scanner%'
-      )
-      ORDER BY groupID
-  """)
-  high = [row[0] for row in cursor.fetchall()]
-
-  # Med slots - Shield, Capacitor, Targeting, EWAR
-  cursor.execute("""
-      SELECT groupID FROM core_itemgroup
-      WHERE categoryID = 7 AND (
-          groupName LIKE '%Shield%' OR groupName LIKE '%Capacitor%' OR
-          groupName LIKE '%Sensor%' OR groupName LIKE '%Tracking%' OR
-          groupName LIKE '%Targeting%' OR groupName LIKE '%ECM%' OR
-          groupName LIKE '%Painter%'
-      )
-      ORDER BY groupID
-  """)
-  med = [row[0] for row in cursor.fetchall()]
-
-  # Low slots - Armor, Hull, Engineering
-  cursor.execute("""
-      SELECT groupID FROM core_itemgroup
-      WHERE categoryID = 7 AND (
-          groupName LIKE '%Armor%' OR groupName LIKE '%Hull%' OR
-          groupName LIKE '%Reacto%' OR groupName LIKE '%Power%' OR
-          groupName LIKE '%Diagnostic%' OR groupName LIKE '%Expander%'
-      )
-      ORDER BY groupID
-  """)
-  low = [row[0] for row in cursor.fetchall()]
-
-  # Rigs - category 7 groups with "Rig" in name
-  cursor.execute("""
-      SELECT groupID FROM core_itemgroup
-      WHERE categoryID = 7 AND groupName LIKE '%Rig%'
-      ORDER BY groupID
-  """)
-  rigs = [row[0] for row in cursor.fetchall()]
-
-  print("GROUP_TO_SLOT = {")
-  for gid in sorted(high):
-      cursor.execute("SELECT groupName FROM core_itemgroup WHERE groupID = ?", (gid,))
-      print(f"    {gid}: 'high',   # {cursor.fetchone()[0]}")
-  for gid in sorted(med):
-      cursor.execute("SELECT groupName FROM core_itemgroup WHERE groupID = ?", (gid,))
-      print(f"    {gid}: 'med',    # {cursor.fetchone()[0]}")
-  for gid in sorted(low):
-      cursor.execute("SELECT groupName FROM core_itemgroup WHERE groupID = ?", (gid,))
-      print(f"    {gid}: 'low',    # {cursor.fetchone()[0]}")
-  for gid in sorted(rigs):
-      cursor.execute("SELECT groupName FROM core_itemgroup WHERE groupID = ?", (gid,))
-      print(f"    {gid}: 'rig',   # {cursor.fetchone()[0]}")
-  print("}")
-  EOF
+For complete/recent mappings, regenerate with SQL queries against core_itemgroup.
 """
 
 # Category IDs
@@ -202,7 +136,8 @@ def get_slot_type_for_type(type_id: int) -> str | None:
     """
     Get the slot type for an item type by looking up its group.
 
-    Uses proper relationship query: item_type.group.category_id
+    Note: ItemType doesn't have a ForeignKey to ItemGroup, so we need
+    to manually query ItemGroup to get category_id for fallback logic.
 
     Args:
         type_id: EVE item type ID
@@ -210,7 +145,7 @@ def get_slot_type_for_type(type_id: int) -> str | None:
     Returns:
         Slot type ('low', 'med', 'high', 'rig', 'subsystem') or None
     """
-    from core.eve.models import ItemType
+    from core.eve.models import ItemType, ItemGroup
 
     try:
         item_type = ItemType.objects.get(id=type_id)
@@ -221,11 +156,11 @@ def get_slot_type_for_type(type_id: int) -> str | None:
                 return slot
 
             # Fall back to category-based heuristics
-            # Note: Use relationship query - item_type.group.category_id
+            # Note: ItemType doesn't have FK to ItemGroup, must query manually
             try:
-                cat_id = item_type.group.category_id
-            except AttributeError:
-                # In case group is None or doesn't have category_id
+                group = ItemGroup.objects.get(id=item_type.group_id)
+                cat_id = group.category_id
+            except ItemGroup.DoesNotExist:
                 return None
 
             if cat_id == CATEGORY_RIGS:

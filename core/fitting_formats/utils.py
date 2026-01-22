@@ -132,18 +132,27 @@ def detect_ship_type(name: str) -> Optional[int]:
     More lenient than general item resolution - specifically looks for
     items in the ship category (category 6).
 
+    Note: Uses group_id filtering since ItemType doesn't have a direct
+    category relationship - we get groups in the ship category first.
+
     Args:
         name: Ship name
 
     Returns:
         Type ID if found, None otherwise
     """
-    from core.eve.models import ItemType
+    from core.eve.models import ItemType, ItemGroup
 
     try:
+        # Get all group IDs in the ship category (category 6)
+        ship_group_ids = list(ItemGroup.objects.filter(
+            category_id=6  # Ships category
+        ).values_list('id', flat=True))
+
+        # Filter ItemType by group_id
         item = ItemType.objects.filter(
             name__iexact=name.strip(),
-            category_id=6  # Ships category
+            group_id__in=ship_group_ids
         ).first()
         if item:
             return item.id
