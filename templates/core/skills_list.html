@@ -51,13 +51,14 @@
                 <th style="padding: 0.75rem; text-align: left;">Skill</th>
                 <th style="padding: 0.75rem; text-align: center; width: 150px;">Level</th>
                 <th style="padding: 0.75rem; text-align: right; width: 120px;">Skill Points</th>
+                <th style="padding: 0.75rem; text-align: left; width: 120px;">Time to Next</th>
             </tr>
         </thead>
         <tbody>
             {% regroup skills by group_name as skills_by_group %}
             {% for group in skills_by_group %}
             <tr class="group-header" style="cursor: pointer;" onclick="toggleGroup('{{ group.grouper|slugify }}')">
-                <td colspan="3" style="padding: 0.5rem 0.75rem; background: var(--bg-secondary, #e8e8e8); font-weight: 600; color: var(--text-secondary);">
+                <td colspan="4" style="padding: 0.5rem 0.75rem; background: var(--bg-secondary, #e8e8e8); font-weight: 600; color: var(--text-secondary);">
                     <span style="display: flex; justify-content: space-between; align-items: center;">
                         <span>{{ group.grouper }}</span>
                         <span class="toggle-icon" id="icon-{{ group.grouper|slugify }}" style="font-size: 0.8rem;">▼</span>
@@ -78,13 +79,26 @@
                 <td style="padding: 0.6rem 0.75rem; text-align: right; font-family: monospace;">
                     {{ skill.skill.skillpoints_in_skill|default:0|commas }}
                 </td>
+                <td style="padding: 0.6rem 0.75rem; font-size: 0.9rem;">
+                    {% if skill.skill.skill_level == 5 %}
+                        <span style="color: #080;">Max</span>
+                    {% elif skill.training_time %}
+                        {% if skill.training_time.total_seconds > 0 %}
+                            {{ skill.training_time.total_seconds|format_duration }}
+                        {% else %}
+                            <span style="color: #999;">Ready</span>
+                        {% endif %}
+                    {% else %}
+                        <span style="color: #999;">&mdash;</span>
+                    {% endif %}
+                </td>
             </tr>
             {% endfor %}
             </tbody>
             {% endfor %}
             {% if not skills %}
             <tr>
-                <td colspan="3" style="padding: 2rem; text-align: center; color: var(--text-secondary);">
+                <td colspan="4" style="padding: 2rem; text-align: center; color: var(--text-secondary);">
                     No skills found. Please sync your character.
                 </td>
             </tr>

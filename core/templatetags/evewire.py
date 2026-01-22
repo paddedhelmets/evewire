@@ -78,6 +78,32 @@ def format_timedelta(value):
 
 
 @register.filter
+def format_duration(seconds):
+    """Format seconds as a human-readable duration string (e.g., '2d 4h 30m')."""
+    try:
+        total_seconds = int(seconds)
+    except (ValueError, TypeError):
+        return ''
+
+    if total_seconds <= 0:
+        return '0m'
+
+    days = total_seconds // 86400
+    hours = (total_seconds % 86400) // 3600
+    minutes = (total_seconds % 3600) // 60
+
+    parts = []
+    if days > 0:
+        parts.append(f'{days}d')
+    if hours > 0:
+        parts.append(f'{hours}h')
+    if minutes > 0 or not parts:
+        parts.append(f'{minutes}m')
+
+    return ' '.join(parts)
+
+
+@register.filter
 def isk_format(value):
     """Format number as ISK with suffix (K, M, B)."""
     try:

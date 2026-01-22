@@ -287,6 +287,7 @@ def skill_plan_detail(request: HttpRequest, plan_id: int) -> HttpResponse:
     """Show a single skill plan with progress for the user's character."""
     from core.character.models import SkillPlan
     from core.models import Character
+    from core.skill_plans import calculate_training_time
 
     try:
         plan = SkillPlan.objects.get(id=plan_id)
@@ -305,12 +306,18 @@ def skill_plan_detail(request: HttpRequest, plan_id: int) -> HttpResponse:
         progress = plan.get_progress_for_character(character)
         character_skills = {s.skill_id: s for s in character.skills.all()}
 
-    # Get entries with character skill status
+    # Get entries with character skill status and training times
     entries = []
+    total_training_seconds = 0
+
     for entry in plan.entries.all():
         skill = character_skills.get(entry.skill_id)
         status = 'unknown'
         current_level = 0
+        training_time = None
+
+        # Determine target level (required level, or recommended if no required)
+        target_level = entry.level or entry.recommended_level
 
         if skill:
             current_level = skill.skill_level
@@ -325,10 +332,21 @@ def skill_plan_detail(request: HttpRequest, plan_id: int) -> HttpResponse:
         elif entry.level:
             status = 'not_started'
 
+        # Calculate training time if character exists and skill is not complete
+        if character and target_level and status != 'completed':
+            try:
+                training_time = calculate_training_time(character, entry.skill_id, target_level)
+                total_training_seconds += training_time['total_seconds']
+            except Exception:
+                # Training time calculation may fail if SDE data missing
+                training_time = None
+
         entries.append({
             'entry': entry,
             'current_level': current_level,
             'status': status,
+            'training_time': training_time,
+            'target_level': target_level,
         })
 
     return render(request, 'core/skill_plan_detail.html', {
@@ -336,6 +354,7 @@ def skill_plan_detail(request: HttpRequest, plan_id: int) -> HttpResponse:
         'entries': entries,
         'progress': progress,
         'character': character,
+        'total_training_seconds': total_training_seconds,
     })
 
 
@@ -547,6 +566,7 @@ def skills_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
     from core.character.models import CharacterSkill
     from core.eve.models import ItemType, ItemGroup
     from core.models import Character
+    from core.skill_plans import calculate_training_time
 
     # Get character - from URL param or user's first character
     if character_id:
@@ -582,6 +602,15 @@ def skills_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
                 if group:
                     group_ids_seen.add(group.id)
 
+            # Calculate training time to next level (if not already at level 5)
+            training_time = None
+            if skill.skill_level < 5:
+                try:
+                    training_time = calculate_training_time(character, skill.skill_id, skill.skill_level + 1)
+                except Exception:
+                    # Training time calculation may fail if SDE data missing
+                    training_time = None
+
             skill_data = {
                 'skill': skill,
                 'name': item_type.name,
@@ -589,11 +618,20 @@ def skills_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
                 'level_stars': '★' * skill.skill_level + '☆' * (5 - skill.skill_level),
                 'group_id': item_type.group_id,
                 'group_name': group.name if group else 'Unknown',
+                'training_time': training_time,
             }
             # Apply category filter if specified
             if not category_filter or skill_data['group_name'] == category_filter:
                 skills_with_groups.append(skill_data)
         except ItemType.DoesNotExist:
+            # Calculate training time to next level (if not already at level 5)
+            training_time = None
+            if skill.skill_level < 5:
+                try:
+                    training_time = calculate_training_time(character, skill.skill_id, skill.skill_level + 1)
+                except Exception:
+                    training_time = None
+
             skill_data = {
                 'skill': skill,
                 'name': f'Skill {skill.skill_id}',
@@ -601,6 +639,7 @@ def skills_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
                 'level_stars': '★' * skill.skill_level + '☆' * (5 - skill.skill_level),
                 'group_id': None,
                 'group_name': 'Unknown',
+                'training_time': training_time,
             }
             # Apply category filter (Unknown category only matches if filtering for Unknown)
             if not category_filter or category_filter == 'Unknown':
