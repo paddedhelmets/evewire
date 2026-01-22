@@ -5,6 +5,7 @@ Includes authentication, dashboard, and character views.
 """
 
 import logging
+from datetime import timedelta
 from django.shortcuts import render, redirect
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
@@ -12,6 +13,7 @@ from django.views.decorators.http import require_http_methods
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.urls import reverse
 from django.db import models
+from django.utils import timezone
 
 logger = logging.getLogger('evewire')
 
@@ -215,6 +217,137 @@ def character_detail(request: HttpRequest, character_id: int) -> HttpResponse:
         'root_assets': root_assets,
         'skill_groups': skill_groups_list,
         'total_skill_groups': len(skill_groups_list),
+    })
+
+
+@login_required
+def character_overview(request: HttpRequest, character_id: int) -> HttpResponse:
+    """Character overview page with quick stats grid."""
+    from core.models import Character
+    from core.character.models import CharacterSkill, SkillQueueEntry
+
+    try:
+        character = Character.objects.get(id=character_id, user=request.user)
+    except Character.DoesNotExist:
+        return render(request, 'core/error.html', {
+            'message': 'Character not found',
+        }, status=404)
+
+    # Get currently training skill
+    current_skill = character.queue.filter(finish_date__gt=timezone.now()).order_by('finish_date').first()
+
+    # Count assets
+    assets_count = character.assets.count()
+
+    # Count fittings that match this character's skills
+    fittings_count = 0  # TODO: Implement fitting match logic
+
+    return render(request, 'core/character_overview.html', {
+        'character': character,
+        'current_skill': current_skill,
+        'assets_count': assets_count,
+        'fittings_count': fittings_count,
+    })
+
+
+@login_required
+def character_skills_page(request: HttpRequest, character_id: int) -> HttpResponse:
+    """Character skills page with expandable skill groups."""
+    from core.models import Character
+    from core.eve.models import ItemType, ItemGroup
+    from collections import defaultdict
+
+    try:
+        character = Character.objects.get(id=character_id, user=request.user)
+    except Character.DoesNotExist:
+        return render(request, 'core/error.html', {
+            'message': 'Character not found',
+        }, status=404)
+
+    # Build skill groups with type info
+    skill_groups = defaultdict(list)
+    skill_data = {}
+
+    for skill in character.skills.select_related().all():
+        skill_data[skill.skill_id] = skill
+        try:
+            item_type = ItemType.objects.get(id=skill.skill_id)
+            group = ItemGroup.objects.filter(id=item_type.group_id).first()
+            group_name = group.name if group else 'Unknown'
+            rank = item_type.rank or 0
+            skill_groups[group_name].append({
+                'skill': skill,
+                'type': item_type,
+                'rank': rank,
+            })
+        except ItemType.DoesNotExist:
+            pass
+
+    # Sort groups and skills within groups
+    sorted_groups = []
+    for group_name in sorted(skill_groups.keys()):
+        skills = sorted(skill_groups[group_name], key=lambda x: x['type'].name)
+        sorted_groups.append({'name': group_name, 'skills': skills})
+
+    return render(request, 'core/character_skills.html', {
+        'character': character,
+        'skill_groups': sorted_groups,
+    })
+
+
+@login_required
+def character_queue_page(request: HttpRequest, character_id: int) -> HttpResponse:
+    """Character training queue page with progress visualization."""
+    from core.models import Character
+    from core.character.models import SkillQueueEntry
+
+    try:
+        character = Character.objects.get(id=character_id, user=request.user)
+    except Character.DoesNotExist:
+        return render(request, 'core/error.html', {
+            'message': 'Character not found',
+        }, status=404)
+
+    queue_entries = character.queue.filter(finish_date__gt=timezone.now()).order_by('finish_date')
+
+    return render(request, 'core/character_queue.html', {
+        'character': character,
+        'queue_entries': queue_entries,
+    })
+
+
+@login_required
+def character_plans_page(request: HttpRequest, character_id: int) -> HttpResponse:
+    """Character skill plans page with progress bars."""
+    from core.models import Character
+    from core.character.models import SkillPlan
+
+    try:
+        character = Character.objects.get(id=character_id, user=request.user)
+    except Character.DoesNotExist:
+        return render(request, 'core/error.html', {
+            'message': 'Character not found',
+        }, status=404)
+
+    # Get all plans (user's + reference)
+    user_plans = SkillPlan.objects.filter(owner=request.user, parent__isnull=True, is_reference=False)
+    reference_plans = SkillPlan.objects.filter(parent__isnull=True, is_reference=True)
+
+    # Add progress for each plan
+    def enrich_plans(plans):
+        enriched = []
+        for plan in plans:
+            progress = plan.get_progress_for_character(character)
+            enriched.append({
+                'plan': plan,
+                'progress': progress,
+            })
+        return enriched
+
+    return render(request, 'core/character_plans.html', {
+        'character': character,
+        'user_plans': enrich_plans(user_plans),
+        'reference_plans': enrich_plans(reference_plans),
     })
 
 
