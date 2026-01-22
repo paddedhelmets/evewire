@@ -129,6 +129,19 @@ def dashboard(request: HttpRequest) -> HttpResponse:
         char.market_orders.count() for char in characters
     )
 
+    # Calculate aggregated industry slots
+    total_manufacturing_slots = sum(char.manufacturing_slots for char in characters)
+    total_active_manufacturing = sum(char.active_manufacturing_jobs for char in characters)
+    total_science_slots = sum(char.science_slots for char in characters)
+    total_active_science = sum(char.active_research_jobs for char in characters)
+    total_reaction_slots = sum(char.reaction_slots for char in characters)
+    total_active_reactions = sum(char.active_reaction_jobs for char in characters)
+
+    # Calculate utilization percentages
+    manufacturing_utilization = (total_active_manufacturing / total_manufacturing_slots * 100) if total_manufacturing_slots > 0 else 0
+    science_utilization = (total_active_science / total_science_slots * 100) if total_science_slots > 0 else 0
+    reaction_utilization = (total_active_reactions / total_reaction_slots * 100) if total_reaction_slots > 0 else 0
+
     # Build character data with skill queue info
     characters_data = []
     for char in characters:
@@ -150,6 +163,11 @@ def dashboard(request: HttpRequest) -> HttpResponse:
         'active_skill_queues': active_skill_queues,
         'total_orders': total_orders,
         'characters_count': characters.count(),
+        'industry_slots': {
+            'manufacturing': {'slots': total_manufacturing_slots, 'active': total_active_manufacturing, 'utilization': manufacturing_utilization},
+            'science': {'slots': total_science_slots, 'active': total_active_science, 'utilization': science_utilization},
+            'reactions': {'slots': total_reaction_slots, 'active': total_active_reactions, 'utilization': reaction_utilization},
+        },
     })
 
 
