@@ -278,10 +278,7 @@ def skill_plan_detail(request: HttpRequest, plan_id: int) -> HttpResponse:
         }, status=404)
 
     # Get user's character
-    try:
-        character = Character.objects.get(user=request.user)
-    except Character.DoesNotExist:
-        character = None
+    character = get_users_character(request.user)
 
     # Get progress if character exists
     progress = None
@@ -714,10 +711,7 @@ def skill_plan_export(request: HttpRequest, plan_id: int) -> HttpResponse:
     # Get user's character for checking known skills
     character = None
     if not include_known:
-        try:
-            character = Character.objects.get(user=request.user)
-        except Character.DoesNotExist:
-            pass
+        character = get_users_character(request.user)
 
     # Generate XML
     xml_content = SkillPlanExporter.export_to_xml(
@@ -787,9 +781,8 @@ def wallet_journal(request: HttpRequest, character_id: int = None) -> HttpRespon
                 'message': 'Character not found',
             }, status=404)
     else:
-        try:
-            character = Character.objects.get(user=request.user)
-        except Character.DoesNotExist:
+        character = get_users_character(request.user)
+        if not character:
             return render(request, 'core/error.html', {
                 'message': 'Character not found',
             }, status=404)
@@ -875,9 +868,8 @@ def wallet_transactions(request: HttpRequest, character_id: int = None) -> HttpR
                 'message': 'Character not found',
             }, status=404)
     else:
-        try:
-            character = Character.objects.get(user=request.user)
-        except Character.DoesNotExist:
+        character = get_users_character(request.user)
+        if not character:
             return render(request, 'core/error.html', {
                 'message': 'Character not found',
             }, status=404)
@@ -953,9 +945,8 @@ def wallet_balance(request: HttpRequest, character_id: int = None) -> HttpRespon
                 'message': 'Character not found',
             }, status=404)
     else:
-        try:
-            character = Character.objects.get(user=request.user)
-        except Character.DoesNotExist:
+        character = get_users_character(request.user)
+        if not character:
             return render(request, 'core/error.html', {
                 'message': 'Character not found',
             }, status=404)
@@ -1048,9 +1039,8 @@ def wallet_summary(request: HttpRequest, character_id: int = None) -> HttpRespon
                 'message': 'Character not found',
             }, status=404)
     else:
-        try:
-            character = Character.objects.get(user=request.user)
-        except Character.DoesNotExist:
+        character = get_users_character(request.user)
+        if not character:
             return render(request, 'core/error.html', {
                 'message': 'Character not found',
             }, status=404)
@@ -1124,9 +1114,8 @@ def market_orders(request: HttpRequest, character_id: int = None) -> HttpRespons
                 'message': 'Character not found',
             }, status=404)
     else:
-        try:
-            character = Character.objects.get(user=request.user)
-        except Character.DoesNotExist:
+        character = get_users_character(request.user)
+        if not character:
             return render(request, 'core/error.html', {
                 'message': 'Character not found',
             }, status=404)
@@ -1197,9 +1186,8 @@ def market_orders_history(request: HttpRequest, character_id: int = None) -> Htt
                 'message': 'Character not found',
             }, status=404)
     else:
-        try:
-            character = Character.objects.get(user=request.user)
-        except Character.DoesNotExist:
+        character = get_users_character(request.user)
+        if not character:
             return render(request, 'core/error.html', {
                 'message': 'Character not found',
             }, status=404)
@@ -1264,9 +1252,8 @@ def trade_overview(request: HttpRequest, character_id: int = None) -> HttpRespon
                 'message': 'Character not found',
             }, status=404)
     else:
-        try:
-            character = Character.objects.get(user=request.user)
-        except Character.DoesNotExist:
+        character = get_users_character(request.user)
+        if not character:
             return render(request, 'core/error.html', {
                 'message': 'Character not found',
             }, status=404)
@@ -1649,9 +1636,8 @@ def contracts_list(request: HttpRequest, character_id: int = None) -> HttpRespon
                 'message': 'Character not found',
             }, status=404)
     else:
-        try:
-            character = Character.objects.get(user=request.user)
-        except Character.DoesNotExist:
+        character = get_users_character(request.user)
+        if not character:
             return render(request, 'core/error.html', {
                 'message': 'Character not found',
             }, status=404)
@@ -1733,9 +1719,8 @@ def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
                 'message': 'Character not found',
             }, status=404)
     else:
-        try:
-            character = Character.objects.get(user=request.user)
-        except Character.DoesNotExist:
+        character = get_users_character(request.user)
+        if not character:
             return render(request, 'core/error.html', {
                 'message': 'Character not found',
             }, status=404)
@@ -1791,9 +1776,8 @@ def assets_summary(request: HttpRequest, character_id: int = None) -> HttpRespon
                 'message': 'Character not found',
             }, status=404)
     else:
-        try:
-            character = Character.objects.get(user=request.user)
-        except Character.DoesNotExist:
+        character = get_users_character(request.user)
+        if not character:
             return render(request, 'core/error.html', {
                 'message': 'Character not found',
             }, status=404)
@@ -1924,9 +1908,8 @@ def fitted_ships(request: HttpRequest, character_id: int = None) -> HttpResponse
                 'message': 'Character not found',
             }, status=404)
     else:
-        try:
-            character = Character.objects.get(user=request.user)
-        except Character.DoesNotExist:
+        character = get_users_character(request.user)
+        if not character:
             return render(request, 'core/error.html', {
                 'message': 'Character not found',
             }, status=404)
@@ -2104,9 +2087,8 @@ def industry_summary(request: HttpRequest, character_id: int = None) -> HttpResp
                 'message': 'Character not found',
             }, status=404)
     else:
-        try:
-            character = Character.objects.get(user=request.user)
-        except Character.DoesNotExist:
+        character = get_users_character(request.user)
+        if not character:
             return render(request, 'core/error.html', {
                 'message': 'Character not found',
             }, status=404)
@@ -2131,9 +2113,8 @@ def industry_jobs_list(request: HttpRequest, character_id: int = None) -> HttpRe
                 'message': 'Character not found',
             }, status=404)
     else:
-        try:
-            character = Character.objects.get(user=request.user)
-        except Character.DoesNotExist:
+        character = get_users_character(request.user)
+        if not character:
             return render(request, 'core/error.html', {
                 'message': 'Character not found',
             }, status=404)
@@ -2187,9 +2168,8 @@ def assets_export(request: HttpRequest, character_id: int = None) -> HttpRespons
                 'message': 'Character not found',
             }, status=404)
     else:
-        try:
-            character = Character.objects.get(user=request.user)
-        except Character.DoesNotExist:
+        character = get_users_character(request.user)
+        if not character:
             return render(request, 'core/error.html', {
                 'message': 'Character not found',
             }, status=404)
@@ -2269,9 +2249,8 @@ def contracts_export(request: HttpRequest, character_id: int = None) -> HttpResp
                 'message': 'Character not found',
             }, status=404)
     else:
-        try:
-            character = Character.objects.get(user=request.user)
-        except Character.DoesNotExist:
+        character = get_users_character(request.user)
+        if not character:
             return render(request, 'core/error.html', {
                 'message': 'Character not found',
             }, status=404)
@@ -2363,9 +2342,8 @@ def industry_jobs_export(request: HttpRequest, character_id: int = None) -> Http
                 'message': 'Character not found',
             }, status=404)
     else:
-        try:
-            character = Character.objects.get(user=request.user)
-        except Character.DoesNotExist:
+        character = get_users_character(request.user)
+        if not character:
             return render(request, 'core/error.html', {
                 'message': 'Character not found',
             }, status=404)
@@ -2455,9 +2433,8 @@ def blueprints_list(request: HttpRequest, character_id: int = None) -> HttpRespo
                 'message': 'Character not found',
             }, status=404)
     else:
-        try:
-            character = Character.objects.get(user=request.user)
-        except Character.DoesNotExist:
+        character = get_users_character(request.user)
+        if not character:
             return render(request, 'core/error.html', {
                 'message': 'Character not found',
             }, status=404)
