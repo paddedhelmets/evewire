@@ -278,10 +278,7 @@ def skill_plan_detail(request: HttpRequest, plan_id: int) -> HttpResponse:
         }, status=404)
 
     # Get user's character
-    try:
-        character = Character.objects.get(user=request.user)
-    except Character.DoesNotExist:
-        character = None
+    character = get_users_character(request.user)
 
     # Get progress if character exists
     progress = None
@@ -714,10 +711,7 @@ def skill_plan_export(request: HttpRequest, plan_id: int) -> HttpResponse:
     # Get user's character for checking known skills
     character = None
     if not include_known:
-        try:
-            character = Character.objects.get(user=request.user)
-        except Character.DoesNotExist:
-            pass
+        character = get_users_character(request.user)
 
     # Generate XML
     xml_content = SkillPlanExporter.export_to_xml(
