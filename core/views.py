@@ -19,7 +19,7 @@ logger = logging.getLogger('evewire')
 def index(request: HttpRequest) -> HttpResponse:
     """Landing page - show login button or redirect to dashboard."""
     if request.user.is_authenticated:
-        return redirect('dashboard')
+        return redirect('core:dashboard')
     return render(request, 'core/index.html')
 
 
@@ -29,7 +29,7 @@ def login_view(request: HttpRequest) -> HttpResponse:
     from core.services import TokenManager
 
     if request.user.is_authenticated:
-        return redirect('dashboard')
+        return redirect('core:dashboard')
 
     sso_url = TokenManager.get_sso_login_url()
     return redirect(sso_url)
@@ -66,7 +66,7 @@ def oauth_callback(request: HttpRequest) -> HttpResponse:
             login(request, user)
 
         logger.info(f'User {user.display_name} logged in via SSO')
-        return redirect('characters')
+        return redirect('core:characters')
 
     except Exception as e:
         logger.error(f'Failed to handle OAuth callback: {e}')
@@ -81,7 +81,7 @@ def logout_view(request: HttpRequest) -> HttpResponse:
     """Log out the current user."""
     logger.info(f'User {request.user.display_name} logged out')
     logout(request)
-    return redirect('index')
+    return redirect('core:index')
 
 
 @login_required
@@ -97,7 +97,7 @@ def dashboard(request: HttpRequest) -> HttpResponse:
     # Redirect to characters list if user has no characters
     if not characters.exists():
         messages.info(request, 'Please add a character to get started.')
-        return redirect('characters')
+        return redirect('core:characters')
 
     # Calculate aggregated stats
     total_wallet = characters.aggregate(
@@ -186,7 +186,7 @@ def sync_character(request: HttpRequest, character_id: int) -> HttpResponse:
         character = Character.objects.get(id=character_id, user=request.user)
     except Character.DoesNotExist:
         messages.error(request, 'Character not found.')
-        return redirect('dashboard')
+        return redirect('core:dashboard')
 
     # Update sync status
     character.last_sync_status = 'pending'
@@ -1992,19 +1992,19 @@ def remove_character(request: HttpRequest, character_id: int) -> HttpResponse:
         character = Character.objects.get(id=character_id, user=request.user)
     except Character.DoesNotExist:
         messages.error(request, 'Character not found.')
-        return redirect('characters')
+        return redirect('core:characters')
 
     # Don't allow removing the last character
     character_count = request.user.characters.count()
     if character_count <= 1:
         messages.error(request, 'You cannot remove your last character.')
-        return redirect('characters')
+        return redirect('core:characters')
 
     character_name = character.character_name
     character.delete()
 
     messages.success(request, f'Character "{character_name}" has been removed from your account.')
-    return redirect('characters')
+    return redirect('core:characters')
 
 
 @login_required
@@ -2017,7 +2017,7 @@ def set_main_character(request: HttpRequest, character_id: int) -> HttpResponse:
         character = Character.objects.get(id=character_id, user=request.user)
     except Character.DoesNotExist:
         messages.error(request, 'Character not found.')
-        return redirect('characters')
+        return redirect('core:characters')
 
     # Update user's first character fields for backward compatibility
     request.user.eve_character_id = character.id
@@ -2029,7 +2029,7 @@ def set_main_character(request: HttpRequest, character_id: int) -> HttpResponse:
     request.user.save()
 
     messages.success(request, f'"{character.character_name}" set as main character.')
-    return redirect('characters')
+    return redirect('core:characters')
 
 
 # Industry Views
