@@ -413,6 +413,10 @@ class AuthService:
             existing_character.save()
             character = existing_character
             user = existing_character.user
+
+            # Fetch corporation/alliance names from ESI
+            update_character_corporation_info(character)
+
             logger.info(f'Re-authenticated character {character_id}')
 
         elif request_user:
@@ -431,6 +435,9 @@ class AuthService:
                 existing_character.corporation_id = corporation_id
                 existing_character.save()
                 character = existing_character
+
+                # Fetch corporation/alliance names from ESI
+                update_character_corporation_info(character)
             else:
                 # Create new character for this user
                 character = Character.objects.create(
@@ -443,6 +450,9 @@ class AuthService:
                 character.token_expires = timezone.now() + timedelta(seconds=expires_in)
                 character.save()
                 character_added = True
+
+                # Fetch corporation/alliance names from ESI
+                update_character_corporation_info(character)
 
         else:
             # Not logged in - this is initial login
@@ -457,6 +467,9 @@ class AuthService:
                 existing_character.save()
                 character = existing_character
                 created = False
+
+                # Fetch corporation/alliance names from ESI
+                update_character_corporation_info(character)
             else:
                 # Create new user with this character
                 user = User(username=User.objects.generate_username())
@@ -474,10 +487,16 @@ class AuthService:
                 character.token_expires = timezone.now() + timedelta(seconds=expires_in)
                 character.save()
 
+                # Fetch corporation/alliance names from ESI
+                update_character_corporation_info(character)
+
                 # Update user's first character fields for backward compatibility
                 user.eve_character_id = character_id
                 user.eve_character_name = character_name
                 user.corporation_id = corporation_id
+                user.corporation_name = character.corporation_name
+                user.alliance_id = character.alliance_id
+                user.alliance_name = character.alliance_name
                 user.save()
                 created = True
 
@@ -498,6 +517,55 @@ class AuthService:
 
         logger.info(f'User action: {action} - {character_name} ({character_id})')
         return user
+
+
+def update_character_corporation_info(character) -> bool:
+    """
+    Update character's corporation and alliance names from ESI.
+
+    Fetches public corporation and alliance information to populate the
+    corporation_name and alliance_name fields. Called during authentication
+    and sync to keep names current.
+
+    Args:
+        character: Character instance with corporation_id set
+
+    Returns:
+        True if successful, False otherwise
+    """
+    if not character.corporation_id:
+        return False
+
+    try:
+        # Fetch corporation info
+        corp_response = ESIClient.get_corporation_info(character.corporation_id)
+        corp_data = corp_response.data
+
+        corporation_name = corp_data.get('name', '')
+        alliance_id = corp_data.get('alliance_id')
+
+        # Fetch alliance info if applicable
+        alliance_name = ''
+        if alliance_id:
+            try:
+                alliance_response = ESIClient.get_alliance_info(alliance_id)
+                alliance_data = alliance_response.data
+                alliance_name = alliance_data.get('name', '')
+            except Exception as e:
+                logger.warning(f'Failed to fetch alliance {alliance_id} info: {e}')
+
+        # Update character
+        character.corporation_name = corporation_name
+        character.alliance_id = alliance_id
+        character.alliance_name = alliance_name
+        character.save(update_fields=['corporation_name', 'alliance_id', 'alliance_name'])
+
+        logger.debug(f'Updated corp info for {character.character_name}: {corporation_name}, {alliance_name or "No alliance"}')
+        return True
+
+    except Exception as e:
+        logger.warning(f'Failed to fetch corporation {character.corporation_id} info: {e}')
+        return False
 
 
 # Sync functions for character data
@@ -521,6 +589,9 @@ def sync_character_data(character) -> bool:
         _sync_orders_history(character)
         _sync_industry_jobs(character)
         _sync_contracts(character)
+
+        # Update corporation/alliance names (can change over time)
+        update_character_corporation_info(character)
 
         character.last_sync_status = SyncStatus.SUCCESS
         character.last_sync_error = ''
