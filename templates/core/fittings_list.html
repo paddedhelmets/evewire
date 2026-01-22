@@ -6,11 +6,15 @@
 {% block content %}
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
     <h1>Fittings</h1>
-    {% if character %}
-        <a href="{% url 'core:fitting_matches' character.id %}">View My Matches</a>
-    {% else %}
-        <a href="{% url 'core:fitting_matches' %}">View My Matches</a>
-    {% endif %}
+    <div style="display: flex; gap: 1rem; align-items: center;">
+        <a href="{% url 'core:fitting_import' %}">Import</a>
+        <a href="{% url 'core:fitting_bulk_import' %}">Bulk Import</a>
+        {% if character %}
+            <a href="{% url 'core:fitting_matches' character.id %}">View My Matches</a>
+        {% else %}
+            <a href="{% url 'core:fitting_matches' %}">View My Matches</a>
+        {% endif %}
+    </div>
 </div>
 
 <div class="card">

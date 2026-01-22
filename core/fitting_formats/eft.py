@@ -207,29 +207,37 @@ class EFTSerializer(FittingSerializer):
         ship_name = data.ship_type_name or f"Type {data.ship_type_id}"
         lines.append(f"[{ship_name}, {data.name}]")
 
+        # Track global position for offline module detection
+        global_pos = 0
+
         # Low slots
         if data.low_slots:
-            lines.extend(self._serialize_slots(data.low_slots, data.offline, 'low'))
+            lines.extend(self._serialize_slots(data.low_slots, data.offline, 'low', global_pos))
+            global_pos += len(data.low_slots)
             lines.append("")  # Empty line separator
 
         # Med slots
         if data.med_slots:
-            lines.extend(self._serialize_slots(data.med_slots, data.offline, 'med'))
+            lines.extend(self._serialize_slots(data.med_slots, data.offline, 'med', global_pos))
+            global_pos += len(data.med_slots)
             lines.append("")  # Empty line separator
 
         # High slots
         if data.high_slots:
-            lines.extend(self._serialize_slots(data.high_slots, data.offline, 'high'))
+            lines.extend(self._serialize_slots(data.high_slots, data.offline, 'high', global_pos))
+            global_pos += len(data.high_slots)
             lines.append("")  # Empty line separator
 
         # Rigs
         if data.rig_slots:
-            lines.extend(self._serialize_slots(data.rig_slots, [], 'rig'))
+            lines.extend(self._serialize_slots(data.rig_slots, [], 'rig', global_pos))
+            global_pos += len(data.rig_slots)
             lines.append("")  # Empty line separator
 
         # Subsystems
         if data.subsystem_slots:
-            lines.extend(self._serialize_slots(data.subsystem_slots, [], 'subsystem'))
+            lines.extend(self._serialize_slots(data.subsystem_slots, [], 'subsystem', global_pos))
+            global_pos += len(data.subsystem_slots)
             lines.append("")  # Empty line separator
 
         # Drones
@@ -259,11 +267,15 @@ class EFTSerializer(FittingSerializer):
         slots: List[int],
         offline: List[int],
         slot_type: str,
+        global_position: int = 0,
     ) -> List[str]:
         """Serialize a list of slot modules."""
         lines = []
         for position, type_id in enumerate(slots):
             if type_id:
                 module_name = get_item_name(type_id)
+                global_pos = global_position + position
+                if global_pos in offline:
+                    module_name = f"{module_name} /offline"
                 lines.append(module_name)
         return lines

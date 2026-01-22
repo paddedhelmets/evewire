@@ -5,14 +5,47 @@ Admin interface for fittings module.
 from django.contrib import admin
 from django.utils.html import format_html
 
-from core.doctrines.models import Fitting, FittingEntry, FittingMatch, ShoppingList
+from core.doctrines.models import (
+    Fitting,
+    FittingEntry,
+    FittingMatch,
+    FittingCharge,
+    FittingDrone,
+    FittingCargoItem,
+    FittingService,
+    ShoppingList
+)
 
 
 class FittingEntryInline(admin.TabularInline):
     model = FittingEntry
     extra = 0
     readonly_fields = ('module_name', 'usage_percentage')
-    fields = ('slot_type', 'position', 'module_type_id', 'module_name', 'usage_percentage')
+    fields = ('slot_type', 'position', 'module_type_id', 'is_offline', 'module_name', 'usage_percentage')
+
+
+class FittingChargeInline(admin.TabularInline):
+    model = FittingCharge
+    extra = 0
+    fields = ('fitting_entry', 'charge_type_id', 'quantity')
+
+
+class FittingDroneInline(admin.TabularInline):
+    model = FittingDrone
+    extra = 0
+    fields = ('drone_type_id', 'bay_type', 'quantity')
+
+
+class FittingCargoItemInline(admin.TabularInline):
+    model = FittingCargoItem
+    extra = 0
+    fields = ('item_type_id', 'quantity')
+
+
+class FittingServiceInline(admin.TabularInline):
+    model = FittingService
+    extra = 0
+    fields = ('service_type_id', 'position')
 
 
 @admin.register(Fitting)
@@ -21,7 +54,13 @@ class FittingAdmin(admin.ModelAdmin):
     list_filter = ('is_active', 'created_at')
     search_fields = ('name', 'ship_type_id')
     readonly_fields = ('created_at', 'updated_at')
-    inlines = [FittingEntryInline]
+    inlines = [
+        FittingEntryInline,
+        FittingChargeInline,
+        FittingDroneInline,
+        FittingCargoItemInline,
+        FittingServiceInline,
+    ]
 
     fieldsets = (
         (None, {

@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}Bulk Import Fittings - evewire{% endblock %}
+
+{% block content %}
+<div style="max-width: 800px; margin: 0 auto;">
+    <h1>Bulk Import Fittings</h1>
+    <p>Upload a file containing multiple fittings (EFT or XML format).</p>
+
+    {% if success %}
+    <div class="card" style="background-color: #0f0; color: #000;">
+        <h2>Import Complete</h2>
+        <p><strong>{{ imported|length }}</strong> fitting(s) imported successfully.</p>
+        {% if imported %}
+        <ul style="margin-top: 1rem;">
+            {% for fitting in imported %}
+            <li>
+                <a href="{% url 'core:fitting_detail' fitting.id %}">{{ fitting.ship_type_name }} - {{ fitting.name }}</a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        {% if errors %}
+        <p style="margin-top: 1rem;"><strong>{{ errors|length }}</strong> error(s) occurred:</p>
+        <ul style="color: #900;">
+            {% for error in errors %}
+            <li>{{ error }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        <p style="margin-top: 1rem;"><a href="{% url 'core:fittings_list' %}">Back to Fittings</a></p>
+    </div>
+    {% elif error %}
+    <div class="card" style="background-color: #f00; color: #fff;">
+        <h2>Import Failed</h2>
+        <p>{{ error }}</p>
+    </div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data" style="margin-top: 2rem;">
+        {% csrf_token %}
+
+        <div style="margin-bottom: 1rem;">
+            <label for="file" style="font-weight: bold; display: block; margin-bottom: 0.5rem;">File:</label>
+            <input type="file" name="file" id="file" accept=".txt,.xml,.eft" style="padding: 0.5rem; width: 100%; max-width: 400px;">
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+            <label for="format" style="font-weight: bold; display: block; margin-bottom: 0.5rem;">Format:</label>
+            <select name="format" id="format" style="padding: 0.5rem; width: 100%; max-width: 400px;">
+                <option value="">Auto-detect</option>
+                {% for fmt in formats %}
+                <option value="{{ fmt.name|lower }}">{{ fmt.name }} - {{ fmt.description }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+            <label style="font-weight: bold; display: flex; align-items: center; gap: 0.5rem;">
+                <input type="checkbox" name="auto_detect" value="on" checked>
+                Auto-detect format
+            </label>
+        </div>
+
+        <button type="submit" style="padding: 0.75rem 1.5rem; font-size: 1rem; cursor: pointer;">Import Fittings</button>
+        <a href="{% url 'core:fittings_list' %}" style="margin-left: 1rem;">Cancel</a>
+    </form>
+
+    <div class="card" style="margin-top: 2rem;">
+        <h3>Instructions</h3>
+        <p><strong>EFT Format:</strong> Upload a .txt file with one or more fittings. Each fitting should start with <code>[Ship, Name]</code>.</p>
+        <p><strong>XML Format:</strong> Upload an XML file exported from EVE or a fitting tool. Multiple fittings per file are supported.</p>
+        <p><strong>DNA Format:</strong> For single fittings only. Use the regular import for individual DNA fits.</p>
+    </div>
+</div>
+{% endblock %}

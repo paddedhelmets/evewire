@@ -3014,3 +3014,253 @@ def shopping_list_detail(request: HttpRequest, list_id: int) -> HttpResponse:
         'shopping_list': shopping_list,
         'items_to_buy': items_to_buy,
     })
+
+
+@login_required
+@require_http_methods(['GET', 'POST'])
+def fitting_import(request: HttpRequest) -> HttpResponse:
+    """Import a fitting from EFT/DNA/XML format."""
+    from core.fitting_formats import FittingImporter, detect_format, FormatDetectionError
+    from core.fitting_formats.exceptions import FittingFormatError
+
+    if request.method == 'GET':
+        return render(request, 'core/fitting_import.html', {
+            'formats': [
+                {'name': 'EFT', 'description': 'EVE Fitting Tool - Human-readable text format'},
+                {'name': 'DNA', 'description': 'Compact type_id format for chat links'},
+                {'name': 'XML', 'description': 'CCP official XML format'},
+            ],
+        })
+
+    # Handle POST import
+    content = request.POST.get('content', '')
+    format_name = request.POST.get('format', '')
+    auto_detect = request.POST.get('auto_detect') == 'on'
+
+    if not content:
+        return render(request, 'core/fitting_import.html', {
+            'error': 'Please paste fitting content',
+            'formats': [
+                {'name': 'EFT', 'description': 'EVE Fitting Tool - Human-readable text format'},
+                {'name': 'DNA', 'description': 'Compact type_id format for chat links'},
+                {'name': 'XML', 'description': 'CCP official XML format'},
+            ],
+        })
+
+    try:
+        # Import fitting
+        fitting = FittingImporter.import_from_string(
+            content,
+            format_name=format_name if not auto_detect else None,
+            auto_detect=auto_detect,
+        )
+
+        return render(request, 'core/fitting_import.html', {
+            'success': True,
+            'fitting': fitting,
+            'formats': [
+                {'name': 'EFT', 'description': 'EVE Fitting Tool - Human-readable text format'},
+                {'name': 'DNA', 'description': 'Compact type_id format for chat links'},
+                {'name': 'XML', 'description': 'CCP official XML format'},
+            ],
+        })
+
+    except FormatDetectionError as e:
+        return render(request, 'core/fitting_import.html', {
+            'error': f'Could not detect format: {e}',
+            'content': content,
+            'formats': [
+                {'name': 'EFT', 'description': 'EVE Fitting Tool - Human-readable text format'},
+                {'name': 'DNA', 'description': 'Compact type_id format for chat links'},
+                {'name': 'XML', 'description': 'CCP official XML format'},
+            ],
+        })
+    except FittingFormatError as e:
+        return render(request, 'core/fitting_import.html', {
+            'error': f'Import failed: {e}',
+            'content': content,
+            'formats': [
+                {'name': 'EFT', 'description': 'EVE Fitting Tool - Human-readable text format'},
+                {'name': 'DNA', 'description': 'Compact type_id format for chat links'},
+                {'name': 'XML', 'description': 'CCP official XML format'},
+            ],
+        })
+
+
+@login_required
+def fitting_export(request: HttpRequest, fitting_id: int, format: str) -> HttpResponse:
+    """Export a fitting to EFT/DNA/XML format."""
+    from django.http import FileResponse
+    from core.doctrines.models import Fitting
+    from core.fitting_formats import FittingExporter, FittingFormatError
+    import io
+
+    # Validate format
+    if format not in ('eft', 'dna', 'xml'):
+        return render(request, 'core/error.html', {
+            'message': f'Invalid format: {format}',
+        }, status=400)
+
+    try:
+        fitting = Fitting.objects.get(id=fitting_id)
+    except Fitting.DoesNotExist:
+        return render(request, 'core/error.html', {
+            'message': 'Fitting not found',
+        }, status=404)
+
+    try:
+        # Export fitting
+        content = FittingExporter.export_to_string(fitting, format)
+
+        # Create response with appropriate content type and filename
+        filename = f"{fitting.name.replace('/', '-')}.{format}"
+        if format == 'eft':
+            content_type = 'text/plain'
+        elif format == 'dna':
+            content_type = 'text/plain'
+        elif format == 'xml':
+            content_type = 'application/xml'
+        else:
+            content_type = 'text/plain'
+
+        response = HttpResponse(content, content_type=content_type)
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
+    except FittingFormatError as e:
+        return render(request, 'core/error.html', {
+            'message': f'Export failed: {e}',
+        }, status=500)
+
+
+@login_required
+@require_http_methods(['GET', 'POST'])
+def fitting_bulk_import(request: HttpRequest) -> HttpResponse:
+    """Bulk import fittings from a file."""
+    from core.fitting_formats import FittingImporter, detect_format, FormatDetectionError
+    from core.fitting_formats.exceptions import FittingFormatError
+    import re
+
+    if request.method == 'GET':
+        return render(request, 'core/fitting_bulk_import.html', {
+            'formats': [
+                {'name': 'EFT', 'description': 'EVE Fitting Tool - Human-readable text format'},
+                {'name': 'DNA', 'description': 'Compact type_id format for chat links'},
+                {'name': 'XML', 'description': 'CCP official XML format'},
+            ],
+        })
+
+    # Handle POST import
+    uploaded_file = request.FILES.get('file')
+    format_name = request.POST.get('format', '')
+    auto_detect = request.POST.get('auto_detect') == 'on'
+
+    if not uploaded_file:
+        return render(request, 'core/fitting_bulk_import.html', {
+            'error': 'Please upload a file',
+            'formats': [
+                {'name': 'EFT', 'description': 'EVE Fitting Tool - Human-readable text format'},
+                {'name': 'DNA', 'description': 'Compact type_id format for chat links'},
+                {'name': 'XML', 'description': 'CCP official XML format'},
+            ],
+        })
+
+    try:
+        content = uploaded_file.read().decode('utf-8')
+    except UnicodeDecodeError:
+        return render(request, 'core/fitting_bulk_import.html', {
+            'error': 'File encoding error. Please upload a UTF-8 text file.',
+            'formats': [
+                {'name': 'EFT', 'description': 'EVE Fitting Tool - Human-readable text format'},
+                {'name': 'DNA', 'description': 'Compact type_id format for chat links'},
+                {'name': 'XML', 'description': 'CCP official XML format'},
+            ],
+        })
+
+    # Import fittings
+    imported = []
+    errors = []
+
+    # For EFT format, split by [Ship, Name] headers
+    if format_name == 'eft' or (auto_detect and '[' in content and ']' in content):
+        # Split by fitting headers
+        pattern = r'\[([^,\]]+),\s*([^\]]+)\]'
+        parts = re.split(pattern, content)
+
+        for i in range(1, len(parts), 3):
+            if i + 2 >= len(parts):
+                break
+            ship_name = parts[i].strip()
+            fitting_name = parts[i + 1].strip()
+            fitting_content = f'[{ship_name}, {fitting_name}]'
+
+            # Add remaining content until next header or end
+            j = i + 2
+            while j < len(parts) and not parts[j].startswith('['):
+                fitting_content += parts[j]
+                j += 1
+
+            try:
+                fitting = FittingImporter.import_from_string(
+                    fitting_content,
+                    format_name='eft',
+                    auto_detect=False,
+                )
+                imported.append(fitting)
+            except FittingFormatError as e:
+                errors.append(f'{fitting_name}: {e}')
+
+    # For XML with multiple fittings
+    elif format_name == 'xml' or (auto_detect and content.strip().startswith('<')):
+        # XML can contain multiple fittings
+        try:
+            import xml.etree.ElementTree as ET
+            root = ET.fromstring(content)
+
+            fitting_elems = root.findall('.//fitting')
+            if not fitting_elems:
+                # Try direct parsing of single fitting
+                fitting = FittingImporter.import_from_string(
+                    content,
+                    format_name='xml',
+                    auto_detect=False,
+                )
+                imported.append(fitting)
+            else:
+                for fitting_elem in fitting_elems:
+                    fitting_xml = ET.tostring(fitting_elem, encoding='unicode')
+                    try:
+                        fitting = FittingImporter.import_from_string(
+                            f'<fittings>{fitting_xml}</fittings>',
+                            format_name='xml',
+                            auto_detect=False,
+                        )
+                        imported.append(fitting)
+                    except FittingFormatError as e:
+                        fitting_name = fitting_elem.get('name', 'Unknown')
+                        errors.append(f'{fitting_name}: {e}')
+        except Exception as e:
+            errors.append(f'XML parsing error: {e}')
+
+    else:
+        # Single fitting
+        try:
+            fitting = FittingImporter.import_from_string(
+                content,
+                format_name=format_name if not auto_detect else None,
+                auto_detect=auto_detect,
+            )
+            imported.append(fitting)
+        except FittingFormatError as e:
+            errors.append(str(e))
+
+    return render(request, 'core/fitting_bulk_import.html', {
+        'success': True if imported else False,
+        'imported': imported,
+        'errors': errors,
+        'formats': [
+            {'name': 'EFT', 'description': 'EVE Fitting Tool - Human-readable text format'},
+            {'name': 'DNA', 'description': 'Compact type_id format for chat links'},
+            {'name': 'XML', 'description': 'CCP official XML format'},
+        ],
+    })

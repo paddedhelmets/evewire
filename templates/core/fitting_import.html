@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}Import Fitting - evewire{% endblock %}
+
+{% block content %}
+<div style="max-width: 800px; margin: 0 auto;">
+    <h1>Import Fitting</h1>
+    <p>Paste a fitting in EFT, DNA, or XML format to import it.</p>
+
+    {% if success %}
+    <div class="card" style="background-color: #0f0; color: #000;">
+        <h2>Import Successful!</h2>
+        <p><strong>Ship:</strong> {{ fitting.ship_type_name }}</p>
+        <p><strong>Name:</strong> {{ fitting.name }}</p>
+        <p><a href="{% url 'core:fitting_detail' fitting.id %}">View Fitting</a></p>
+        <p><a href="{% url 'core:fittings_list' %}">Back to Fittings</a></p>
+    </div>
+    {% elif error %}
+    <div class="card" style="background-color: #f00; color: #fff;">
+        <h2>Import Failed</h2>
+        <p>{{ error }}</p>
+    </div>
+    {% endif %}
+
+    <form method="post" style="margin-top: 2rem;">
+        {% csrf_token %}
+
+        <div style="margin-bottom: 1rem;">
+            <label for="format" style="font-weight: bold; display: block; margin-bottom: 0.5rem;">Format:</label>
+            <select name="format" id="format" style="padding: 0.5rem; width: 100%; max-width: 400px;">
+                <option value="">Auto-detect</option>
+                {% for fmt in formats %}
+                <option value="{{ fmt.name|lower }}" {% if format == fmt.name|lower %}selected{% endif %}>{{ fmt.name }} - {{ fmt.description }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+            <label style="font-weight: bold; display: flex; align-items: center; gap: 0.5rem;">
+                <input type="checkbox" name="auto_detect" value="on" checked>
+                Auto-detect format
+            </label>
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+            <label for="content" style="font-weight: bold; display: block; margin-bottom: 0.5rem;">Fitting Content:</label>
+            <textarea
+                name="content"
+                id="content"
+                rows="20"
+                style="width: 100%; padding: 0.5rem; font-family: monospace; font-size: 12px;"
+                placeholder="[Vexor, My Fit]&#10;Damage Control II&#10;...">{% if content %}{{ content }}{% endif %}</textarea>
+        </div>
+
+        <button type="submit" style="padding: 0.75rem 1.5rem; font-size: 1rem; cursor: pointer;">Import Fitting</button>
+        <a href="{% url 'core:fittings_list' %}" style="margin-left: 1rem;">Cancel</a>
+    </form>
+
+    <div class="card" style="margin-top: 2rem;">
+        <h3>Format Examples</h3>
+
+        <h4 style="margin-top: 1rem;">EFT Format:</h4>
+        <pre style="background-color: #f0f0f0; padding: 0.5rem; overflow-x: auto;">[Vexor, Test Fit]
+Damage Control II
+1600mm Reinforced Steel Plates II
+
+Small Armor Repairer I
+Capacitor Recharger I
+
+Small Hybrid Burst Aerator I
+Warrior II x5</pre>
+
+        <h4 style="margin-top: 1rem;">DNA Format:</h4>
+        <pre style="background-color: #f0f0f0; padding: 0.5rem; overflow-x: auto;">626:12058;1:25606;1::5973;5:11928;2:</pre>
+
+        <h4 style="margin-top: 1rem;">XML Format:</h4>
+        <pre style="background-color: #f0f0f0; padding: 0.5rem; overflow-x: auto;">&lt;?xml version=&quot;1.0&quot; ?&gt;
+&lt;fittings&gt;
+    &lt;fitting name=&quot;Test Fit&quot;&gt;
+        &lt;shipType value=&quot;Vexor&quot;/&gt;
+        &lt;hardware slot=&quot;low slot 0&quot; type=&quot;Damage Control II&quot;/&gt;
+    &lt;/fitting&gt;
+&lt;/fittings&gt;</pre>
+    </div>
+</div>
+{% endblock %}
