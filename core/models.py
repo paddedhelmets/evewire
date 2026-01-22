@@ -412,19 +412,19 @@ class Character(models.Model):
     def active_manufacturing_jobs(self) -> int:
         """Count active manufacturing jobs (activity_id=1)."""
         from core.character.models import IndustryJob
-        return self.industry_jobs.filter(activity_id=1, status__in=[1, 'active']).count()
+        return self.industry_jobs.filter(activity_id=1, status=1).count()
 
     @property
     def active_research_jobs(self) -> int:
         """Count active research jobs (copying, invention, ME, TE)."""
         from core.character.models import IndustryJob
-        return self.industry_jobs.filter(activity_id__in=[3, 4, 5, 8], status__in=[1, 'active']).count()
+        return self.industry_jobs.filter(activity_id__in=[3, 4, 5, 8], status=1).count()
 
     @property
     def active_reaction_jobs(self) -> int:
         """Count active reaction jobs."""
         from core.character.models import IndustryJob
-        return self.industry_jobs.filter(activity_id=9, status__in=[1, 'active']).count()
+        return self.industry_jobs.filter(activity_id=9, status=1).count()
 
     @property
     def manufacturing_utilization(self) -> float:
