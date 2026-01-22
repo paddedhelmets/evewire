@@ -36,6 +36,11 @@
         <div>
             <strong>{{ progress.not_started }}</strong> Not Started
         </div>
+        {% if total_training_seconds %}
+        <div>
+            <strong>{{ total_training_seconds|format_duration }}</strong> Total Time
+        </div>
+        {% endif %}
     </div>
     <div style="background: #eee; height: 20px; border-radius: 4px; overflow: hidden;">
         <div style="background: #080; height: 100%; width: {{ progress.percent_complete }}%;"></div>
@@ -54,6 +59,7 @@
                     <th style="padding: 0.5rem; text-align: center;">Recommended</th>
                     <th style="padding: 0.5rem; text-align: center;">Current</th>
                     <th style="padding: 0.5rem; text-align: left;">Status</th>
+                    <th style="padding: 0.5rem; text-align: left;">Training Time</th>
                     <th style="padding: 0.5rem; text-align: left;">Actions</th>
                 </tr>
             </thead>
@@ -83,6 +89,19 @@
                             <span style="color: #666;">Not Started</span>
                         {% else %}
                             <span style="color: #999;">Unknown</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 0.5rem; font-size: 0.9rem;">
+                        {% if item.status == 'completed' %}
+                            <span style="color: #080;">Complete</span>
+                        {% elif item.training_time %}
+                            {% if item.training_time.total_seconds > 0 %}
+                                {{ item.training_time.total_seconds|format_duration }}
+                            {% else %}
+                                <span style="color: #999;">Ready</span>
+                            {% endif %}
+                        {% else %}
+                            <span style="color: #999;">&mdash;</span>
                         {% endif %}
                     </td>
                     <td style="padding: 0.5rem;">
