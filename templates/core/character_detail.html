@@ -135,10 +135,7 @@
 </div>
 
 <div class="card">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-        <h2>Skills</h2>
-        <a href="{% url 'core:skills_list' %}" style="font-size: 0.9rem;">View All Skills →</a>
-    </div>
+    <h2>Skills</h2>
     {% if character.total_sp is not None %}
         <p><strong>Total SP:</strong> {{ character.total_sp }}</p>
         <p style="color: #666; margin-bottom: 1rem;">Last updated: {{ character.skills_synced_at|date:"Y-m-d H:i:s" }}</p>
