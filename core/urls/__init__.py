@@ -39,6 +39,7 @@ urlpatterns = [
 
     # Skills
     path('skills/', views.skills_list, name='skills_list'),
+    path('character/<int:character_id>/skills/', views.skills_list, name='character_skills'),
     path('skills/implants/', views.implants_view, name='implants_view'),
     path('skills/attributes/', views.attributes_view, name='attributes_view'),
 

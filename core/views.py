@@ -500,51 +500,81 @@ def skill_plan_remove_skill(request: HttpRequest, plan_id: int, entry_id: int) -
 
 
 @login_required
-def skills_list(request: HttpRequest) -> HttpResponse:
-    """List all skills with search and filtering."""
+def skills_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
+    """List skills grouped by category, for a specific character."""
     from core.character.models import CharacterSkill
-    from core.eve.models import ItemType
+    from core.eve.models import ItemType, ItemGroup
+    from core.models import Character
+    from collections import defaultdict
 
-    character = get_users_character(request.user)
-    if not character:
-        return render(request, 'core/error.html', {
-            'message': 'No characters found. Please add a character first.',
-        }, status=404)
-
-    # Get search/filter parameters
-    search = request.GET.get('search', '')
-    group_id = request.GET.get('group', '')
-    min_level = request.GET.get('min_level', '')
-
-    # Start with all character skills
-    skills_qs = CharacterSkill.objects.filter(character=character).select_related()
-
-    # Apply filters
-    if search:
-        # Search by skill name
-        skill_ids = ItemType.objects.filter(name__icontains=search).values_list('id', flat=True)
-        skills_qs = skills_qs.filter(skill_id__in=skill_ids)
-
-    if group_id:
-        # Filter by group (need to implement this properly with SDE data)
-        # For now, skip this filter
-        pass
-
-    if min_level:
+    # Get character - from URL param or user's first character
+    if character_id:
         try:
-            min_level = int(min_level)
-            skills_qs = skills_qs.filter(skill_level__gte=min_level)
-        except ValueError:
+            character = Character.objects.get(id=character_id, user=request.user)
+        except Character.DoesNotExist:
+            return render(request, 'core/error.html', {
+                'message': 'Character not found',
+            }, status=404)
+    else:
+        character = get_users_character(request.user)
+        if not character:
+            return render(request, 'core/error.html', {
+                'message': 'No characters found. Please add a character first.',
+            }, status=404)
+
+    # Get all skills with ItemType and ItemGroup data
+    skills_qs = CharacterSkill.objects.filter(
+        character=character
+    ).select_related()
+
+    # Build skill groups: {group: {skills}}
+    skill_groups = defaultdict(lambda: {'group': None, 'skills': []})
+    skill_names = {}  # skill_id -> name cache
+    group_names = {}  # group_id -> name cache
+
+    # Pre-fetch all item types and groups
+    skill_ids = [s.skill_id for s in skills_qs]
+    item_types = ItemType.objects.filter(id__in=skill_ids).select_related()
+    for it in item_types:
+        skill_names[it.id] = it.name
+
+    group_ids = [it.group_id for it in item_types if it.group_id]
+    item_groups = ItemGroup.objects.filter(id__in=group_ids)
+    for ig in item_groups:
+        group_names[ig.id] = ig.name
+
+    # Organize skills by group
+    for skill in skills_qs:
+        skill_name = skill_names.get(skill.skill_id, f'Skill {skill.skill_id}')
+        group_id = None
+        group_name = 'Unknown'
+
+        # Get group info from ItemType
+        try:
+            item_type = ItemType.objects.get(id=skill.skill_id)
+            if item_type.group_id:
+                group_id = item_type.group_id
+                group_name = group_names.get(group_id, f'Group {group_id}')
+        except ItemType.DoesNotExist:
             pass
 
-    skills = skills_qs.order_by('-skill_level', 'skill_id')
+        skill_groups[group_name]['skills'].append({
+            'skill': skill,
+            'name': skill_name,
+            'level_stars': '★' * skill.skill_level + '☆' * (5 - skill.skill_level),
+        })
+
+    # Sort skills alphabetically within each group, and groups by name
+    for group_data in skill_groups.values():
+        group_data['skills'].sort(key=lambda x: x['name'])
+
+    sorted_groups = sorted(skill_groups.items(), key=lambda x: x[0])
 
     return render(request, 'core/skills_list.html', {
         'character': character,
-        'skills': skills,
-        'search': search,
-        'group': group_id,
-        'min_level': min_level,
+        'skill_groups': sorted_groups,
+        'total_skills': skills_qs.count(),
+        'total_sp': character.total_sp or 0,
     })
 
 
