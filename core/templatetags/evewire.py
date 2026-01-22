@@ -139,3 +139,35 @@ def dictsortreversed(value, arg):
         return sorted(value, key=lambda x: str(x.get(arg, '')), reverse=True)
     except (TypeError, AttributeError):
         return value
+
+
+@register.filter
+def selectattr(value, arg):
+    """Select items from a list/queryset where an attribute is truthy.
+
+    Usage:
+        items|selectattr:"is_open"    # Items where is_open is truthy
+    """
+    try:
+        items = list(value)
+        return [item for item in items if getattr(item, arg, None)]
+    except (TypeError, AttributeError):
+        return value
+
+
+@register.filter
+def equal(value, arg):
+    """Check if an attribute value equals arg.
+    Intended to be chained after selectattr for the first item's attribute.
+
+    Usage:
+        items|selectattr:"attr"|equal:"value"    # First item's attr == "value"
+    """
+    try:
+        items = list(value)
+        if not items:
+            return []
+        attr = getattr(items[0], list(items[0].__dict__.keys())[0] if hasattr(items[0], '__dict__') else arg, None)
+        return items if attr == arg else []
+    except (TypeError, AttributeError):
+        return value
