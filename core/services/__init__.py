@@ -163,16 +163,20 @@ class TokenManager:
     def get_sso_login_url(state: Optional[str] = None) -> str:
         """Generate the EVE SSO login URL."""
         from core.models import EveScope
+        import string
+        import secrets
+
+        # Always generate a state if not provided (CSRF protection)
+        if not state:
+            state = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(16))
 
         params = {
             'response_type': 'code',
             'redirect_uri': settings.EVE_CALLBACK_URL,
             'client_id': settings.EVE_CLIENT_ID,
             'scope': ' '.join(EveScope.mvp_scopes()),
+            'state': state,
         }
-
-        if state:
-            params['state'] = state
 
         import urllib.parse
         return f'{settings.EVE_SSO_LOGIN_URL}?{urllib.parse.urlencode(params)}'
