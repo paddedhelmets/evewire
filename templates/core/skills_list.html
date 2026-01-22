@@ -16,7 +16,13 @@
             <strong>Total SP:</strong> {{ total_sp|commas }}
         </div>
         <div>
-            <strong>Total Skills:</strong> {{ total_skills }}
+            <strong>Total Available:</strong> {{ total_skills }} skills
+        </div>
+        <div>
+            <strong>Trained:</strong> {{ trained_skills }}
+        </div>
+        <div>
+            <strong>Untrained:</strong> {{ untrained_skills }}
         </div>
         <div>
             <strong>Skill Groups:</strong> {{ total_groups }}
@@ -26,7 +32,7 @@
 
 <div class="card" style="margin-top: 1.5rem;">
     <h2>Filter</h2>
-    <form method="get" style="display: flex; align-items: center; gap: 1rem;">
+    <form method="get" style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
         <div>
             <label for="category" style="display: block; margin-bottom: 0.25rem;">Category:</label>
             <select name="category" id="category" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); min-width: 200px;">
@@ -36,15 +42,22 @@
                 {% endfor %}
             </select>
         </div>
+        <div>
+            <label for="show" style="display: block; margin-bottom: 0.25rem;">Show:</label>
+            <select name="show" id="show" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
+                <option value="all" {% if show_filter == 'all' %}selected{% endif %}>All Skills</option>
+                <option value="trained" {% if show_filter == 'trained' %}selected{% endif %}>Trained Only</option>
+            </select>
+        </div>
         <button type="submit" class="btn">Apply</button>
-        {% if category_filter %}
+        {% if category_filter or show_filter != 'all' %}
         <a href="{% url 'core:skills_list' character.id %}" class="btn" style="background: var(--text-secondary);">Clear</a>
         {% endif %}
     </form>
 </div>
 
 <div class="card" style="margin-top: 1.5rem;">
-    <h2>All Skills ({{ total_skills }} trained{% if category_filter %}, filtered by: {{ category_filter }}{% endif %})</h2>
+    <h2>Skills ({{ total_skills }} total{% if category_filter %}, filtered by: {{ category_filter }}{% endif %}{% if show_filter == 'trained' %}, trained only{% endif %})</h2>
     <table style="width: 100%; border-collapse: collapse;">
         <thead>
             <tr style="border-bottom: 3px solid var(--border-color, #ddd); background: var(--bg-primary, #f5f5f5);">
@@ -52,13 +65,14 @@
                 <th style="padding: 0.75rem; text-align: center; width: 150px;">Level</th>
                 <th style="padding: 0.75rem; text-align: right; width: 140px;">SP (current/next)</th>
                 <th style="padding: 0.75rem; text-align: left; width: 120px;">Time to Next</th>
+                <th style="padding: 0.75rem; text-align: center; width: 100px;">Status</th>
             </tr>
         </thead>
         <tbody>
             {% regroup skills by group_name as skills_by_group %}
             {% for group in skills_by_group %}
             <tr class="group-header" style="cursor: pointer;" onclick="toggleGroup('{{ group.grouper|slugify }}')">
-                <td colspan="4" style="padding: 0.5rem 0.75rem; background: var(--bg-secondary, #e8e8e8); font-weight: 600; color: var(--text-secondary);">
+                <td colspan="6" style="padding: 0.5rem 0.75rem; background: var(--bg-secondary, #e8e8e8); font-weight: 600; color: var(--text-secondary);">
                     <span style="display: flex; justify-content: space-between; align-items: center;">
                         <span>{{ group.grouper }}</span>
                         <span class="toggle-icon" id="icon-{{ group.grouper|slugify }}" style="font-size: 0.8rem;">▼</span>
@@ -67,36 +81,42 @@
             </tr>
             <tbody id="group-{{ group.grouper|slugify }}" class="group-content">
             {% for skill in group.list %}
-            <tr style="border-bottom: 1px solid var(--table-border, #eee);">
+            <tr style="border-bottom: 1px solid var(--table-border, #eee);
+                {% if skill.status == 'not_injected' %}opacity: 0.6;{% endif %}">
                 <td style="padding: 0.6rem 0.75rem;">
                     {{ skill.name }}
-                    {% if skill.primary_attr or skill.secondary_attr %}
                     <span style="color: var(--text-secondary); font-size: 0.85rem;">({{ skill.primary_attr }}/{{ skill.secondary_attr }})</span>
-                    {% endif %}
                 </td>
                 <td style="padding: 0.6rem 0.75rem; text-align: center;">
-                    <span style="color: {% if skill.skill.skill_level == 5 %}#c00{% elif skill.skill.skill_level == 4 %}#c60{% elif skill.skill.skill_level == 3 %}#c90{% else %}#666{% endif %}; font-weight: bold; font-size: 1.1rem; letter-spacing: 3px;">
+                    <span style="color: {% if skill.level == 5 %}#c00{% elif skill.level == 4 %}#c60{% elif skill.level == 3 %}#c90{% elif skill.level > 0 %}#090{% else %}#666{% endif %}; font-weight: bold; font-size: 1.1rem; letter-spacing: 3px;">
                         {{ skill.level_stars }}
                     </span>
                 </td>
                 <td style="padding: 0.6rem 0.75rem; text-align: right; font-family: monospace; font-size: 0.9rem;">
-                    {% if skill.skill.skill_level < 5 %}
+                    {% if skill.level < 5 %}
                         {{ skill.sp_current|default:0|commas }} / {{ skill.sp_for_next|commas }}
                     {% else %}
                         {{ skill.sp_current|default:0|commas }}
                     {% endif %}
                 </td>
                 <td style="padding: 0.6rem 0.75rem; font-size: 0.9rem;">
-                    {% if skill.skill.skill_level == 5 %}
+                    {% if skill.level == 5 %}
                         <span style="color: #080;">Max</span>
-                    {% elif skill.training_time %}
-                        {% if skill.training_time.total_seconds > 0 %}
-                            {{ skill.training_time.total_seconds|format_duration }}
-                        {% else %}
-                            <span style="color: #999;">Ready</span>
-                        {% endif %}
+                    {% elif skill.training_time and skill.training_time.total_seconds > 0 %}
+                        {{ skill.training_time.total_seconds|format_duration }}
+                    {% elif skill.status == 'not_injected' %}
+                        <span style="color: #999;">Not injected</span>
                     {% else %}
                         <span style="color: #999;">&mdash;</span>
+                    {% endif %}
+                </td>
+                <td style="padding: 0.6rem 0.75rem; text-align: center; font-size: 0.85rem;">
+                    {% if skill.status == 'not_injected' %}
+                        <span style="color: #999; background: #f0f0f0; padding: 0.1rem 0.3rem; border-radius: 3px;">Not Injected</span>
+                    {% elif skill.status == 'injected' %}
+                        <span style="color: #c60; background: #fff3cd; padding: 0.1rem 0.3rem; border-radius: 3px;">Level 0</span>
+                    {% else %}
+                        <span style="color: #080; font-weight: bold;">L{{ skill.level }}</span>
                     {% endif %}
                 </td>
             </tr>
@@ -105,8 +125,8 @@
             {% endfor %}
             {% if not skills %}
             <tr>
-                <td colspan="4" style="padding: 2rem; text-align: center; color: var(--text-secondary);">
-                    No skills found. Please sync your character.
+                <td colspan="6" style="padding: 2rem; text-align: center; color: var(--text-secondary);">
+                    {% if show_filter == 'trained' %}No trained skills found.{% else %}No skills found.{% endif %}
                 </td>
             </tr>
             {% endif %}

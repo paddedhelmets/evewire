@@ -586,11 +586,17 @@ def skill_plan_remove_skill(request: HttpRequest, plan_id: int, entry_id: int) -
 def skills_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
     """List skills grouped by category, for a specific character.
 
+    Shows ALL available skills with visual distinction for:
+    - Not injected (character doesn't have the skill at all)
+    - Level 0 with SP (injected but not trained)
+    - Trained (level 1-5)
+
     Query parameters:
         category: Filter to specific skill group name
+        show: 'all' (default) or 'trained' (hide untrained)
     """
     from core.character.models import CharacterSkill
-    from core.eve.models import ItemType, ItemGroup, TypeAttribute, AttributeType
+    from core.eve.models import ItemType, ItemGroup, ItemCategory, TypeAttribute
     from core.models import Character
     from core.skill_plans import calculate_training_time
     import math
@@ -612,17 +618,32 @@ def skills_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
 
     # Get filter parameters
     category_filter = request.GET.get('category', '')
+    show_filter = request.GET.get('show', 'all')  # 'all' or 'trained'
 
-    # Get all skills for this character
-    skills_qs = CharacterSkill.objects.filter(character=character).select_related()
+    # Get all skills from SDE (skills category = 16)
+    skills_category = ItemCategory.objects.filter(name__icontains='skill').first()
+    if skills_category:
+        all_skill_types = ItemType.objects.filter(
+            group_id__in=list(
+                ItemGroup.objects.filter(category_id=skills_category.id).values_list('id', flat=True)
+            )
+        ).select_related()
+    else:
+        all_skill_types = ItemType.objects.none()
 
-    # EVE attribute ID mapping for display
+    # Get character's trained skills for lookup
+    trained_skills = {
+        cs.skill_id: cs
+        for cs in CharacterSkill.objects.filter(character=character)
+    }
+
+    # EVE attribute ID mapping
     ATTRIBUTE_NAMES = {
-        164: 'INT',
-        165: 'PER',
-        166: 'WIL',
-        167: 'CHA',
-        168: 'MEM',
+        164: 'intelligence',
+        165: 'perception',
+        166: 'willpower',
+        167: 'charisma',
+        168: 'memory',
     }
 
     def calculate_sp_for_level(rank: int, level: int) -> int:
@@ -631,99 +652,106 @@ def skills_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
             return 0
         return int(math.pow(2, (2.5 * level) - 2) * 32 * rank)
 
-    # Build a list of all skills with group info
+    # Build comprehensive skill list
     skills_with_groups = []
-    group_ids_seen = set()
+    groups_seen = set()
 
-    for skill in skills_qs:
+    for skill_type in all_skill_types:
+        group = None
         try:
-            item_type = ItemType.objects.get(id=skill.skill_id)
-            group = None
-            if item_type.group_id:
-                group = ItemGroup.objects.filter(id=item_type.group_id).first()
-                if group:
-                    group_ids_seen.add(group.id)
+            group = ItemGroup.objects.get(id=skill_type.group_id)
+        except ItemGroup.DoesNotExist:
+            pass
 
-            # Calculate training time to next level (if not already at level 5)
-            training_time = None
-            if skill.skill_level < 5:
-                try:
-                    training_time = calculate_training_time(character, skill.skill_id, skill.skill_level + 1)
-                except Exception:
-                    # Training time calculation may fail if SDE data missing
-                    training_time = None
+        if group:
+            groups_seen.add(group.id)
 
-            # Get skill rank (attribute 275)
-            rank_attr = TypeAttribute.objects.filter(
-                type_id=skill.skill_id,
-                attribute_id=275
-            ).first()
-            rank = int(rank_attr.value_int) if rank_attr and rank_attr.value_int else 1
-            if rank_attr and rank_attr.value_float:
+        # Check character's status for this skill
+        trained_skill = trained_skills.get(skill_type.id)
+        if trained_skill:
+            # Character has this skill injected
+            level = trained_skill.skill_level
+            sp = trained_skill.skillpoints_in_skill
+
+            # Determine status
+            if level == 0:
+                status = 'injected'  # Has SP but level 0
+            else:
+                status = 'trained'  # Level 1+
+
+            skill_obj = trained_skill
+        else:
+            # Character doesn't have this skill
+            level = 0
+            sp = 0
+            status = 'not_injected'
+            skill_obj = None
+
+        # Get skill rank (attribute 275)
+        rank_attr = TypeAttribute.objects.filter(
+            type_id=skill_type.id,
+            attribute_id=275
+        ).first()
+        rank = 1
+        if rank_attr:
+            if rank_attr.value_int is not None:
+                rank = int(rank_attr.value_int)
+            elif rank_attr.value_float is not None:
                 rank = int(rank_attr.value_float)
 
-            # Get primary/secondary attributes
-            primary_attr = TypeAttribute.objects.filter(
-                type_id=skill.skill_id,
-                attribute_id=180
-            ).first()
-            secondary_attr = TypeAttribute.objects.filter(
-                type_id=skill.skill_id,
-                attribute_id=181
-            ).first()
+        # Get primary/secondary attributes
+        primary_attr = TypeAttribute.objects.filter(
+            type_id=skill_type.id,
+            attribute_id=180
+        ).first()
+        secondary_attr = TypeAttribute.objects.filter(
+            type_id=skill_type.id,
+            attribute_id=181
+        ).first()
 
-            primary_name = ATTRIBUTE_NAMES.get(int(primary_attr.value_int) if primary_attr and primary_attr.value_int else None, '')
-            secondary_name = ATTRIBUTE_NAMES.get(int(secondary_attr.value_int) if secondary_attr and secondary_attr.value_int else None, '')
+        primary_name = ATTRIBUTE_NAMES.get(int(primary_attr.value_int) if primary_attr and primary_attr.value_int else None, 'intelligence')
+        secondary_name = ATTRIBUTE_NAMES.get(int(secondary_attr.value_int) if secondary_attr and secondary_attr.value_int else None, 'memory')
 
-            # Calculate SP for current and next level
-            current_level_sp = calculate_sp_for_level(rank, skill.skill_level)
-            next_level_sp = calculate_sp_for_level(rank, skill.skill_level + 1) if skill.skill_level < 5 else current_level_sp
+        # Calculate SP for current and next level
+        sp_for_level = calculate_sp_for_level(rank, level)
+        sp_for_next = calculate_sp_for_level(rank, level + 1) if level < 5 else sp_for_level
 
-            skill_data = {
-                'skill': skill,
-                'name': item_type.name,
-                'group': group,
-                'level_stars': '★' * skill.skill_level + '☆' * (5 - skill.skill_level),
-                'group_id': item_type.group_id,
-                'group_name': group.name if group else 'Unknown',
-                'training_time': training_time,
-                'rank': rank,
-                'primary_attr': primary_name,
-                'secondary_attr': secondary_name,
-                'sp_current': skill.skillpoints_in_skill,
-                'sp_for_level': current_level_sp,
-                'sp_for_next': next_level_sp,
-            }
-            # Apply category filter if specified
-            if not category_filter or skill_data['group_name'] == category_filter:
-                skills_with_groups.append(skill_data)
-        except ItemType.DoesNotExist:
-            # Calculate training time to next level (if not already at level 5)
-            training_time = None
-            if skill.skill_level < 5:
-                try:
-                    training_time = calculate_training_time(character, skill.skill_id, skill.skill_level + 1)
-                except Exception:
-                    training_time = None
+        # Calculate training time to next level (if not maxed)
+        training_time = None
+        if level < 5 and status != 'not_injected':
+            try:
+                training_time = calculate_training_time(character, skill_type.id, level + 1)
+            except Exception:
+                training_time = None
 
-            skill_data = {
-                'skill': skill,
-                'name': f'Skill {skill.skill_id}',
-                'group': None,
-                'level_stars': '★' * skill.skill_level + '☆' * (5 - skill.skill_level),
-                'group_id': None,
-                'group_name': 'Unknown',
-                'training_time': training_time,
-                'rank': 1,
-                'primary_attr': '',
-                'secondary_attr': '',
-                'sp_current': skill.skillpoints_in_skill,
-                'sp_for_level': 0,
-                'sp_for_next': 0,
-            }
-            # Apply category filter (Unknown category only matches if filtering for Unknown)
-            if not category_filter or category_filter == 'Unknown':
-                skills_with_groups.append(skill_data)
+        skill_data = {
+            'skill_id': skill_type.id,
+            'skill': skill_obj,  # CharacterSkill object or None
+            'name': skill_type.name,
+            'group': group,
+            'level': level,
+            'level_stars': '★' * level + '☆' * (5 - level),
+            'group_id': skill_type.group_id,
+            'group_name': group.name if group else 'Unknown',
+            'training_time': training_time,
+            'rank': rank,
+            'primary_attr': primary_name,
+            'secondary_attr': secondary_name,
+            'sp_current': sp,
+            'sp_for_level': sp_for_level,
+            'sp_for_next': sp_for_next,
+            'status': status,
+        }
+
+        # Apply filters
+        include = True
+        if category_filter and skill_data['group_name'] != category_filter:
+            include = False
+        if show_filter == 'trained' and status == 'not_injected':
+            include = False
+
+        if include:
+            skills_with_groups.append(skill_data)
 
     # Sort by group name, then skill name
     skills_with_groups.sort(key=lambda x: (x['group_name'], x['name']))
@@ -735,17 +763,23 @@ def skills_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
         grouped[s['group_name']].append(s)
 
     # Get all available categories for the filter dropdown
-    all_categories = sorted(grouped.keys())
+    all_categories = sorted(groups_seen)
+
+    # Get character's trained skill count
+    trained_count = len([s for s in skills_with_groups if s['status'] in ('trained', 'injected')])
 
     return render(request, 'core/skills_list.html', {
         'character': character,
         'skills': skills_with_groups,
         'grouped_skills': dict(grouped),
         'total_skills': len(skills_with_groups),
+        'trained_skills': trained_count,
+        'untrained_skills': len(skills_with_groups) - trained_count,
         'total_sp': character.total_sp or 0,
         'total_groups': len(grouped),
         'category_filter': category_filter,
         'all_categories': all_categories,
+        'show_filter': show_filter,
     })
 
 
