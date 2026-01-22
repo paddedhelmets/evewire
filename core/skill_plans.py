@@ -327,9 +327,7 @@ def calculate_training_time(character, skill_id: int, target_level: int) -> Dict
         # Default attributes if not synced
         attrs = None
 
-    # Get skill rank from SDE (using dgmTypeAttributes or hardcoded)
-    # For now, use a default rank of 1 for all skills
-    # TODO: Implement proper SDE lookup for skill rank
+    # Get skill rank from SDE (TypeAttribute table)
     skill_rank = _get_skill_rank(skill_id)
 
     # Get skill primary/secondary attributes from SDE
@@ -380,10 +378,26 @@ def _get_skill_rank(skill_id: int) -> int:
     Rank determines how many SP are needed to train the skill.
     Most skills have rank 1, but some have higher ranks.
 
-    TODO: Implement proper SDE lookup from dgmTypeAttributes
-    For now, return 1 for all skills.
+    Looks up from SDE TypeAttribute table:
+    - Attribute ID 182 = skillRank
     """
-    # Placeholder - would look up from SDE
+    from core.eve.models import TypeAttribute
+
+    try:
+        rank_attr = TypeAttribute.objects.get(
+            type_id=skill_id,
+            attribute_id=182  # skillRank
+        )
+        # Rank is stored as value_int
+        if rank_attr.value_int is not None:
+            return rank_attr.value_int
+        # Fallback to value_float if value_int is None
+        if rank_attr.value_float is not None:
+            return int(rank_attr.value_float)
+    except TypeAttribute.DoesNotExist:
+        pass
+
+    # Default to rank 1 if not found
     return 1
 
 
@@ -393,12 +407,55 @@ def _get_skill_attributes(skill_id: int) -> tuple[str, str]:
 
     Returns tuple of (primary_attribute_name, secondary_attribute_name).
 
-    TODO: Implement proper SDE lookup from invTypes/dgmTypeAttributes
-    For now, return default (intelligence, memory) for all skills.
+    Looks up from SDE TypeAttribute table:
+    - Attribute ID 161 = primaryAttribute
+    - Attribute ID 162 = secondaryAttribute
+
+    EVE attribute ID mapping:
+    - 164 = intelligence
+    - 165 = perception
+    - 166 = willpower
+    - 167 = charisma
+    - 168 = memory
     """
-    # Placeholder - would look up from SDE
-    # Default to intelligence/memory
-    return ('intelligence', 'memory')
+    from core.eve.models import TypeAttribute
+
+    # Map EVE attribute IDs to character attribute field names
+    ATTRIBUTE_MAP = {
+        164: 'intelligence',
+        165: 'perception',
+        166: 'willpower',
+        167: 'charisma',
+        168: 'memory',
+    }
+
+    # Get primary attribute
+    primary_attr = 'intelligence'  # default
+    try:
+        primary_attr_obj = TypeAttribute.objects.get(
+            type_id=skill_id,
+            attribute_id=161  # primaryAttribute
+        )
+        primary_attr_id = int(primary_attr_obj.value_int) if primary_attr_obj.value_int else None
+        if primary_attr_id and primary_attr_id in ATTRIBUTE_MAP:
+            primary_attr = ATTRIBUTE_MAP[primary_attr_id]
+    except TypeAttribute.DoesNotExist:
+        pass
+
+    # Get secondary attribute
+    secondary_attr = 'memory'  # default
+    try:
+        secondary_attr_obj = TypeAttribute.objects.get(
+            type_id=skill_id,
+            attribute_id=162  # secondaryAttribute
+        )
+        secondary_attr_id = int(secondary_attr_obj.value_int) if secondary_attr_obj.value_int else None
+        if secondary_attr_id and secondary_attr_id in ATTRIBUTE_MAP:
+            secondary_attr = ATTRIBUTE_MAP[secondary_attr_id]
+    except TypeAttribute.DoesNotExist:
+        pass
+
+    return (primary_attr, secondary_attr)
 
 
 # Import models for aggregate functions
