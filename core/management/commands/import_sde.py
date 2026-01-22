@@ -2,7 +2,11 @@
 Management command to import EVE SDE (Static Data Export).
 
 Uses Fuzzwork Enterprises pre-built SQLite database - the simplest approach.
-Downloads the SDE database and copies required tables into our database.
+Downloads the SDE database and copies required tables into the shared SDE database.
+
+The shared SDE database location is configured via:
+- settings.EVESDE_PATH (default: ~/data/evewire/eve_sde.sqlite3)
+- DB_NAME environment variable (overrides the default path)
 """
 
 import os
@@ -98,8 +102,27 @@ class Command(BaseCommand):
             type=str,
             help='Comma-separated list of SDE tables to import (default: all required)',
         )
+        parser.add_argument(
+            '--dry-run',
+            action='store_true',
+            help='Show what would be imported without doing anything',
+        )
+        parser.add_argument(
+            '--init',
+            action='store_true',
+            help='Initialize the SDE database (download full SDE to shared location)',
+        )
 
     def handle(self, *args, **options):
+        # Get the shared SDE database path
+        sde_db_path = Path(settings.DATABASES['default']['NAME'])
+
+        self.stdout.write(f'SDE Database: {sde_db_path}')
+
+        # Handle --init mode: download full SDE to shared location
+        if options['init']:
+            return self._init_sde(sde_db_path)
+
         # Check which tables to import
         if options['tables']:
             tables = [t.strip() for t in options['tables'].split(',')]
@@ -108,6 +131,15 @@ class Command(BaseCommand):
             table_map = self.REQUIRED_TABLES
 
         self.stdout.write(f'Importing {len(table_map)} tables from Fuzzwork SDE SQLite database')
+
+        # Dry run mode
+        if options['dry_run']:
+            self.stdout.write('Dry run mode - would import:')
+            for sde_table, django_table in table_map.items():
+                exists = self._table_exists(django_table)
+                status = 'exists' if exists else 'would create'
+                self.stdout.write(f'  {sde_table} -> {django_table}: {status}')
+            return
 
         # Download and extract the SDE database
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -150,12 +182,67 @@ class Command(BaseCommand):
 
         self.stdout.write(f'\nDone: {imported} imported, {skipped} skipped')
 
+    def _init_sde(self, target_path: Path) -> None:
+        """Initialize the SDE database by downloading the full SDE to the shared location."""
+        import shutil
+        import sqlite3
+
+        self.stdout.write(f'Initializing SDE database at {target_path}')
+        self.stdout.write('This will download the full SDE (~300MB) and may take several minutes.')
+
+        # Create parent directory if it doesn't exist
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Download to temp file first
+        with tempfile.TemporaryDirectory() as tmpdir:
+            compressed_path = os.path.join(tmpdir, 'sde.sqlite.bz2')
+            decompressed_path = os.path.join(tmpdir, 'sde.sqlite')
+
+            self.stdout.write('Downloading SDE database...')
+            try:
+                urllib.request.urlretrieve(self.SDE_URL, compressed_path)
+            except Exception as e:
+                self.stdout.write(self.style.ERROR(f'Failed to download SDE: {e}'))
+                return
+
+            self.stdout.write('Decompressing...')
+            try:
+                with bz2.open(compressed_path, 'rb') as compressed:
+                    with open(decompressed_path, 'wb') as decompressed:
+                        decompressed.write(compressed.read())
+            except Exception as e:
+                self.stdout.write(self.style.ERROR(f'Failed to decompress SDE: {e}'))
+                return
+
+            # Verify the database
+            self.stdout.write('Verifying database...')
+            try:
+                conn = sqlite3.connect(decompressed_path)
+                cursor = conn.cursor()
+                cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table'")
+                table_count = cursor.fetchone()[0]
+                conn.close()
+                self.stdout.write(f'Database contains {table_count} tables')
+            except Exception as e:
+                self.stdout.write(self.style.ERROR(f'Database verification failed: {e}'))
+                return
+
+            # Move to target location (backup existing if present)
+            if target_path.exists():
+                backup_path = target_path.with_suffix('.sqlite3.backup')
+                self.stdout.write(f'Backing up existing database to {backup_path}')
+                shutil.move(str(target_path), str(backup_path))
+
+            self.stdout.write(f'Installing SDE to {target_path}')
+            shutil.move(decompressed_path, str(target_path))
+
+        self.stdout.write(self.style.SUCCESS('SDE database initialized successfully'))
+        self.stdout.write('You can now run import_sde without --init to add additional tables.')
+
     def _table_exists(self, table_name: str) -> bool:
         """Check if a table already exists and has data."""
         import sqlite3
         db_path = settings.DATABASES['default']['NAME']
-        if db_path is None:
-            db_path = str(Path(settings.BASE_DIR) / 'db.sqlite3')
 
         conn = sqlite3.connect(db_path)
         result = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", [table_name]).fetchone()
@@ -172,8 +259,6 @@ class Command(BaseCommand):
         import sqlite3
 
         db_path = settings.DATABASES['default']['NAME']
-        if db_path is None:
-            db_path = str(Path(settings.BASE_DIR) / 'db.sqlite3')
 
         # Connect to SDE database
         sde_conn = sqlite3.connect(sde_path)
