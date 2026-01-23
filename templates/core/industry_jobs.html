@@ -1,22 +1,45 @@
 {% extends "base.html" %}
 {% load evewire %}
 
-{% block title %}Industry Jobs - {{ character.name }} - evewire{% endblock %}
+{% block title %}
+{% if is_account_wide %}Industry Jobs - Account Wide{% else %}Industry Jobs - {{ character.name }}{% endif %} - evewire
+{% endblock %}
 
 {% block content %}
-<h1>Industry Jobs - {{ character.name }}</h1>
+<h1>
+    {% if is_account_wide %}Industry Jobs - Account Wide{% else %}Industry Jobs - {{ character.name }}{% endif %}
+</h1>
 
 <div style="margin-bottom: 1rem;">
     <a href="{% url 'core:dashboard' %}">Dashboard</a>
     <span style="margin: 0 0.5rem;">&rarr;</span>
-    <a href="{% url 'core:character_detail' character.id %}">{{ character.name }}</a>
+    <a href="{% url 'core:industry_jobs_list' %}">Jobs</a>
+    {% if not is_account_wide %}
     <span style="margin: 0 0.5rem;">&rarr;</span>
-    <span>Industry Jobs</span>
+    <span>{{ character.name }}</span>
+    {% endif %}
 </div>
 
+<!-- Filters with pilot selection for account-wide view -->
 <div class="card">
     <h2>Filters</h2>
     <form method="get" style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end;">
+        {% if is_account_wide %}
+        <div style="flex: 1; min-width: 250px;">
+            <label style="display: block; margin-bottom: 0.25rem;">Filter by Pilot:</label>
+            <div style="max-height: 150px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 4px; padding: 0.5rem; background: var(--bg-primary);">
+                {% for char in all_characters %}
+                <div style="margin-bottom: 0.25rem;">
+                    <label style="display: flex; align-items: center; margin: 0; cursor: pointer;">
+                        <input type="checkbox" name="pilots" value="{{ char.id }}" {% if char.id|stringformat:"s" in pilot_filter %}checked{% endif %} style="margin-right: 0.5rem;">
+                        <span>{{ char.character_name }}</span>
+                    </label>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
         <div>
             <label for="activity" style="display: block; margin-bottom: 0.25rem;">Activity:</label>
             <select name="activity" id="activity" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
@@ -34,8 +57,10 @@
             </select>
         </div>
         <button type="submit" class="btn">Apply Filters</button>
-        <a href="{% url 'core:character_industry_jobs_list' character.id %}" class="btn" style="background: var(--text-secondary);">Clear</a>
+        <a href="{% url 'core:industry_jobs_list' %}" class="btn" style="background: var(--text-secondary);">Clear</a>
+        {% if not is_account_wide %}
         <a href="{% url 'core:character_industry_jobs_export' character.id %}" class="btn" style="background: #28a745; margin-left: auto;">Export CSV</a>
+        {% endif %}
     </form>
 </div>
 
@@ -45,6 +70,9 @@
     <table style="width: 100%; border-collapse: collapse;">
         <thead>
             <tr style="border-bottom: 2px solid var(--border-color);">
+                {% if is_account_wide %}
+                <th style="padding: 0.75rem; text-align: left;">Pilot</th>
+                {% endif %}
                 <th style="padding: 0.75rem; text-align: left;">Activity</th>
                 <th style="padding: 0.75rem; text-align: left;">Product</th>
                 <th style="padding: 0.75rem; text-align: left;">Status</th>
@@ -58,6 +86,11 @@
         <tbody>
             {% for job in jobs %}
             <tr style="border-bottom: 1px solid var(--table-border); {% if not job.is_active and not job.is_completed %}opacity: 0.6;{% endif %}">
+                {% if is_account_wide %}
+                <td style="padding: 0.75rem;">
+                    <a href="{% url 'core:character_industry_jobs' job.character.id %}" style="font-weight: 500;">{{ job.character.character_name }}</a>
+                </td>
+                {% endif %}
                 <td style="padding: 0.75rem;">
                     <span style="font-weight: bold;">{{ job.activity_name }}</span>
                 </td>
@@ -101,7 +134,7 @@
     {% if jobs.has_other_pages %}
     <div style="margin-top: 1.5rem; display: flex; justify-content: center; gap: 0.5rem; align-items: center;">
         {% if jobs.has_previous %}
-            <a href="?page={{ jobs.previous_page_number }}{% if activity_filter %}&activity={{ activity_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}" class="btn">&laquo; Previous</a>
+            <a href="?page={{ jobs.previous_page_number }}{% if activity_filter %}&activity={{ activity_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if is_account_wide %}{% for pid in pilot_filter %}&pilots={{ pid }}{% endfor %}{% endif %}" class="btn">&laquo; Previous</a>
         {% endif %}
 
         <span>
@@ -109,7 +142,7 @@
         </span>
 
         {% if jobs.has_next %}
-            <a href="?page={{ jobs.next_page_number }}{% if activity_filter %}&activity={{ activity_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}" class="btn">Next &raquo;</a>
+            <a href="?page={{ jobs.next_page_number }}{% if activity_filter %}&activity={{ activity_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if is_account_wide %}{% for pid in pilot_filter %}&pilots={{ pid }}{% endfor %}{% endif %}" class="btn">Next &raquo;</a>
         {% endif %}
     </div>
     {% endif %}
@@ -121,6 +154,8 @@
 {% endif %}
 
 <div style="margin-bottom: 1rem;">
+    {% if not is_account_wide %}
     <a href="{% url 'core:character_detail' character.id %}" class="btn">Back to Character</a>
+    {% endif %}
 </div>
 {% endblock %}

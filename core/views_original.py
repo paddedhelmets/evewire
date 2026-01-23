@@ -1105,7 +1105,15 @@ def wallet_journal(request: HttpRequest, character_id: int = None) -> HttpRespon
     from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
     from datetime import datetime, timedelta
 
-    # Get character - either specified or user's character
+    # Get all user's characters for pilot filter
+    all_characters = list(Character.objects.filter(user=request.user).order_by('character_name'))
+
+    if not all_characters:
+        return render(request, 'core/error.html', {
+            'message': 'No characters found',
+        }, status=404)
+
+    # Get character - either specified or user's first character
     if character_id:
         try:
             character = Character.objects.get(id=character_id, user=request.user)
@@ -1113,20 +1121,28 @@ def wallet_journal(request: HttpRequest, character_id: int = None) -> HttpRespon
             return render(request, 'core/error.html', {
                 'message': 'Character not found',
             }, status=404)
+        is_account_wide = False
     else:
-        character = get_users_character(request.user)
-        if not character:
-            return render(request, 'core/error.html', {
-                'message': 'Character not found',
-            }, status=404)
+        # Account-wide view - show all characters
+        character = None
+        is_account_wide = True
 
     # Get filter parameters
+    pilot_filter = request.GET.getlist('pilots', [])  # Multi-select for account-wide
     ref_type_filter = request.GET.get('ref_type', '')
     date_from = request.GET.get('date_from', '')
     date_to = request.GET.get('date_to', '')
 
     # Build queryset
-    entries_qs = WalletJournalEntry.objects.filter(character=character)
+    if is_account_wide:
+        # Filter by selected pilots, or show all if none selected
+        if pilot_filter:
+            pilot_ids = [int(pid) for pid in pilot_filter if pid.isdigit()]
+            entries_qs = WalletJournalEntry.objects.filter(character_id__in=pilot_ids)
+        else:
+            entries_qs = WalletJournalEntry.objects.filter(character__user=request.user)
+    else:
+        entries_qs = WalletJournalEntry.objects.filter(character=character)
 
     # Apply ref_type filter
     if ref_type_filter:
@@ -1150,9 +1166,23 @@ def wallet_journal(request: HttpRequest, character_id: int = None) -> HttpRespon
             pass
 
     # Get distinct ref_types for filter dropdown
-    all_ref_types = WalletJournalEntry.objects.filter(
-        character=character
-    ).values_list('ref_type', flat=True).distinct().order_by('ref_type')
+    if is_account_wide:
+        if pilot_filter:
+            pilot_ids = [int(pid) for pid in pilot_filter if pid.isdigit()]
+            all_ref_types = WalletJournalEntry.objects.filter(
+                character_id__in=pilot_ids
+            ).values_list('ref_type', flat=True).distinct().order_by('ref_type')
+        else:
+            all_ref_types = WalletJournalEntry.objects.filter(
+                character__user=request.user
+            ).values_list('ref_type', flat=True).distinct().order_by('ref_type')
+    else:
+        all_ref_types = WalletJournalEntry.objects.filter(
+            character=character
+        ).values_list('ref_type', flat=True).distinct().order_by('ref_type')
+
+    # Order by date descending
+    entries_qs = entries_qs.order_by('-date')
 
     # Pagination
     page = request.GET.get('page', 1)
@@ -1166,21 +1196,40 @@ def wallet_journal(request: HttpRequest, character_id: int = None) -> HttpRespon
     except EmptyPage:
         entries = paginator.page(paginator.num_pages)
 
-    # Get current balance from latest entry
-    current_balance = entries_qs.order_by('-date').first()
-    if current_balance:
-        current_balance = current_balance.balance
+    # Calculate summary stats for account-wide view
+    summary = None
+    if is_account_wide:
+        total_entries = entries_qs.count()
+        # Calculate total income/expense
+        from django.db.models import Sum
+        income = entries_qs.filter(amount__gt=0).aggregate(total=Sum('amount'))['total'] or 0
+        expense = entries_qs.filter(amount__lt=0).aggregate(total=Sum('amount'))['total'] or 0
+        summary = {
+            'total_entries': total_entries,
+            'income': income,
+            'expense': abs(expense),
+            'net': income + expense,
+        }
     else:
-        current_balance = character.wallet_balance
+        # Get current balance from latest entry for single character
+        current_balance = entries_qs.order_by('-date').first()
+        if current_balance:
+            current_balance = current_balance.balance
+        else:
+            current_balance = character.wallet_balance
 
     return render(request, 'core/wallet_journal.html', {
         'character': character,
+        'all_characters': all_characters,
+        'is_account_wide': is_account_wide,
         'entries': entries,
         'ref_types': all_ref_types,
         'ref_type_filter': ref_type_filter,
         'date_from': date_from,
         'date_to': date_to,
-        'current_balance': current_balance,
+        'pilot_filter': pilot_filter,
+        'summary': summary,
+        'current_balance': current_balance if not is_account_wide else None,
     })
 
 

@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}
+{% if is_account_wide %}Industry - Account Wide{% else %}Industry - {{ character.name }}{% endif %} - evewire
+{% endblock %}
+
+{% block content %}
+<h1>
+    {% if is_account_wide %}Industry - Account Wide{% else %}Industry - {{ character.name }}{% endif %}
+</h1>
+
+<div style="margin-bottom: 1rem;">
+    <a href="{% url 'core:dashboard' %}">Dashboard</a>
+    <span style="margin: 0 0.5rem;">&rarr;</span>
+    <a href="{% url 'core:industry_summary' %}">Industry</a>
+    {% if not is_account_wide %}
+    <span style="margin: 0 0.5rem;">&rarr;</span>
+    <span>{{ character.name }}</span>
+    {% endif %}
+</div>
+
+<!-- Industry slots summary by pilot (account-wide) -->
+{% if is_account_wide and industry_by_pilot %}
+<div class="card">
+    <h2>Industry Slots by Pilot</h2>
+
+    <h3 style="margin-top: 0;">Manufacturing</h3>
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+        {% for pilot_info in industry_by_pilot %}
+        <div style="border: 1px solid var(--border-color); border-radius: 4px; padding: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <h4 style="margin: 0;">{{ pilot_info.character.character_name }}</h4>
+                <span style="font-size: 1.1rem; font-weight: bold;">{{ pilot_info.manufacturing.active }} / {{ pilot_info.manufacturing.slots }}</span>
+            </div>
+            <div style="background: var(--bg-secondary); height: 12px; border-radius: 3px; overflow: hidden; margin-top: 0.5rem;">
+                <div style="background: {% if pilot_info.manufacturing.utilization >= 100 %}var(--alert-error-text){% elif pilot_info.manufacturing.utilization > 80 %}var(--alert-warning-text){% else %}var(--alert-success-text){% endif %}; height: 100%; width: {{ pilot_info.manufacturing.utilization }}%;"></div>
+            </div>
+            <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">{{ pilot_info.manufacturing.utilization|floatformat:0 }}% utilized</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <h3>Science / Research</h3>
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+        {% for pilot_info in industry_by_pilot %}
+        <div style="border: 1px solid var(--border-color); border-radius: 4px; padding: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <h4 style="margin: 0;">{{ pilot_info.character.character_name }}</h4>
+                <span style="font-size: 1.1rem; font-weight: bold;">{{ pilot_info.science.active }} / {{ pilot_info.science.slots }}</span>
+            </div>
+            <div style="background: var(--bg-secondary); height: 12px; border-radius: 3px; overflow: hidden; margin-top: 0.5rem;">
+                <div style="background: {% if pilot_info.science.utilization >= 100 %}var(--alert-error-text){% elif pilot_info.science.utilization > 80 %}var(--alert-warning-text){% else %}var(--alert-success-text){% endif %}; height: 100%; width: {{ pilot_info.science.utilization }}%;"></div>
+            </div>
+            <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">{{ pilot_info.science.utilization|floatformat:0 }}% utilized</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <h3>Reactions</h3>
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem;">
+        {% for pilot_info in industry_by_pilot %}
+        <div style="border: 1px solid var(--border-color); border-radius: 4px; padding: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <h4 style="margin: 0;">{{ pilot_info.character.character_name }}</h4>
+                <span style="font-size: 1.1rem; font-weight: bold;">{{ pilot_info.reactions.active }} / {{ pilot_info.reactions.slots }}</span>
+            </div>
+            <div style="background: var(--bg-secondary); height: 12px; border-radius: 3px; overflow: hidden; margin-top: 0.5rem;">
+                <div style="background: {% if pilot_info.reactions.utilization >= 100 %}var(--alert-error-text){% elif pilot_info.reactions.utilization > 80 %}var(--alert-warning-text){% else %}var(--alert-success-text){% endif %}; height: 100%; width: {{ pilot_info.reactions.utilization }}%;"></div>
+            </div>
+            <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">{{ pilot_info.reactions.utilization|floatformat:0 }}% utilized</p>
+            <a href="{% url 'core:character_industry_jobs' pilot_info.character.id %}" style="font-size: 0.85rem; display: block; margin-top: 0.5rem;">View Jobs &rarr;</a>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% elif not is_account_wide %}
+<!-- Single character industry slots -->
+<div class="card">
+    <h2>Industry Slots</h2>
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
+        <!-- Manufacturing -->
+        <div style="border: 1px solid #ddd; border-radius: 4px; padding: 0.75rem;">
+            <p style="margin: 0 0 0.5rem 0; font-size: 0.9rem; color: #666;">Manufacturing</p>
+            <p style="font-size: 1.25rem; font-weight: bold; margin: 0.25rem 0;">
+                {{ character.active_manufacturing_jobs }} / {{ character.manufacturing_slots }}
+            </p>
+            <div style="background: #eee; height: 12px; border-radius: 3px; overflow: hidden;">
+                <div style="background: {% if character.manufacturing_utilization >= 100 %}#c00{% elif character.manufacturing_utilization > 80 %}#ffc107{% else %}#080{% endif %}; height: 100%; width: {{ character.manufacturing_utilization }}%;"></div>
+            </div>
+            <p style="font-size: 0.8rem; color: #666; margin-top: 0.25rem;">{{ character.manufacturing_utilization|floatformat:0 }}%</p>
+        </div>
+        <!-- Science -->
+        <div style="border: 1px solid #ddd; border-radius: 4px; padding: 0.75rem;">
+            <p style="margin: 0 0 0.5rem 0; font-size: 0.9rem; color: #666;">Science / Research</p>
+            <p style="font-size: 1.25rem; font-weight: bold; margin: 0.25rem 0;">
+                {{ character.active_research_jobs }} / {{ character.science_slots }}
+            </p>
+            <div style="background: #eee; height: 12px; border-radius: 3px; overflow: hidden;">
+                <div style="background: {% if character.science_utilization >= 100 %}#c00{% elif character.science_utilization > 80 %}#ffc107{% else %}#080{% endif %}; height: 100%; width: {{ character.science_utilization }}%;"></div>
+            </div>
+            <p style="font-size: 0.8rem; color: #666; margin-top: 0.25rem;">{{ character.science_utilization|floatformat:0 }}%</p>
+        </div>
+        <!-- Reactions -->
+        <div style="border: 1px solid #ddd; border-radius: 4px; padding: 0.75rem;">
+            <p style="margin: 0 0 0.5rem 0; font-size: 0.9rem; color: #666;">Reactions</p>
+            <p style="font-size: 1.25rem; font-weight: bold; margin: 0.25rem 0;">
+                {{ character.active_reaction_jobs }} / {{ character.reaction_slots }}
+            </p>
+            <div style="background: #eee; height: 12px; border-radius: 3px; overflow: hidden;">
+                <div style="background: {% if character.reaction_utilization >= 100 %}#c00{% elif character.reaction_utilization > 80 %}#ffc107{% else %}#080{% endif %}; height: 100%; width: {{ character.reaction_utilization }}%;"></div>
+            </div>
+            <p style="font-size: 0.8rem; color: #666; margin-top: 0.25rem;">{{ character.reaction_utilization|floatformat:0 }}%</p>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Quick links -->
+<div class="card">
+    <h2>Industry Jobs</h2>
+    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+        <a href="{% url 'core:industry_jobs_list' %}" class="btn">View All Jobs</a>
+        {% if not is_account_wide %}
+        <a href="{% url 'core:blueprints_list' character.id %}" class="btn">View Blueprints</a>
+        <a href="{% url 'core:character_industry_jobs_export' character.id %}" class="btn" style="background: #28a745;">Export CSV</a>
+        {% endif %}
+    </div>
+</div>
+
+<div style="margin-bottom: 1rem;">
+    {% if not is_account_wide %}
+    <a href="{% url 'core:character_detail' character.id %}" class="btn">Back to Character</a>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,19 +1,47 @@
 {% extends "base.html" %}
 {% load evewire %}
 
-{% block title %}Market Orders - {{ character.name }} - evewire{% endblock %}
+{% block title %}
+{% if is_account_wide %}Market Orders - Account Wide{% else %}Market Orders - {{ character.name }}{% endif %} - evewire
+{% endblock %}
 
 {% block content %}
-<h1>Market Orders - {{ character.name }}</h1>
+<h1>
+    {% if is_account_wide %}Market Orders - Account Wide{% else %}Market Orders - {{ character.name }}{% endif %}
+</h1>
 
 <div style="margin-bottom: 1rem;">
     <a href="{% url 'core:dashboard' %}">Dashboard</a>
     <span style="margin: 0 0.5rem;">&rarr;</span>
-    <a href="{% url 'core:character_detail' character.id %}">{{ character.name }}</a>
+    <a href="{% url 'core:market_orders' %}">Orders</a>
+    {% if not is_account_wide %}
     <span style="margin: 0 0.5rem;">&rarr;</span>
-    <span>Market Orders</span>
+    <span>{{ character.name }}</span>
+    {% endif %}
 </div>
 
+<!-- Slot utilization summary -->
+{% if is_account_wide and slot_utilization %}
+<div class="card">
+    <h2>Slot Utilization by Pilot</h2>
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem;">
+        {% for slot_info in slot_utilization %}
+        <div style="border: 1px solid var(--border-color); border-radius: 4px; padding: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <h3 style="margin: 0;">{{ slot_info.character.character_name }}</h3>
+                <span style="font-size: 1.2rem; font-weight: bold;">{{ slot_info.orders_count }} / {{ slot_info.slots_total }}</span>
+            </div>
+            <div style="background: var(--bg-secondary); height: 12px; border-radius: 3px; overflow: hidden; margin-top: 0.5rem;">
+                <div style="background: {% if slot_info.utilization >= 100 %}var(--alert-error-text){% elif slot_info.utilization > 80 %}var(--alert-warning-text){% else %}var(--alert-success-text){% endif %}; height: 100%; width: {{ slot_info.utilization }}%;"></div>
+            </div>
+            <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">{{ slot_info.utilization|floatformat:0 }}% utilized</p>
+            <a href="{% url 'core:character_market_orders' slot_info.character.id %}" style="font-size: 0.85rem;">View &rarr;</a>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% elif not is_account_wide %}
+<!-- Single character slot utilization -->
 <div class="card">
     <h2>Order Slot Utilization</h2>
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
@@ -53,10 +81,28 @@
         Slot limits based on Trade (+5/level), Retail (+4/level), Wholesale (+8/level), and Tycoon (+16/level) skills.
     </p>
 </div>
+{% endif %}
 
+<!-- Filters with pilot selection for account-wide view -->
 <div class="card">
     <h2>Filters</h2>
     <form method="get" style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end;">
+        {% if is_account_wide %}
+        <div style="flex: 1; min-width: 250px;">
+            <label style="display: block; margin-bottom: 0.25rem;">Filter by Pilot:</label>
+            <div style="max-height: 150px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 4px; padding: 0.5rem; background: var(--bg-primary);">
+                {% for char in all_characters %}
+                <div style="margin-bottom: 0.25rem;">
+                    <label style="display: flex; align-items: center; margin: 0; cursor: pointer;">
+                        <input type="checkbox" name="pilots" value="{{ char.id }}" {% if char.id|stringformat:"s" in pilot_filter %}checked{% endif %} style="margin-right: 0.5rem;">
+                        <span>{{ char.character_name }}</span>
+                    </label>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
         <div>
             <label for="type" style="display: block; margin-bottom: 0.25rem;">Order Type:</label>
             <select name="type" id="type" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
@@ -77,7 +123,7 @@
             </select>
         </div>
         <button type="submit" class="btn">Apply Filters</button>
-        <a href="{% url 'core:character_market_orders' character.id %}" class="btn" style="background: var(--text-secondary);">Clear</a>
+        <a href="{% url 'core:market_orders' %}" class="btn" style="background: var(--text-secondary);">Clear</a>
     </form>
 </div>
 
@@ -87,6 +133,9 @@
     <table style="width: 100%; border-collapse: collapse;">
         <thead>
             <tr style="border-bottom: 2px solid var(--border-color);">
+                {% if is_account_wide %}
+                <th style="padding: 0.75rem; text-align: left;">Pilot</th>
+                {% endif %}
                 <th style="padding: 0.75rem; text-align: left;">Type</th>
                 <th style="padding: 0.75rem; text-align: left;">Item</th>
                 <th style="padding: 0.75rem; text-align: right;">Price</th>
@@ -100,6 +149,11 @@
         <tbody>
             {% for order in orders %}
             <tr style="border-bottom: 1px solid var(--table-border); {% if not order.is_open %}opacity: 0.6;{% endif %}">
+                {% if is_account_wide %}
+                <td style="padding: 0.75rem;">
+                    <a href="{% url 'core:character_market_orders' order.character.id %}" style="font-weight: 500;">{{ order.character.character_name }}</a>
+                </td>
+                {% endif %}
                 <td style="padding: 0.75rem;">
                     <span style="color: {% if order.is_buy_order %}var(--alert-success-text){% else %}var(--alert-error-text){% endif %}; font-weight: bold;">
                         {% if order.is_buy_order %}BUY{% else %}SELL{% endif %}
@@ -124,7 +178,7 @@
     {% if orders.has_other_pages %}
     <div style="margin-top: 1.5rem; display: flex; justify-content: center; gap: 0.5rem; align-items: center;">
         {% if orders.has_previous %}
-            <a href="?page={{ orders.previous_page_number }}{% if order_type %}&type={{ order_type }}{% endif %}{% if state_filter %}&state={{ state_filter }}{% endif %}" class="btn">&laquo; Previous</a>
+            <a href="?page={{ orders.previous_page_number }}{% if order_type %}&type={{ order_type }}{% endif %}{% if state_filter %}&state={{ state_filter }}{% endif %}{% if is_account_wide %}{% for pid in pilot_filter %}&pilots={{ pid }}{% endfor %}{% endif %}" class="btn">&laquo; Previous</a>
         {% endif %}
 
         <span>
@@ -132,7 +186,7 @@
         </span>
 
         {% if orders.has_next %}
-            <a href="?page={{ orders.next_page_number }}{% if order_type %}&type={{ order_type }}{% endif %}{% if state_filter %}&state={{ state_filter }}{% endif %}" class="btn">Next &raquo;</a>
+            <a href="?page={{ orders.next_page_number }}{% if order_type %}&type={{ order_type }}{% endif %}{% if state_filter %}&state={{ state_filter }}{% endif %}{% if is_account_wide %}{% for pid in pilot_filter %}&pilots={{ pid }}{% endfor %}{% endif %}" class="btn">Next &raquo;</a>
         {% endif %}
     </div>
     {% endif %}
@@ -144,7 +198,9 @@
 {% endif %}
 
 <div style="margin-bottom: 1rem;">
+    {% if not is_account_wide %}
     <a href="{% url 'core:character_market_orders_history' character.id %}" class="btn">View Order History</a>
     <a href="{% url 'core:character_detail' character.id %}" class="btn" style="margin-left: 0.5rem;">Back to Character</a>
+    {% endif %}
 </div>
 {% endblock %}

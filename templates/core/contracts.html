@@ -1,24 +1,50 @@
 {% extends "base.html" %}
 {% load evewire %}
 
-{% block title %}Contracts - {{ character.name }} - evewire{% endblock %}
+{% block title %}
+{% if is_account_wide %}Contracts - Account Wide{% else %}Contracts - {{ character.name }}{% endif %} - evewire
+{% endblock %}
 
 {% block content %}
-<h1>Contracts - {{ character.name }}</h1>
+<h1>
+    {% if is_account_wide %}Contracts - Account Wide{% else %}Contracts - {{ character.name }}{% endif %}
+</h1>
 
 <div style="margin-bottom: 1rem;">
     <a href="{% url 'core:dashboard' %}">Dashboard</a>
     <span style="margin: 0 0.5rem;">&rarr;</span>
-    <a href="{% url 'core:character_detail' character.id %}">{{ character.name }}</a>
+    <a href="{% url 'core:contracts' %}">Contracts</a>
+    {% if not is_account_wide %}
     <span style="margin: 0 0.5rem;">&rarr;</span>
-    <span>Contracts</span>
+    <span>{{ character.name }}</span>
+    {% endif %}
 </div>
 
+<!-- Contract status summary -->
 <div class="card">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-        <h2>Contract Status Summary</h2>
-        <a href="{% url 'core:character_contracts_export' character.id %}" class="btn" style="background: #28a745;">Export CSV</a>
+    <h2>Contract Status Summary</h2>
+    {% if is_account_wide and summary %}
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
+        <div style="border: 1px solid var(--border-color); border-radius: 4px; padding: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <h3 style="margin: 0;">Outstanding</h3>
+                <span style="font-size: 1.2rem; font-weight: bold;">{{ summary.outstanding_count }}</span>
+            </div>
+        </div>
+        <div style="border: 1px solid var(--border-color); border-radius: 4px; padding: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <h3 style="margin: 0;">In Progress</h3>
+                <span style="font-size: 1.2rem; font-weight: bold;">{{ summary.in_progress_count }}</span>
+            </div>
+        </div>
+        <div style="border: 1px solid var(--border-color); border-radius: 4px; padding: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <h3 style="margin: 0;">Completed</h3>
+                <span style="font-size: 1.2rem; font-weight: bold;">{{ summary.completed_count }}</span>
+            </div>
+        </div>
     </div>
+    {% elif not is_account_wide %}
     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
         <div style="border: 1px solid var(--border-color); border-radius: 4px; padding: 1rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
@@ -39,11 +65,29 @@
             </div>
         </div>
     </div>
+    {% endif %}
 </div>
 
+<!-- Filters with pilot selection for account-wide view -->
 <div class="card">
     <h2>Filters</h2>
     <form method="get" style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end;">
+        {% if is_account_wide %}
+        <div style="flex: 1; min-width: 250px;">
+            <label style="display: block; margin-bottom: 0.25rem;">Filter by Pilot:</label>
+            <div style="max-height: 150px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 4px; padding: 0.5rem; background: var(--bg-primary);">
+                {% for char in all_characters %}
+                <div style="margin-bottom: 0.25rem;">
+                    <label style="display: flex; align-items: center; margin: 0; cursor: pointer;">
+                        <input type="checkbox" name="pilots" value="{{ char.id }}" {% if char.id|stringformat:"s" in pilot_filter %}checked{% endif %} style="margin-right: 0.5rem;">
+                        <span>{{ char.character_name }}</span>
+                    </label>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
         <div>
             <label for="type" style="display: block; margin-bottom: 0.25rem;">Type:</label>
             <select name="type" id="type" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
@@ -79,7 +123,7 @@
             </select>
         </div>
         <button type="submit" class="btn">Apply Filters</button>
-        <a href="{% url 'core:character_contracts' character.id %}" class="btn" style="background: var(--text-secondary);">Clear</a>
+        <a href="{% url 'core:contracts' %}" class="btn" style="background: var(--text-secondary);">Clear</a>
     </form>
 </div>
 
@@ -89,11 +133,14 @@
     <table style="width: 100%; border-collapse: collapse;">
         <thead>
             <tr style="border-bottom: 2px solid var(--border-color);">
+                {% if is_account_wide %}
+                <th style="padding: 0.75rem; text-align: left;">Pilot</th>
+                {% endif %}
                 <th style="padding: 0.75rem; text-align: left;">Type</th>
                 <th style="padding: 0.75rem; text-align: left;">Title</th>
                 <th style="padding: 0.75rem; text-align: left;">Status</th>
                 <th style="padding: 0.75rem; text-align: right;">Value</th>
-                <th style="padding: 0.75rem; text-align: right;">Profit/Loss</th>
+                <th style="padding: 0.75rem; text-align: right;">Reward</th>
                 <th style="padding: 0.75rem; text-align: left;">Availability</th>
                 <th style="padding: 0.75rem; text-align: left;">Expires</th>
                 <th style="padding: 0.75rem; text-align: left;">Issued</th>
@@ -102,6 +149,11 @@
         <tbody>
             {% for contract in contracts %}
             <tr style="border-bottom: 1px solid var(--table-border); {% if not contract.is_active %}opacity: 0.6;{% endif %}">
+                {% if is_account_wide %}
+                <td style="padding: 0.75rem;">
+                    <a href="{% url 'core:character_contracts' contract.character.id %}" style="font-weight: 500;">{{ contract.character.character_name }}</a>
+                </td>
+                {% endif %}
                 <td style="padding: 0.75rem;">
                     <span style="font-weight: bold;">{{ contract.type_name }}</span>
                 </td>
@@ -123,13 +175,8 @@
                 </td>
                 <td style="padding: 0.75rem; text-align: right;">{{ contract.total_value|isk_format }}</td>
                 <td style="padding: 0.75rem; text-align: right;">
-                    {% if contract.type == 'item_exchange' and contract.is_completed and contract.profit_loss is not none %}
-                        <span style="color: {% if contract.profit_loss > 0 %}var(--alert-success-text){% elif contract.profit_loss < 0 %}var(--alert-error-text){% endif %};">
-                            {% if contract.profit_loss > 0 %}+{% endif %}{{ contract.profit_loss|isk_format }}
-                            {% if contract.profit_pct %}
-                                <span style="font-size: 0.8em;">({% if contract.profit_loss > 0 %}+{% endif %}{{ contract.profit_pct|floatformat:1 }}%)</span>
-                            {% endif %}
-                        </span>
+                    {% if contract.reward %}
+                        {{ contract.reward|isk_format }}
                     {% else %}
                         &mdash;
                     {% endif %}
@@ -145,7 +192,7 @@
     {% if contracts.has_other_pages %}
     <div style="margin-top: 1.5rem; display: flex; justify-content: center; gap: 0.5rem; align-items: center;">
         {% if contracts.has_previous %}
-            <a href="?page={{ contracts.previous_page_number }}{% if contract_type %}&type={{ contract_type }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if availability_filter %}&availability={{ availability_filter }}{% endif %}" class="btn">&laquo; Previous</a>
+            <a href="?page={{ contracts.previous_page_number }}{% if contract_type %}&type={{ contract_type }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if availability_filter %}&availability={{ availability_filter }}{% endif %}{% if is_account_wide %}{% for pid in pilot_filter %}&pilots={{ pid }}{% endfor %}{% endif %}" class="btn">&laquo; Previous</a>
         {% endif %}
 
         <span>
@@ -153,7 +200,7 @@
         </span>
 
         {% if contracts.has_next %}
-            <a href="?page={{ contracts.next_page_number }}{% if contract_type %}&type={{ contract_type }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if availability_filter %}&availability={{ availability_filter }}{% endif %}" class="btn">Next &raquo;</a>
+            <a href="?page={{ contracts.next_page_number }}{% if contract_type %}&type={{ contract_type }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if availability_filter %}&availability={{ availability_filter }}{% endif %}{% if is_account_wide %}{% for pid in pilot_filter %}&pilots={{ pid }}{% endfor %}{% endif %}" class="btn">Next &raquo;</a>
         {% endif %}
     </div>
     {% endif %}
@@ -165,6 +212,8 @@
 {% endif %}
 
 <div style="margin-bottom: 1rem;">
+    {% if not is_account_wide %}
     <a href="{% url 'core:character_detail' character.id %}" class="btn">Back to Character</a>
+    {% endif %}
 </div>
 {% endblock %}
