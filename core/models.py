@@ -244,6 +244,7 @@ class EveScope(models.TextChoices):
     ASSETS_READ = 'esi-assets.read_assets.v1', 'Read Assets'
     ORDERS_READ = 'esi-markets.read_character_orders.v1', 'Read Market Orders'
     INDUSTRY_JOBS_READ = 'esi-industry.read_character_jobs.v1', 'Read Industry Jobs'
+    UNIVERSE_READ_STRUCTURES = 'esi-universe.read_structures.v1', 'Read Structure Info'
 
     @classmethod
     def mvp_scopes(cls) -> list[str]:
@@ -257,6 +258,7 @@ class EveScope(models.TextChoices):
             cls.ASSETS_READ.value,
             cls.ORDERS_READ.value,
             cls.INDUSTRY_JOBS_READ.value,
+            cls.UNIVERSE_READ_STRUCTURES.value,  # Required for structure names
         ]
 
 
