@@ -547,9 +547,9 @@ def reauthenticate_character(request: HttpRequest, character_id: int) -> HttpRes
 
 
 # Re-export views from split modules
-from core.views_pkg.views_skills import *
-from core.views_pkg.views_econ import *
-from core.views_pkg.views_assets import *
-from core.views_pkg.views_characters import *
-from core.views_pkg.views_exports import *
-from core.views_pkg.views_fittings import *
+from core.views.views_skills import *
+from core.views.views_econ import *
+from core.views.views_assets import *
+from core.views.views_characters import *
+from core.views.views_exports import *
+from core.views.views_fittings import *
