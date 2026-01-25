@@ -137,6 +137,8 @@ class SkillQueueItem(models.Model):
     @property
     def is_completed(self) -> bool:
         """Check if this skill has finished training."""
+        if not self.finish_date:
+            return False  # No finish date means not actively training
         from django.utils import timezone
         return self.finish_date <= timezone.now()
 
@@ -144,6 +146,10 @@ class SkillQueueItem(models.Model):
     def progress_percent(self) -> float:
         """Calculate training progress percentage."""
         from django.utils import timezone
+
+        if not self.finish_date or not self.training_start_time:
+            return 0.0  # Can't calculate progress without both dates
+
         total = self.level_end_sp - self.level_start_sp
         if total == 0:
             return 100.0
