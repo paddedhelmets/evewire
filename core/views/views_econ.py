@@ -106,34 +106,27 @@ def wallet_journal(request: HttpRequest, character_id: int = None) -> HttpRespon
 
 @login_required
 def wallet_transactions(request: HttpRequest, character_id: int = None) -> HttpResponse:
-    """View wallet transaction history."""
+    """Multi-pilot wallet transaction history view."""
     from core.models import Character
     from core.character.models import WalletTransaction
     from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
     from datetime import datetime, timedelta
 
-    # Get character
-    if character_id:
-        try:
-            character = Character.objects.get(id=character_id, user=request.user)
-        except Character.DoesNotExist:
-            return render(request, 'core/error.html', {
-                'message': 'Character not found',
-            }, status=404)
-    else:
-        character = get_users_character(request.user)
-        if not character:
-            return render(request, 'core/error.html', {
-                'message': 'Character not found',
-            }, status=404)
+    # Get all characters for this user
+    characters = request.user.characters.all()
 
     # Get filter parameters
-    buy_sell_filter = request.GET.get('type', '')  # 'buy', 'sell', or ''
+    buy_sell_filter = request.GET.get('type', '')
     date_from = request.GET.get('date_from', '')
     date_to = request.GET.get('date_to', '')
+    character_filter = request.GET.get('character')
 
-    # Build queryset
-    transactions_qs = WalletTransaction.objects.filter(character=character)
+    # Build queryset across all pilots
+    transactions_qs = WalletTransaction.objects.filter(character__user=request.user)
+
+    # Apply character filter if selected
+    if character_filter:
+        transactions_qs = transactions_qs.filter(character_id=character_filter)
 
     # Apply buy/sell filter
     if buy_sell_filter == 'buy':
@@ -157,11 +150,12 @@ def wallet_transactions(request: HttpRequest, character_id: int = None) -> HttpR
         except ValueError:
             pass
 
-    # Pagination
-    page = request.GET.get('page', 1)
-    per_page = 50
-    paginator = Paginator(transactions_qs, per_page)
+    # Order by date (newest first)
+    transactions_qs = transactions_qs.select_related('character').order_by('-date')
 
+    # Pagination
+    paginator = Paginator(transactions_qs, 50)
+    page = request.GET.get('page', 1)
     try:
         transactions = paginator.page(page)
     except PageNotAnInteger:
@@ -170,11 +164,12 @@ def wallet_transactions(request: HttpRequest, character_id: int = None) -> HttpR
         transactions = paginator.page(paginator.num_pages)
 
     return render(request, 'core/wallet_transactions.html', {
-        'character': character,
         'transactions': transactions,
         'buy_sell_filter': buy_sell_filter,
         'date_from': date_from,
         'date_to': date_to,
+        'character_filter': character_filter,
+        'characters': characters,
     })
 
 
@@ -275,28 +270,17 @@ def wallet_balance(request: HttpRequest, character_id: int = None) -> HttpRespon
 
 @login_required
 def wallet_summary(request: HttpRequest, character_id: int = None) -> HttpResponse:
-    """View income/expense summary aggregated by ref_type."""
+    """Multi-pilot income/expense summary with aggregate stats and journal table."""
     from core.models import Character
     from core.character.models import WalletJournalEntry
-    from django.db.models import Sum, Count
+    from django.db.models import Sum, Count, Q
+    from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
     from datetime import datetime, timedelta
     from collections import defaultdict
     from django.utils import timezone
 
-    # Get character
-    if character_id:
-        try:
-            character = Character.objects.get(id=character_id, user=request.user)
-        except Character.DoesNotExist:
-            return render(request, 'core/error.html', {
-                'message': 'Character not found',
-            }, status=404)
-    else:
-        character = get_users_character(request.user)
-        if not character:
-            return render(request, 'core/error.html', {
-                'message': 'Character not found',
-            }, status=404)
+    # Get all characters for this user
+    characters = request.user.characters.all()
 
     # Get time range parameters (default to last 30 days)
     days = request.GET.get('days', '30')
@@ -307,13 +291,22 @@ def wallet_summary(request: HttpRequest, character_id: int = None) -> HttpRespon
 
     since = timezone.now() - timedelta(days=days)
 
-    # Aggregate by ref_type
-    summary = WalletJournalEntry.objects.filter(
-        character=character,
+    # Get character filter
+    character_filter = request.GET.get('character')
+
+    # Aggregate by ref_type across all pilots
+    summary_qs = WalletJournalEntry.objects.filter(
+        character__user=request.user,
         date__gte=since
-    ).values('ref_type').annotate(
-        total_income=Sum('amount', filter=models.Q(amount__gt=0)),
-        total_expense=Sum('amount', filter=models.Q(amount__lt=0)),
+    )
+
+    # Apply character filter if selected
+    if character_filter:
+        summary_qs = summary_qs.filter(character_id=character_filter)
+
+    summary = summary_qs.values('ref_type').annotate(
+        total_income=Sum('amount', filter=Q(amount__gt=0)),
+        total_expense=Sum('amount', filter=Q(amount__lt=0)),
         entry_count=Count('entry_id')
     ).order_by('-total_income')
 
@@ -337,8 +330,59 @@ def wallet_summary(request: HttpRequest, character_id: int = None) -> HttpRespon
     top_by_income = sorted(summary, key=lambda x: x['income'], reverse=True)[:5]
     top_by_expense = sorted(summary, key=lambda x: x['expense'], reverse=True)[:5]
 
+    # Build per-pilot breakdown
+    pilot_stats = []
+    for char in characters:
+        char_income = WalletJournalEntry.objects.filter(
+            character=char,
+            date__gte=since,
+            amount__gt=0
+        ).aggregate(total=Sum('amount'))['total'] or 0
+
+        char_expense = abs(WalletJournalEntry.objects.filter(
+            character=char,
+            date__gte=since,
+            amount__lt=0
+        ).aggregate(total=Sum('amount'))['total'] or 0)
+
+        char_net = float(char_income) - float(char_expense)
+
+        # Calculate current wallet balance
+        latest_entry = WalletJournalEntry.objects.filter(
+            character=char
+        ).order_by('-date').first()
+
+        current_balance = float(latest_entry.balance) if latest_entry else float(char.wallet_balance or 0)
+
+        pilot_stats.append({
+            'character': char,
+            'income': float(char_income),
+            'expense': float(char_expense),
+            'net': char_net,
+            'balance': current_balance,
+        })
+
+    # Get all journal entries with pagination
+    journal_qs = WalletJournalEntry.objects.filter(
+        character__user=request.user,
+        date__gte=since
+    ).select_related('character').order_by('-date')
+
+    # Apply character filter
+    if character_filter:
+        journal_qs = journal_qs.filter(character_id=character_filter)
+
+    # Paginate
+    paginator = Paginator(journal_qs, 50)
+    page = request.GET.get('page', 1)
+    try:
+        entries = paginator.page(page)
+    except PageNotAnInteger:
+        entries = paginator.page(1)
+    except EmptyPage:
+        entries = paginator.page(paginator.num_pages)
+
     return render(request, 'core/wallet_summary.html', {
-        'character': character,
         'summary': summary,
         'income_total': income_total,
         'expense_total': expense_total,
@@ -346,6 +390,10 @@ def wallet_summary(request: HttpRequest, character_id: int = None) -> HttpRespon
         'days': days,
         'top_by_income': top_by_income,
         'top_by_expense': top_by_expense,
+        'pilot_stats': pilot_stats,
+        'entries': entries,
+        'character_filter': character_filter,
+        'characters': characters,
     })
 
 
@@ -353,32 +401,26 @@ def wallet_summary(request: HttpRequest, character_id: int = None) -> HttpRespon
 
 @login_required
 def market_orders(request: HttpRequest, character_id: int = None) -> HttpResponse:
-    """View market orders with filtering and pagination."""
+    """Multi-pilot market orders view with aggregate stats and orders table."""
     from core.models import Character
     from core.character.models import MarketOrder
     from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+    from django.db.models import Sum
 
-    # Get character - either specified or user's character
-    if character_id:
-        try:
-            character = Character.objects.get(id=character_id, user=request.user)
-        except Character.DoesNotExist:
-            return render(request, 'core/error.html', {
-                'message': 'Character not found',
-            }, status=404)
-    else:
-        character = get_users_character(request.user)
-        if not character:
-            return render(request, 'core/error.html', {
-                'message': 'Character not found',
-            }, status=404)
+    # Get all characters for this user
+    characters = request.user.characters.all()
 
     # Get filter parameters
-    order_type = request.GET.get('type', '')  # 'buy', 'sell', or ''
-    state_filter = request.GET.get('state', '')  # 'open', 'closed', 'expired', 'cancelled', ''
+    order_type = request.GET.get('type', '')
+    state_filter = request.GET.get('state', '')
+    character_filter = request.GET.get('character')
 
-    # Build queryset
-    orders_qs = MarketOrder.objects.filter(character=character)
+    # Build queryset across all pilots
+    orders_qs = MarketOrder.objects.filter(character__user=request.user)
+
+    # Apply character filter if selected
+    if character_filter:
+        orders_qs = orders_qs.filter(character_id=character_filter)
 
     # Apply buy/sell filter
     if order_type == 'buy':
@@ -391,13 +433,11 @@ def market_orders(request: HttpRequest, character_id: int = None) -> HttpRespons
         orders_qs = orders_qs.filter(state=state_filter)
 
     # Order by issued date (newest first)
-    orders_qs = orders_qs.order_by('-issued')
+    orders_qs = orders_qs.select_related('character').order_by('-issued')
 
     # Pagination
+    paginator = Paginator(orders_qs, 50)
     page = request.GET.get('page', 1)
-    per_page = 50
-    paginator = Paginator(orders_qs, per_page)
-
     try:
         orders = paginator.page(page)
     except PageNotAnInteger:
@@ -405,21 +445,56 @@ def market_orders(request: HttpRequest, character_id: int = None) -> HttpRespons
     except EmptyPage:
         orders = paginator.page(paginator.num_pages)
 
-    # Calculate order totals
-    buy_total = MarketOrder.objects.filter(
-        character=character, is_buy_order=True, state='open'
-    ).count()
-    sell_total = MarketOrder.objects.filter(
-        character=character, is_buy_order=False, state='open'
-    ).count()
+    # Calculate aggregate stats across all pilots
+    total_buy_orders = sum(
+        MarketOrder.objects.filter(
+            character=char, is_buy_order=True, state='open'
+        ).count() for char in characters
+    )
+    total_sell_orders = sum(
+        MarketOrder.objects.filter(
+            character=char, is_buy_order=False, state='open'
+        ).count() for char in characters
+    )
+
+    # Calculate total escrowed ISK across all buy orders
+    total_escrow = sum(
+        MarketOrder.objects.filter(
+            character=char, is_buy_order=True, state='open'
+        ).aggregate(total=Sum('escrow'))['total'] or 0 for char in characters
+    )
+
+    # Build per-pilot breakdown
+    pilot_stats = []
+    for char in characters:
+        buy_count = MarketOrder.objects.filter(
+            character=char, is_buy_order=True, state='open'
+        ).count()
+        sell_count = MarketOrder.objects.filter(
+            character=char, is_buy_order=False, state='open'
+        ).count()
+        escrow = MarketOrder.objects.filter(
+            character=char, is_buy_order=True, state='open'
+        ).aggregate(total=Sum('escrow'))['total'] or 0
+
+        pilot_stats.append({
+            'character': char,
+            'buy_count': buy_count,
+            'sell_count': sell_count,
+            'escrow': float(escrow),
+            'total_orders': buy_count + sell_count,
+        })
 
     return render(request, 'core/market_orders.html', {
-        'character': character,
         'orders': orders,
         'order_type': order_type,
         'state_filter': state_filter,
-        'buy_total': buy_total,
-        'sell_total': sell_total,
+        'character_filter': character_filter,
+        'total_buy_orders': total_buy_orders,
+        'total_sell_orders': total_sell_orders,
+        'total_escrow': total_escrow,
+        'pilot_stats': pilot_stats,
+        'characters': characters,
     })
 
 
@@ -489,35 +564,24 @@ def market_orders_history(request: HttpRequest, character_id: int = None) -> Htt
 
 @login_required
 def trade_overview(request: HttpRequest, character_id: int = None) -> HttpResponse:
-    """Trade overview showing profit/loss summary and top items."""
+    """Multi-pilot trade overview showing profit/loss summary and top items."""
     from core.models import Character
     from core.trade.services import TradeAnalyzer
     from core.trade.models import Campaign
     from django.utils import timezone
     from datetime import timedelta
 
-    # Get character
-    if character_id:
-        try:
-            character = Character.objects.get(id=character_id, user=request.user)
-        except Character.DoesNotExist:
-            return render(request, 'core/error.html', {
-                'message': 'Character not found',
-            }, status=404)
-    else:
-        character = get_users_character(request.user)
-        if not character:
-            return render(request, 'core/error.html', {
-                'message': 'Character not found',
-            }, status=404)
+    # Get all characters for this user
+    characters = request.user.characters.all()
 
     # Get timeframe filter
     timeframe = request.GET.get('timeframe', 'all')
     campaign_id = request.GET.get('campaign')
     year = request.GET.get('year')
     month = request.GET.get('month')
+    character_filter = request.GET.get('character')
 
-    summaries = []
+    # Determine date range
     start_date = None
     end_date = None
     timeframe_label = "All Time"
@@ -526,7 +590,6 @@ def trade_overview(request: HttpRequest, character_id: int = None) -> HttpRespon
         # Use campaign date range
         try:
             campaign = Campaign.objects.get(id=campaign_id, user=request.user)
-            summaries = TradeAnalyzer.analyze_campaign(campaign)
             start_date = campaign.start_date
             end_date = campaign.end_date
             timeframe_label = campaign.title
@@ -539,49 +602,71 @@ def trade_overview(request: HttpRequest, character_id: int = None) -> HttpRespon
             end_date = datetime(int(year) + 1, 1, 1).replace(tzinfo=dt_timezone.utc) - timedelta(seconds=1)
         else:
             end_date = datetime(int(year), int(month) + 1, 1).replace(tzinfo=dt_timezone.utc) - timedelta(seconds=1)
-        summaries = TradeAnalyzer.analyze_timeframe(character, start_date, end_date)
         timeframe_label = f"{year}-{month.zfill(2)}"
     elif timeframe == '30d':
         start_date = timezone.now() - timedelta(days=30)
         end_date = timezone.now()
-        summaries = TradeAnalyzer.analyze_timeframe(character, start_date, end_date)
         timeframe_label = "Last 30 Days"
     elif timeframe == '90d':
         start_date = timezone.now() - timedelta(days=90)
         end_date = timezone.now()
-        summaries = TradeAnalyzer.analyze_timeframe(character, start_date, end_date)
         timeframe_label = "Last 90 Days"
     elif timeframe == '12m':
         start_date = timezone.now() - timedelta(days=365)
         end_date = timezone.now()
-        summaries = TradeAnalyzer.analyze_timeframe(character, start_date, end_date)
         timeframe_label = "Last 12 Months"
     else:
-        # All time - use overview stats for efficiency
-        stats = TradeAnalyzer.get_overview_stats(character)
-        summaries = TradeAnalyzer.analyze_timeframe(
-            character,
-            start_date=datetime(2000, 1, 1).replace(tzinfo=dt_timezone.utc),
-            end_date=timezone.now()
-        )
+        # All time
+        start_date = datetime(2000, 1, 1).replace(tzinfo=dt_timezone.utc)
+        end_date = timezone.now()
+
+    # Aggregate summaries across all characters (or filtered character)
+    all_summaries = []
+    chars_to_analyze = characters
+
+    if character_filter:
+        try:
+            filtered_char = characters.get(id=character_filter)
+            chars_to_analyze = [filtered_char]
+        except Character.DoesNotExist:
+            chars_to_analyze = []
+
+    for char in chars_to_analyze:
+        char_summaries = TradeAnalyzer.analyze_timeframe(char, start_date, end_date)
+        all_summaries.extend(char_summaries)
 
     # Calculate overview stats
-    total_buy = sum(s.buy_total for s in summaries)
-    total_sell = sum(s.sell_total for s in summaries)
+    total_buy = sum(s.buy_total for s in all_summaries)
+    total_sell = sum(s.sell_total for s in all_summaries)
     net_balance = total_sell - total_buy
 
     # Get top items
-    top_profitable = [s for s in summaries if s.balance > 0][:10]
-    top_losses = [s for s in summaries if s.balance < 0][:10]
-    top_volume = sorted(summaries, key=lambda x: x.buy_total + x.sell_total, reverse=True)[:10]
+    top_profitable = sorted((s for s in all_summaries if s.balance > 0), key=lambda x: x.balance, reverse=True)[:10]
+    top_losses = sorted((s for s in all_summaries if s.balance < 0), key=lambda x: x.balance)[:10]
+    top_volume = sorted(all_summaries, key=lambda x: x.buy_total + x.sell_total, reverse=True)[:10]
 
-    # Get available campaigns and months
+    # Build per-pilot breakdown
+    pilot_stats = []
+    for char in characters:
+        char_summaries = TradeAnalyzer.analyze_timeframe(char, start_date, end_date)
+        char_buy = sum(s.buy_total for s in char_summaries)
+        char_sell = sum(s.sell_total for s in char_summaries)
+        char_net = char_sell - char_buy
+        char_count = len(char_summaries)
+
+        pilot_stats.append({
+            'character': char,
+            'buy_total': char_buy,
+            'sell_total': char_sell,
+            'net': char_net,
+            'items_traded': char_count,
+        })
+
+    # Get available campaigns
     campaigns = Campaign.objects.filter(user=request.user).order_by('-start_date')
-    monthly_summaries = TradeAnalyzer.get_monthly_summaries(character)
 
     return render(request, 'core/trade_overview.html', {
-        'character': character,
-        'summaries': summaries,
+        'summaries': all_summaries,
         'total_buy': total_buy,
         'total_sell': total_sell,
         'net_balance': net_balance,
@@ -589,10 +674,12 @@ def trade_overview(request: HttpRequest, character_id: int = None) -> HttpRespon
         'top_losses': top_losses,
         'top_volume': top_volume,
         'campaigns': campaigns,
-        'monthly_summaries': monthly_summaries,
         'timeframe': timeframe,
         'timeframe_label': timeframe_label,
         'campaign_id': campaign_id,
+        'character_filter': character_filter,
+        'pilot_stats': pilot_stats,
+        'characters': characters,
     })
 
 
@@ -875,33 +962,26 @@ def campaign_delete(request: HttpRequest, campaign_id: int) -> HttpResponse:
 
 @login_required
 def contracts_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
-    """View contracts with filtering and pagination."""
+    """Multi-pilot contracts view with aggregate stats and contracts table."""
     from core.models import Character
     from core.character.models import Contract
     from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 
-    # Get character - either specified or user's character
-    if character_id:
-        try:
-            character = Character.objects.get(id=character_id, user=request.user)
-        except Character.DoesNotExist:
-            return render(request, 'core/error.html', {
-                'message': 'Character not found',
-            }, status=404)
-    else:
-        character = get_users_character(request.user)
-        if not character:
-            return render(request, 'core/error.html', {
-                'message': 'Character not found',
-            }, status=404)
+    # Get all characters for this user
+    characters = request.user.characters.all()
 
     # Get filter parameters
-    contract_type = request.GET.get('type', '')  # 'item_exchange', 'auction', 'courier', 'loan', or ''
-    status_filter = request.GET.get('status', '')  # 'outstanding', 'in_progress', etc.
-    availability_filter = request.GET.get('availability', '')  # 'public', 'personal', 'corporation', 'alliance'
+    contract_type = request.GET.get('type', '')
+    status_filter = request.GET.get('status', '')
+    availability_filter = request.GET.get('availability', '')
+    character_filter = request.GET.get('character')
 
-    # Build queryset
-    contracts_qs = Contract.objects.filter(character=character)
+    # Build queryset across all pilots
+    contracts_qs = Contract.objects.filter(character__user=request.user)
+
+    # Apply character filter if selected
+    if character_filter:
+        contracts_qs = contracts_qs.filter(character_id=character_filter)
 
     # Apply type filter
     if contract_type:
@@ -916,13 +996,11 @@ def contracts_list(request: HttpRequest, character_id: int = None) -> HttpRespon
         contracts_qs = contracts_qs.filter(availability=availability_filter)
 
     # Order by issued date (newest first)
-    contracts_qs = contracts_qs.order_by('-date_issued')
+    contracts_qs = contracts_qs.select_related('character').order_by('-date_issued')
 
     # Pagination
+    paginator = Paginator(contracts_qs, 50)
     page = request.GET.get('page', 1)
-    per_page = 50
-    paginator = Paginator(contracts_qs, per_page)
-
     try:
         contracts = paginator.page(page)
     except PageNotAnInteger:
@@ -930,25 +1008,54 @@ def contracts_list(request: HttpRequest, character_id: int = None) -> HttpRespon
     except EmptyPage:
         contracts = paginator.page(paginator.num_pages)
 
-    # Calculate contract counts by status
-    outstanding_count = Contract.objects.filter(
-        character=character, status='outstanding'
-    ).count()
-    in_progress_count = Contract.objects.filter(
-        character=character, status='in_progress'
-    ).count()
-    completed_count = Contract.objects.filter(
-        character=character, status__in=('finished_issuer', 'finished_contractor', 'finished')
-    ).count()
+    # Calculate aggregate stats across all pilots
+    total_outstanding = sum(
+        Contract.objects.filter(
+            character=char, status='outstanding'
+        ).count() for char in characters
+    )
+    total_in_progress = sum(
+        Contract.objects.filter(
+            character=char, status='in_progress'
+        ).count() for char in characters
+    )
+    total_completed = sum(
+        Contract.objects.filter(
+            character=char, status__in=('finished_issuer', 'finished_contractor', 'finished')
+        ).count() for char in characters
+    )
+
+    # Build per-pilot breakdown
+    pilot_stats = []
+    for char in characters:
+        outstanding = Contract.objects.filter(
+            character=char, status='outstanding'
+        ).count()
+        in_progress = Contract.objects.filter(
+            character=char, status='in_progress'
+        ).count()
+        completed = Contract.objects.filter(
+            character=char, status__in=('finished_issuer', 'finished_contractor', 'finished')
+        ).count()
+
+        pilot_stats.append({
+            'character': char,
+            'outstanding': outstanding,
+            'in_progress': in_progress,
+            'completed': completed,
+            'total': outstanding + in_progress + completed,
+        })
 
     return render(request, 'core/contracts.html', {
-        'character': character,
         'contracts': contracts,
         'contract_type': contract_type,
         'status_filter': status_filter,
         'availability_filter': availability_filter,
-        'outstanding_count': outstanding_count,
-        'in_progress_count': in_progress_count,
-        'completed_count': completed_count,
+        'character_filter': character_filter,
+        'total_outstanding': total_outstanding,
+        'total_in_progress': total_in_progress,
+        'total_completed': total_completed,
+        'pilot_stats': pilot_stats,
+        'characters': characters,
     })
 

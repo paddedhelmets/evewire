@@ -1,22 +1,16 @@
 {% extends "base.html" %}
 {% load evewire %}
 
-{% block title %}Wallet Transactions - {{ character.name }} - evewire{% endblock %}
+{% block title %}Wallet Transactions - evewire{% endblock %}
 
 {% block content %}
-<h1>Wallet Transactions - {{ character.name }}</h1>
+<h1>Market Transactions</h1>
 
-<div style="margin-bottom: 1rem;">
-    <a href="{% url 'core:dashboard' %}">Dashboard</a>
-    <span style="margin: 0 0.5rem;">&rarr;</span>
-    <a href="{% url 'core:wallet_transactions' %}">Transactions</a>
-</div>
-
-<div class="card">
+<div class="card" style="margin-bottom: 1.5rem;">
     <h2>Filters</h2>
     <form method="get" style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end;">
         <div>
-            <label for="type" style="display: block; margin-bottom: 0.25rem;">Type:</label>
+            <label for="type" style="display: block; margin-bottom: 0.25rem; font-size: 0.9rem;">Type:</label>
             <select name="type" id="type" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
                 <option value="">All</option>
                 <option value="buy" {% if buy_sell_filter == 'buy' %}selected{% endif %}>Buy</option>
@@ -24,25 +18,37 @@
             </select>
         </div>
         <div>
-            <label for="date_from" style="display: block; margin-bottom: 0.25rem;">From:</label>
+            <label for="character" style="display: block; margin-bottom: 0.25rem; font-size: 0.9rem;">Pilot:</label>
+            <select name="character" id="character" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
+                <option value="">All Pilots</option>
+                {% for char in characters %}
+                <option value="{{ char.id }}" {% if character_filter == char.id|stringformat:"s" %}selected{% endif %}>{{ char.character_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="date_from" style="display: block; margin-bottom: 0.25rem; font-size: 0.9rem;">From:</label>
             <input type="date" name="date_from" id="date_from" value="{{ date_from }}" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
         </div>
         <div>
-            <label for="date_to" style="display: block; margin-bottom: 0.25rem;">To:</label>
+            <label for="date_to" style="display: block; margin-bottom: 0.25rem; font-size: 0.9rem;">To:</label>
             <input type="date" name="date_to" id="date_to" value="{{ date_to }}" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
         </div>
         <button type="submit" class="btn">Apply Filters</button>
+        {% if buy_sell_filter or character_filter or date_from or date_to %}
         <a href="{% url 'core:wallet_transactions' %}" class="btn" style="background: var(--text-secondary);">Clear</a>
+        {% endif %}
     </form>
 </div>
 
 {% if transactions %}
 <div class="card">
-    <h2>Market Transactions</h2>
+    <h2>Market Transactions ({{ transactions.paginator.count }} total)</h2>
     <table style="width: 100%; border-collapse: collapse;">
         <thead>
             <tr style="border-bottom: 2px solid var(--border-color);">
                 <th style="padding: 0.75rem; text-align: left;">Date</th>
+                <th style="padding: 0.75rem; text-align: left;">Pilot</th>
                 <th style="padding: 0.75rem; text-align: left;">Type</th>
                 <th style="padding: 0.75rem; text-align: left;">Item</th>
                 <th style="padding: 0.75rem; text-align: right;">Quantity</th>
@@ -55,6 +61,7 @@
             {% for tx in transactions %}
             <tr style="border-bottom: 1px solid var(--table-border);">
                 <td style="padding: 0.75rem;">{{ tx.date|date:"Y-m-d H:i" }}</td>
+                <td style="padding: 0.75rem;">{{ tx.character.character_name }}</td>
                 <td style="padding: 0.75rem;">
                     <span style="font-weight: bold; color: {% if tx.is_buy %}var(--alert-success-text){% else %}var(--alert-error-text){% endif %};">
                         {% if tx.is_buy %}BUY{% else %}SELL{% endif %}
@@ -62,8 +69,8 @@
                 </td>
                 <td style="padding: 0.75rem;">{{ tx.type_name }}</td>
                 <td style="padding: 0.75rem; text-align: right;">{{ tx.quantity|localize }}</td>
-                <td style="padding: 0.75rem; text-align: right;">{{ tx.unit_price|format_is }}</td>
-                <td style="padding: 0.75rem; text-align: right; font-weight: bold;">{{ tx.total_value|format_is }}</td>
+                <td style="padding: 0.75rem; text-align: right;">{{ tx.unit_price|isk_format }}</td>
+                <td style="padding: 0.75rem; text-align: right; font-weight: bold;">{{ tx.total_value|isk_format }}</td>
                 <td style="padding: 0.75rem; font-size: 0.9rem;">{{ tx.location_name }}</td>
             </tr>
             {% endfor %}
@@ -73,28 +80,27 @@
     {% if transactions.has_other_pages %}
     <div style="margin-top: 1.5rem; display: flex; justify-content: center; gap: 0.5rem; align-items: center;">
         {% if transactions.has_previous %}
-            <a href="?page={{ transactions.previous_page_number }}{% if buy_sell_filter %}&type={{ buy_sell_filter }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}" class="btn">&laquo; Previous</a>
+        <a href="?page={{ transactions.previous_page_number }}{% if buy_sell_filter %}&type={{ buy_sell_filter }}{% endif %}{% if character_filter %}&character={{ character_filter }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}" class="btn">&laquo; Previous</a>
         {% endif %}
 
-        <span>
+        <span style="font-size: 0.9rem;">
             Page {{ transactions.number }} of {{ transactions.paginator.num_pages }}
         </span>
 
         {% if transactions.has_next %}
-            <a href="?page={{ transactions.next_page_number }}{% if buy_sell_filter %}&type={{ buy_sell_filter }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}" class="btn">Next &raquo;</a>
+        <a href="?page={{ transactions.next_page_number }}{% if buy_sell_filter %}&type={{ buy_sell_filter }}{% endif %}{% if character_filter %}&character={{ character_filter }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}" class="btn">Next &raquo;</a>
         {% endif %}
     </div>
     {% endif %}
 </div>
 {% else %}
 <div class="card">
-    <p>No transactions found.</p>
+    <p>No transactions found matching the current filters.</p>
 </div>
 {% endif %}
 
-<div style="margin-bottom: 1rem;">
-    <a href="{% url 'core:wallet_journal' %}" class="btn">View Journal</a>
-    <a href="{% url 'core:wallet_balance' %}" class="btn" style="margin-left: 0.5rem;">Balance History</a>
+<div style="margin-top: 1.5rem;">
+    <a href="{% url 'core:wallet_balance' %}" class="btn">Balance History</a>
     <a href="{% url 'core:wallet_summary' %}" class="btn" style="margin-left: 0.5rem;">Income/Expense Summary</a>
 </div>
 {% endblock %}

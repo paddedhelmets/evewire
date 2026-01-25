@@ -1,150 +1,306 @@
 {% extends "base.html" %}
-{% load evewire %}
+{% load evewire evewire_math %}
 
-{% block title %}Wallet Summary - {{ character.name }} - evewire{% endblock %}
+{% block title %}Wallet Summary - evewire{% endblock %}
 
 {% block content %}
-<h1>Income & Expense Summary - {{ character.name }}</h1>
+<style>
+.summary-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+.summary-card {
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    padding: 1.5rem;
+    box-shadow: var(--card-shadow);
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    border-left: 4px solid var(--btn-primary);
+}
+.summary-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+.summary-card.negative {
+    border-left-color: var(--alert-error-text);
+}
+.summary-card.positive {
+    border-left-color: var(--alert-success-text);
+}
+.summary-card-title {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+.summary-card-value {
+    font-size: 2rem;
+    font-weight: bold;
+    margin-bottom: 0.25rem;
+}
+.summary-card-sub {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+.pilot-breakdown {
+    display: none;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+.pilot-breakdown.show {
+    display: block;
+}
+.pilot-row {
+    display: grid;
+    grid-template-columns: 3fr 1fr 1fr 1fr;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--table-border);
+}
+.pilot-row:last-child {
+    border-bottom: none;
+}
+.pilot-name {
+    font-weight: 500;
+}
+.pilot-value {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+.pilot-value.positive {
+    color: var(--alert-success-text);
+}
+.pilot-value.negative {
+    color: var(--alert-error-text);
+}
+</style>
 
-<div style="margin-bottom: 1rem;">
-    <a href="{% url 'core:dashboard' %}">Dashboard</a>
-    <span style="margin: 0 0.5rem;">&rarr;</span>
-    <a href="{% url 'core:wallet_summary' %}">Income/Expense Summary</a>
-</div>
+<div style="max-width: 1400px; margin: 0 auto;">
+    <h1 style="margin-bottom: 1.5rem;">Wallet Overview</h1>
 
-<div class="card">
-    <h2>Time Range</h2>
-    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-        <a href="?days=7" class="btn" {% if days == 7 %}style="background: var(--btn-primary-hover);"{% endif %}>7 Days</a>
-        <a href="?days=30" class="btn" {% if days == 30 %}style="background: var(--btn-primary-hover);"{% endif %}>30 Days</a>
-        <a href="?days=90" class="btn" {% if days == 90 %}style="background: var(--btn-primary-hover);"{% endif %}>90 Days</a>
-        <a href="?days=365" class="btn" {% if days == 365 %}style="background: var(--btn-primary-hover);"{% endif %}>1 Year</a>
-    </div>
-</div>
-
-<div style="margin-bottom: 1.5rem;">
-    <div class="balance-card">
-        <div class="balance-label">Total Income ({{ days }} days)</div>
-        <div class="balance-value change-positive">{{ income_total|isk_format }}</div>
-    </div>
-
-    <div class="balance-card">
-        <div class="balance-label">Total Expenses ({{ days }} days)</div>
-        <div class="balance-value change-negative">{{ expense_total|isk_format }}</div>
-    </div>
-
-    <div class="balance-card">
-        <div class="balance-label">Net Change</div>
-        <div class="balance-value {% if grand_total > 0 %}change-positive{% elif grand_total < 0 %}change-negative{% else %}change-neutral{% endif %}">
-            {% if grand_total > 0 %}+{% endif %}{{ grand_total|isk_format }}
+    <!-- Time Range Selector -->
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <h2>Time Range</h2>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <a href="?days=7" class="btn" {% if days == 7 %}style="background: var(--btn-primary-hover);"{% endif %}>7 Days</a>
+            <a href="?days=30" class="btn" {% if days == 30 %}style="background: var(--btn-primary-hover);"{% endif %}>30 Days</a>
+            <a href="?days=90" class="btn" {% if days == 90 %}style="background: var(--btn-primary-hover);"{% endif %}>90 Days</a>
+            <a href="?days=365" class="btn" {% if days == 365 %}style="background: var(--btn-primary-hover);"{% endif %}>1 Year</a>
         </div>
     </div>
-</div>
 
-{% if summary %}
-<div class="card">
-    <h2>Breakdown by Transaction Type</h2>
-    <table style="width: 100%; border-collapse: collapse;">
-        <thead>
-            <tr style="border-bottom: 2px solid var(--border-color);">
-                <th style="padding: 0.75rem; text-align: left;">Type</th>
-                <th style="padding: 0.75rem; text-align: right;">Income</th>
-                <th style="padding: 0.75rem; text-align: right;">Expenses</th>
-                <th style="padding: 0.75rem; text-align: right;">Net</th>
-                <th style="padding: 0.75rem; text-align: right;">Entries</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in summary %}
-            <tr style="border-bottom: 1px solid var(--table-border);">
-                <td style="padding: 0.75rem;">{{ item.ref_type|replace_underscore }}</td>
-                <td style="padding: 0.75rem; text-align: right;" class="change-positive">
-                    {% if item.income > 0 %}{{ item.income|isk_format }}{% else %}&mdash;{% endif %}
-                </td>
-                <td style="padding: 0.75rem; text-align: right;" class="change-negative">
-                    {% if item.expense > 0 %}{{ item.expense|isk_format }}{% else %}&mdash;{% endif %}
-                </td>
-                <td style="padding: 0.75rem; text-align: right; font-weight: bold; {% if item.net > 0 %}change-positive{% elif item.net < 0 %}change-negative{% endif %}">
-                    {% if item.net != 0 %}{% if item.net > 0 %}+{% endif %}{{ item.net|isk_format }}{% else %}&mdash;{% endif %}
-                </td>
-                <td style="padding: 0.75rem; text-align: right;">{{ item.entry_count }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-        <tfoot style="border-top: 2px solid var(--border-color);">
-            <tr style="font-weight: bold;">
-                <td style="padding: 0.75rem;">Total</td>
-                <td style="padding: 0.75rem; text-align: right;" class="change-positive">{{ income_total|isk_format }}</td>
-                <td style="padding: 0.75rem; text-align: right;" class="change-negative">{{ expense_total|isk_format }}</td>
-                <td style="padding: 0.75rem; text-align: right; {% if grand_total > 0 %}change-positive{% elif grand_total < 0 %}change-negative{% endif %}">
-                    {% if grand_total > 0 %}+{% endif %}{{ grand_total|isk_format }}
-                </td>
-                <td style="padding: 0.75rem; text-align: right;"></td>
-            </tr>
-        </tfoot>
-    </table>
-</div>
+    <!-- Summary Cards -->
+    <div class="summary-cards">
+        <!-- Total Income -->
+        <div class="summary-card positive" onclick="toggleBreakdown('income')">
+            <div class="summary-card-title">Total Income ({{ days }} days)</div>
+            <div class="summary-card-value">{{ income_total|isk_format }}</div>
+            <div class="summary-card-sub">Across all pilots</div>
+            <div class="pilot-breakdown" id="income-breakdown">
+                {% for stat in pilot_stats %}
+                {% if stat.income > 0 %}
+                <div class="pilot-row">
+                    <span class="pilot-name">{{ stat.character.character_name }}</span>
+                    <span class="pilot-value positive" colspan="3">{{ stat.income|isk_format }}</span>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
 
-{% if top_by_income %}
-<div class="card">
-    <h2>Top Income Sources</h2>
-    <table style="width: 100%; border-collapse: collapse;">
-        <thead>
-            <tr style="border-bottom: 2px solid var(--border-color);">
-                <th style="padding: 0.75rem; text-align: left;">Type</th>
-                <th style="padding: 0.75rem; text-align: right;">Amount</th>
-                <th style="padding: 0.75rem; text-align: right;">% of Total</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in top_by_income %}
-            {% if item.income > 0 %}
-            <tr style="border-bottom: 1px solid var(--table-border);">
-                <td style="padding: 0.75rem;">{{ item.ref_type|replace_underscore }}</td>
-                <td style="padding: 0.75rem; text-align: right;" class="change-positive">{{ item.income|isk_format }}</td>
-                <td style="padding: 0.75rem; text-align: right;">{% widthratio item.income income_total 100 %}%</td>
-            </tr>
+        <!-- Total Expenses -->
+        <div class="summary-card negative" onclick="toggleBreakdown('expense')">
+            <div class="summary-card-title">Total Expenses ({{ days }} days)</div>
+            <div class="summary-card-value">{{ expense_total|isk_format }}</div>
+            <div class="summary-card-sub">Across all pilots</div>
+            <div class="pilot-breakdown" id="expense-breakdown">
+                {% for stat in pilot_stats %}
+                {% if stat.expense > 0 %}
+                <div class="pilot-row">
+                    <span class="pilot-name">{{ stat.character.character_name }}</span>
+                    <span class="pilot-value negative" colspan="3">{{ stat.expense|isk_format }}</span>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Net Change -->
+        <div class="summary-card {% if grand_total < 0 %}negative{% elif grand_total > 0 %}positive{% endif %}" onclick="toggleBreakdown('net')">
+            <div class="summary-card-title">Net Change ({{ days }} days)</div>
+            <div class="summary-card-value">
+                {% if grand_total > 0 %}+{% endif %}{{ grand_total|isk_format }}
+            </div>
+            <div class="summary-card-sub">
+                {% if grand_total > 0 %}Profit{% elif grand_total < 0 %}Loss{% else %}Break even{% endif %}
+            </div>
+            <div class="pilot-breakdown" id="net-breakdown">
+                {% for stat in pilot_stats %}
+                <div class="pilot-row">
+                    <span class="pilot-name">{{ stat.character.character_name }}</span>
+                    <span class="pilot-value {% if stat.net >= 0 %}positive{% else %}negative{% endif %}">
+                        {% if stat.net > 0 %}+{% endif %}{{ stat.net|isk_format }}
+                    </span>
+                    <span class="pilot-value" colspan="2">{{ stat.balance|isk_format }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Income Sources -->
+    {% if top_by_income %}
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <h2>Top Income Sources</h2>
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 2px solid var(--border-color);">
+                    <th style="padding: 0.75rem; text-align: left;">Type</th>
+                    <th style="padding: 0.75rem; text-align: right;">Amount</th>
+                    <th style="padding: 0.75rem; text-align: right;">% of Total</th>
+                    <th style="padding: 0.75rem; text-align: right;">Entries</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in top_by_income %}
+                {% if item.income > 0 %}
+                <tr style="border-bottom: 1px solid var(--table-border);">
+                    <td style="padding: 0.75rem;">{{ item.ref_type|replace_underscore }}</td>
+                    <td style="padding: 0.75rem; text-align: right; color: var(--alert-success-text);">{{ item.income|isk_format }}</td>
+                    <td style="padding: 0.75rem; text-align: right;">{% widthratio item.income income_total 100 %}%</td>
+                    <td style="padding: 0.75rem; text-align: right;">{{ item.entry_count }}</td>
+                </tr>
+                {% endif %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- Top Expense Categories -->
+    {% if top_by_expense %}
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <h2>Top Expense Categories</h2>
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 2px solid var(--border-color);">
+                    <th style="padding: 0.75rem; text-align: left;">Type</th>
+                    <th style="padding: 0.75rem; text-align: right;">Amount</th>
+                    <th style="padding: 0.75rem; text-align: right;">% of Total</th>
+                    <th style="padding: 0.75rem; text-align: right;">Entries</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in top_by_expense %}
+                {% if item.expense > 0 %}
+                <tr style="border-bottom: 1px solid var(--table-border);">
+                    <td style="padding: 0.75rem;">{{ item.ref_type|replace_underscore }}</td>
+                    <td style="padding: 0.75rem; text-align: right; color: var(--alert-error-text);">{{ item.expense|isk_format }}</td>
+                    <td style="padding: 0.75rem; text-align: right;">{% widthratio item.expense expense_total 100 %}%</td>
+                    <td style="padding: 0.75rem; text-align: right;">{{ item.entry_count }}</td>
+                </tr>
+                {% endif %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- All Journal Entries -->
+    <div class="card">
+        <h2 style="margin-bottom: 1rem;">Journal Entries ({{ entries.paginator.count }} total)</h2>
+
+        <!-- Filters -->
+        <form method="get" style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end; margin-bottom: 1rem; padding: 1rem; background: var(--bg-primary); border-radius: 4px;">
+            <div>
+                <label for="character" style="display: block; margin-bottom: 0.25rem; font-size: 0.9rem;">Pilot:</label>
+                <select name="character" id="character" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
+                    <option value="">All Pilots</option>
+                    {% for char in characters %}
+                    <option value="{{ char.id }}" {% if character_filter == char.id|stringformat:"s" %}selected{% endif %}>{{ char.character_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="days" style="display: block; margin-bottom: 0.25rem; font-size: 0.9rem;">Time Range:</label>
+                <select name="days" id="days" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
+                    <option value="7" {% if days == 7 %}selected{% endif %}>7 Days</option>
+                    <option value="30" {% if days == 30 %}selected{% endif %}>30 Days</option>
+                    <option value="90" {% if days == 90 %}selected{% endif %}>90 Days</option>
+                    <option value="365" {% if days == 365 %}selected{% endif %}>1 Year</option>
+                </select>
+            </div>
+            <button type="submit" class="btn">Apply Filters</button>
+            {% if character_filter %}
+            <a href="{% url 'core:wallet_summary' %}?days={{ days }}" class="btn" style="background: var(--text-secondary);">Clear</a>
             {% endif %}
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-{% endif %}
+        </form>
 
-{% if top_by_expense %}
-<div class="card">
-    <h2>Top Expense Categories</h2>
-    <table style="width: 100%; border-collapse: collapse;">
-        <thead>
-            <tr style="border-bottom: 2px solid var(--border-color);">
-                <th style="padding: 0.75rem; text-align: left;">Type</th>
-                <th style="padding: 0.75rem; text-align: right;">Amount</th>
-                <th style="padding: 0.75rem; text-align: right;">% of Total</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in top_by_expense %}
-            {% if item.expense > 0 %}
-            <tr style="border-bottom: 1px solid var(--table-border);">
-                <td style="padding: 0.75rem;">{{ item.ref_type|replace_underscore }}</td>
-                <td style="padding: 0.75rem; text-align: right;" class="change-negative">{{ item.expense|isk_format }}</td>
-                <td style="padding: 0.75rem; text-align: right;">{% widthratio item.expense expense_total 100 %}%</td>
-            </tr>
+        {% if entries %}
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 2px solid var(--border-color);">
+                    <th style="padding: 0.75rem; text-align: left;">Date</th>
+                    <th style="padding: 0.75rem; text-align: left;">Pilot</th>
+                    <th style="padding: 0.75rem; text-align: left;">Type</th>
+                    <th style="padding: 0.75rem; text-align: left;">Description</th>
+                    <th style="padding: 0.75rem; text-align: right;">Amount</th>
+                    <th style="padding: 0.75rem; text-align: right;">Balance</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in entries %}
+                <tr style="border-bottom: 1px solid var(--table-border);">
+                    <td style="padding: 0.75rem; font-size: 0.9rem;">{{ entry.date|date:"M d H:i" }}</td>
+                    <td style="padding: 0.75rem;">{{ entry.character.character_name }}</td>
+                    <td style="padding: 0.75rem;">{{ entry.ref_type|replace_underscore }}</td>
+                    <td style="padding: 0.75rem;">
+                        <span style="font-size: 0.9rem;">{{ entry.reason|default:"-" }}</span>
+                    </td>
+                    <td style="padding: 0.75rem; text-align: right; {% if entry.amount > 0 %}color: var(--alert-success-text);{% else %}color: var(--alert-error-text);{% endif %}">
+                        {% if entry.amount > 0 %}+{% endif %}{{ entry.amount|isk_format }}
+                    </td>
+                    <td style="padding: 0.75rem; text-align: right;">{{ entry.balance|isk_format }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- Pagination -->
+        {% if entries.has_other_pages %}
+        <div style="margin-top: 1.5rem; display: flex; justify-content: center; gap: 0.5rem; align-items: center;">
+            {% if entries.has_previous %}
+            <a href="?page={{ entries.previous_page_number }}&days={{ days }}{% if character_filter %}&character={{ character_filter }}{% endif %}" class="btn">&laquo; Previous</a>
             {% endif %}
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-{% endif %}
-{% else %}
-<div class="card">
-    <p>No transaction data available for the selected time period.</p>
-</div>
-{% endif %}
 
-<div style="margin-bottom: 1rem;">
-    <a href="{% url 'core:wallet_journal' %}" class="btn">View Journal</a>
-    <a href="{% url 'core:wallet_transactions' %}" class="btn" style="margin-left: 0.5rem;">View Transactions</a>
-    <a href="{% url 'core:wallet_balance' %}" class="btn" style="margin-left: 0.5rem;">Balance History</a>
+            <span style="font-size: 0.9rem;">
+                Page {{ entries.number }} of {{ entries.paginator.num_pages }}
+            </span>
+
+            {% if entries.has_next %}
+            <a href="?page={{ entries.next_page_number }}&days={{ days }}{% if character_filter %}&character={{ character_filter }}{% endif %}" class="btn">Next &raquo;</a>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% else %}
+        <p style="color: var(--text-secondary);">No journal entries found for the selected time period.</p>
+        {% endif %}
+    </div>
+
+    <!-- Navigation -->
+    <div style="margin-top: 1.5rem;">
+        <a href="{% url 'core:wallet_balance' %}" class="btn">Balance History</a>
+        <a href="{% url 'core:wallet_transactions' %}" class="btn" style="margin-left: 0.5rem;">Transactions</a>
+    </div>
 </div>
+
+<script>
+function toggleBreakdown(type) {
+    const breakdown = document.getElementById(type + '-breakdown');
+    breakdown.classList.toggle('show');
+}
+</script>
 {% endblock %}

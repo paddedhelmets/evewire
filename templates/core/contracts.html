@@ -1,170 +1,261 @@
 {% extends "base.html" %}
 {% load evewire %}
 
-{% block title %}Contracts - {{ character.name }} - evewire{% endblock %}
+{% block title %}Contracts - evewire{% endblock %}
 
 {% block content %}
-<h1>Contracts - {{ character.name }}</h1>
+<style>
+.summary-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+.summary-card {
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    padding: 1.5rem;
+    box-shadow: var(--card-shadow);
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    border-left: 4px solid var(--btn-primary);
+}
+.summary-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+.summary-card.active {
+    border-left-color: var(--alert-warning-text);
+}
+.summary-card.completed {
+    border-left-color: var(--alert-success-text);
+}
+.summary-card-title {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+.summary-card-value {
+    font-size: 2rem;
+    font-weight: bold;
+    margin-bottom: 0.25rem;
+}
+.summary-card-sub {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+.pilot-breakdown {
+    display: none;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+.pilot-breakdown.show {
+    display: block;
+}
+.pilot-row {
+    display: grid;
+    grid-template-columns: 3fr 1fr 1fr 1fr;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--table-border);
+}
+.pilot-row:last-child {
+    border-bottom: none;
+}
+.pilot-name {
+    font-weight: 500;
+}
+.pilot-value {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+</style>
 
-<div style="margin-bottom: 1rem;">
-    <a href="{% url 'core:dashboard' %}">Dashboard</a>
-    <span style="margin: 0 0.5rem;">&rarr;</span>
-    <a href="{% url 'core:character_detail' character.id %}">{{ character.name }}</a>
-    <span style="margin: 0 0.5rem;">&rarr;</span>
-    <span>Contracts</span>
-</div>
+<div style="max-width: 1400px; margin: 0 auto;">
+    <h1 style="margin-bottom: 1.5rem;">Contracts</h1>
 
-<div class="card">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-        <h2>Contract Status Summary</h2>
-        <a href="{% url 'core:character_contracts_export' character.id %}" class="btn" style="background: #28a745;">Export CSV</a>
+    <!-- Summary Cards -->
+    <div class="summary-cards">
+        <!-- Outstanding -->
+        <div class="summary-card active" onclick="toggleBreakdown('outstanding')">
+            <div class="summary-card-title">Outstanding</div>
+            <div class="summary-card-value">{{ total_outstanding }}</div>
+            <div class="summary-card-sub">Awaiting acceptance</div>
+            <div class="pilot-breakdown" id="outstanding-breakdown">
+                {% for stat in pilot_stats %}
+                {% if stat.outstanding > 0 %}
+                <div class="pilot-row">
+                    <span class="pilot-name">{{ stat.character.character_name }}</span>
+                    <span class="pilot-value" colspan="3">{{ stat.outstanding }}</span>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- In Progress -->
+        <div class="summary-card" onclick="toggleBreakdown('in_progress')">
+            <div class="summary-card-title">In Progress</div>
+            <div class="summary-card-value">{{ total_in_progress }}</div>
+            <div class="summary-card-sub">Active contracts</div>
+            <div class="pilot-breakdown" id="in_progress-breakdown">
+                {% for stat in pilot_stats %}
+                {% if stat.in_progress > 0 %}
+                <div class="pilot-row">
+                    <span class="pilot-name">{{ stat.character.character_name }}</span>
+                    <span class="pilot-value" colspan="3">{{ stat.in_progress }}</span>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Completed -->
+        <div class="summary-card completed" onclick="toggleBreakdown('completed')">
+            <div class="summary-card-title">Completed</div>
+            <div class="summary-card-value">{{ total_completed }}</div>
+            <div class="summary-card-sub">Finished contracts</div>
+            <div class="pilot-breakdown" id="completed-breakdown">
+                {% for stat in pilot_stats %}
+                {% if stat.completed > 0 %}
+                <div class="pilot-row">
+                    <span class="pilot-name">{{ stat.character.character_name }}</span>
+                    <span class="pilot-value" colspan="3">{{ stat.completed }}</span>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
     </div>
-    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
-        <div style="border: 1px solid var(--border-color); border-radius: 4px; padding: 1rem;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                <h3 style="margin: 0;">Outstanding</h3>
-                <span style="font-size: 1.2rem; font-weight: bold;">{{ outstanding_count }}</span>
-            </div>
-        </div>
-        <div style="border: 1px solid var(--border-color); border-radius: 4px; padding: 1rem;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                <h3 style="margin: 0;">In Progress</h3>
-                <span style="font-size: 1.2rem; font-weight: bold;">{{ in_progress_count }}</span>
-            </div>
-        </div>
-        <div style="border: 1px solid var(--border-color); border-radius: 4px; padding: 1rem;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                <h3 style="margin: 0;">Completed</h3>
-                <span style="font-size: 1.2rem; font-weight: bold;">{{ completed_count }}</span>
-            </div>
-        </div>
-    </div>
-</div>
 
-<div class="card">
-    <h2>Filters</h2>
-    <form method="get" style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end;">
-        <div>
-            <label for="type" style="display: block; margin-bottom: 0.25rem;">Type:</label>
-            <select name="type" id="type" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
-                <option value="">All Types</option>
-                <option value="item_exchange" {% if contract_type == 'item_exchange' %}selected{% endif %}>Item Exchange</option>
-                <option value="auction" {% if contract_type == 'auction' %}selected{% endif %}>Auction</option>
-                <option value="courier" {% if contract_type == 'courier' %}selected{% endif %}>Courier</option>
-                <option value="loan" {% if contract_type == 'loan' %}selected{% endif %}>Loan</option>
-            </select>
-        </div>
-        <div>
-            <label for="status" style="display: block; margin-bottom: 0.25rem;">Status:</label>
-            <select name="status" id="status" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
-                <option value="">All Statuses</option>
-                <option value="outstanding" {% if status_filter == 'outstanding' %}selected{% endif %}>Outstanding</option>
-                <option value="in_progress" {% if status_filter == 'in_progress' %}selected{% endif %}>In Progress</option>
-                <option value="finished_issuer" {% if status_filter == 'finished_issuer' %}selected{% endif %}>Finished (Issuer)</option>
-                <option value="finished_contractor" {% if status_filter == 'finished_contractor' %}selected{% endif %}>Finished (Contractor)</option>
-                <option value="finished" {% if status_filter == 'finished' %}selected{% endif %}>Completed</option>
-                <option value="cancelled" {% if status_filter == 'cancelled' %}selected{% endif %}>Cancelled</option>
-                <option value="rejected" {% if status_filter == 'rejected' %}selected{% endif %}>Rejected</option>
-                <option value="failed" {% if status_filter == 'failed' %}selected{% endif %}>Failed</option>
-            </select>
-        </div>
-        <div>
-            <label for="availability" style="display: block; margin-bottom: 0.25rem;">Availability:</label>
-            <select name="availability" id="availability" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
-                <option value="">All</option>
-                <option value="public" {% if availability_filter == 'public' %}selected{% endif %}>Public</option>
-                <option value="personal" {% if availability_filter == 'personal' %}selected{% endif %}>Personal</option>
-                <option value="corporation" {% if availability_filter == 'corporation' %}selected{% endif %}>Corporation</option>
-                <option value="alliance" {% if availability_filter == 'alliance' %}selected{% endif %}>Alliance</option>
-            </select>
-        </div>
-        <button type="submit" class="btn">Apply Filters</button>
-        <a href="{% url 'core:character_contracts' character.id %}" class="btn" style="background: var(--text-secondary);">Clear</a>
-    </form>
-</div>
+    <!-- Contracts Table -->
+    <div class="card">
+        <h2 style="margin-bottom: 1rem;">Contracts ({{ contracts.paginator.count }} total)</h2>
 
-{% if contracts %}
-<div class="card">
-    <h2>Contracts ({{ contracts.paginator.count }} total)</h2>
-    <table style="width: 100%; border-collapse: collapse;">
-        <thead>
-            <tr style="border-bottom: 2px solid var(--border-color);">
-                <th style="padding: 0.75rem; text-align: left;">Type</th>
-                <th style="padding: 0.75rem; text-align: left;">Title</th>
-                <th style="padding: 0.75rem; text-align: left;">Status</th>
-                <th style="padding: 0.75rem; text-align: right;">Value</th>
-                <th style="padding: 0.75rem; text-align: right;">Profit/Loss</th>
-                <th style="padding: 0.75rem; text-align: left;">Availability</th>
-                <th style="padding: 0.75rem; text-align: left;">Expires</th>
-                <th style="padding: 0.75rem; text-align: left;">Issued</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for contract in contracts %}
-            <tr style="border-bottom: 1px solid var(--table-border); {% if not contract.is_active %}opacity: 0.6;{% endif %}">
-                <td style="padding: 0.75rem;">
-                    <span style="font-weight: bold;">{{ contract.type_name }}</span>
-                </td>
-                <td style="padding: 0.75rem;">
-                    <a href="{% url 'core:contract_detail' contract.contract_id %}">
-                        {{ contract.title|default:contract.type_name }}
-                    </a>
-                    {% if contract.for_corporation %}
-                        <span style="font-size: 0.8rem; color: var(--text-secondary);">(Corp)</span>
-                    {% endif %}
-                </td>
-                <td style="padding: 0.75rem;">
-                    <span style="font-size: 0.9rem; padding: 2px 6px; border-radius: 3px; background: {% if contract.is_active %}var(--alert-success-bg){% elif contract.is_completed %}var(--alert-info-bg){% else %}var(--alert-error-bg){% endif %}; color: {% if contract.is_active %}var(--alert-success-text){% elif contract.is_completed %}var(--alert-info-text){% else %}var(--alert-error-text){% endif %};">
-                        {{ contract.status_name }}
-                    </span>
-                    {% if contract.expires_soon %}
-                        <span style="font-size: 0.8rem; color: var(--alert-error-text); margin-left: 0.25rem;">&excl;</span>
-                    {% endif %}
-                </td>
-                <td style="padding: 0.75rem; text-align: right;">{{ contract.total_value|isk_format }}</td>
-                <td style="padding: 0.75rem; text-align: right;">
-                    {% if contract.type == 'item_exchange' and contract.is_completed and contract.profit_loss is not none %}
-                        <span style="color: {% if contract.profit_loss > 0 %}var(--alert-success-text){% elif contract.profit_loss < 0 %}var(--alert-error-text){% endif %};">
-                            {% if contract.profit_loss > 0 %}+{% endif %}{{ contract.profit_loss|isk_format }}
-                            {% if contract.profit_pct %}
-                                <span style="font-size: 0.8em;">({% if contract.profit_loss > 0 %}+{% endif %}{{ contract.profit_pct|floatformat:1 }}%)</span>
-                            {% endif %}
+        <!-- Filters -->
+        <form method="get" style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end; margin-bottom: 1rem; padding: 1rem; background: var(--bg-primary); border-radius: 4px;">
+            <div>
+                <label for="type" style="display: block; margin-bottom: 0.25rem; font-size: 0.9rem;">Type:</label>
+                <select name="type" id="type" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
+                    <option value="">All Types</option>
+                    <option value="item_exchange" {% if contract_type == 'item_exchange' %}selected{% endif %}>Item Exchange</option>
+                    <option value="auction" {% if contract_type == 'auction' %}selected{% endif %}>Auction</option>
+                    <option value="courier" {% if contract_type == 'courier' %}selected{% endif %}>Courier</option>
+                    <option value="loan" {% if contract_type == 'loan' %}selected{% endif %}>Loan</option>
+                </select>
+            </div>
+            <div>
+                <label for="status" style="display: block; margin-bottom: 0.25rem; font-size: 0.9rem;">Status:</label>
+                <select name="status" id="status" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
+                    <option value="">All Statuses</option>
+                    <option value="outstanding" {% if status_filter == 'outstanding' %}selected{% endif %}>Outstanding</option>
+                    <option value="in_progress" {% if status_filter == 'in_progress' %}selected{% endif %}>In Progress</option>
+                    <option value="finished_issuer" {% if status_filter == 'finished_issuer' %}selected{% endif %}>Finished (Issuer)</option>
+                    <option value="finished_contractor" {% if status_filter == 'finished_contractor' %}selected{% endif %}>Finished (Contractor)</option>
+                    <option value="finished" {% if status_filter == 'finished' %}selected{% endif %}>Completed</option>
+                    <option value="cancelled" {% if status_filter == 'cancelled' %}selected{% endif %}>Cancelled</option>
+                    <option value="rejected" {% if status_filter == 'rejected' %}selected{% endif %}>Rejected</option>
+                    <option value="failed" {% if status_filter == 'failed' %}selected{% endif %}>Failed</option>
+                </select>
+            </div>
+            <div>
+                <label for="availability" style="display: block; margin-bottom: 0.25rem; font-size: 0.9rem;">Availability:</label>
+                <select name="availability" id="availability" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
+                    <option value="">All</option>
+                    <option value="public" {% if availability_filter == 'public' %}selected{% endif %}>Public</option>
+                    <option value="personal" {% if availability_filter == 'personal' %}selected{% endif %}>Personal</option>
+                    <option value="corporation" {% if availability_filter == 'corporation' %}selected{% endif %}>Corporation</option>
+                    <option value="alliance" {% if availability_filter == 'alliance' %}selected{% endif %}>Alliance</option>
+                </select>
+            </div>
+            <div>
+                <label for="character" style="display: block; margin-bottom: 0.25rem; font-size: 0.9rem;">Pilot:</label>
+                <select name="character" id="character" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
+                    <option value="">All Pilots</option>
+                    {% for char in characters %}
+                    <option value="{{ char.id }}" {% if character_filter == char.id|stringformat:"s" %}selected{% endif %}>{{ char.character_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn">Apply Filters</button>
+            {% if contract_type or status_filter or availability_filter or character_filter %}
+            <a href="{% url 'core:contracts' %}" class="btn" style="background: var(--text-secondary);">Clear</a>
+            {% endif %}
+        </form>
+
+        {% if contracts %}
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 2px solid var(--border-color);">
+                    <th style="padding: 0.75rem; text-align: left;">Pilot</th>
+                    <th style="padding: 0.75rem; text-align: left;">Type</th>
+                    <th style="padding: 0.75rem; text-align: left;">Title</th>
+                    <th style="padding: 0.75rem; text-align: left;">Status</th>
+                    <th style="padding: 0.75rem; text-align: right;">Value</th>
+                    <th style="padding: 0.75rem; text-align: right;">Reward</th>
+                    <th style="padding: 0.75rem; text-align: left;">Availability</th>
+                    <th style="padding: 0.75rem; text-align: left;">Expires</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for contract in contracts %}
+                <tr style="border-bottom: 1px solid var(--table-border); {% if not contract.is_active %}opacity: 0.6;{% endif %}">
+                    <td style="padding: 0.75rem;">{{ contract.character.character_name }}</td>
+                    <td style="padding: 0.75rem;">
+                        <span style="font-weight: bold;">{{ contract.type_name }}</span>
+                    </td>
+                    <td style="padding: 0.75rem;">
+                        <a href="{% url 'core:contract_detail' contract.contract_id %}">
+                            {{ contract.title|default:contract.type_name }}
+                        </a>
+                        {% if contract.for_corporation %}
+                            <span style="font-size: 0.8rem; color: var(--text-secondary);">(Corp)</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 0.75rem;">
+                        <span style="font-size: 0.9rem; padding: 2px 6px; border-radius: 3px; background: {% if contract.is_active %}var(--alert-success-bg){% elif contract.is_completed %}var(--alert-info-bg){% else %}var(--alert-error-bg){% endif %}; color: {% if contract.is_active %}var(--alert-success-text){% elif contract.is_completed %}var(--alert-info-text){% else %}var(--alert-error-text){% endif %};">
+                            {{ contract.status_name }}
                         </span>
-                    {% else %}
-                        &mdash;
-                    {% endif %}
-                </td>
-                <td style="padding: 0.75rem; font-size: 0.9rem;">{{ contract.availability_name }}</td>
-                <td style="padding: 0.75rem;">{{ contract.date_expired|date:"M d H:i" }}</td>
-                <td style="padding: 0.75rem;">{{ contract.date_issued|date:"M d H:i" }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+                        {% if contract.expires_soon %}
+                            <span style="font-size: 0.8rem; color: var(--alert-error-text); margin-left: 0.25rem;">&excl;</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 0.75rem; text-align: right;">{{ contract.total_value|isk_format }}</td>
+                    <td style="padding: 0.75rem; text-align: right;">{{ contract.reward|isk_format }}</td>
+                    <td style="padding: 0.75rem; font-size: 0.9rem;">{{ contract.availability_name }}</td>
+                    <td style="padding: 0.75rem;">{{ contract.date_expired|date:"M d H:i" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
 
-    {% if contracts.has_other_pages %}
-    <div style="margin-top: 1.5rem; display: flex; justify-content: center; gap: 0.5rem; align-items: center;">
-        {% if contracts.has_previous %}
-            <a href="?page={{ contracts.previous_page_number }}{% if contract_type %}&type={{ contract_type }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if availability_filter %}&availability={{ availability_filter }}{% endif %}" class="btn">&laquo; Previous</a>
+        <!-- Pagination -->
+        {% if contracts.has_other_pages %}
+        <div style="margin-top: 1.5rem; display: flex; justify-content: center; gap: 0.5rem; align-items: center;">
+            {% if contracts.has_previous %}
+            <a href="?page={{ contracts.previous_page_number }}{% if contract_type %}&type={{ contract_type }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if availability_filter %}&availability={{ availability_filter }}{% endif %}{% if character_filter %}&character={{ character_filter }}{% endif %}" class="btn">&laquo; Previous</a>
+            {% endif %}
+
+            <span style="font-size: 0.9rem;">
+                Page {{ contracts.number }} of {{ contracts.paginator.num_pages }}
+            </span>
+
+            {% if contracts.has_next %}
+            <a href="?page={{ contracts.next_page_number }}{% if contract_type %}&type={{ contract_type }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if availability_filter %}&availability={{ availability_filter }}{% endif %}{% if character_filter %}&character={{ character_filter }}{% endif %}" class="btn">Next &raquo;</a>
+            {% endif %}
+        </div>
         {% endif %}
-
-        <span>
-            Page {{ contracts.number }} of {{ contracts.paginator.num_pages }}
-        </span>
-
-        {% if contracts.has_next %}
-            <a href="?page={{ contracts.next_page_number }}{% if contract_type %}&type={{ contract_type }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if availability_filter %}&availability={{ availability_filter }}{% endif %}" class="btn">Next &raquo;</a>
+        {% else %}
+        <p style="color: var(--text-secondary);">No contracts found matching the current filters.</p>
         {% endif %}
     </div>
-    {% endif %}
 </div>
-{% else %}
-<div class="card">
-    <p>No contracts found.</p>
-</div>
-{% endif %}
 
-<div style="margin-bottom: 1rem;">
-    <a href="{% url 'core:character_detail' character.id %}" class="btn">Back to Character</a>
-</div>
+<script>
+function toggleBreakdown(type) {
+    const breakdown = document.getElementById(type + '-breakdown');
+    breakdown.classList.toggle('show');
+}
+</script>
 {% endblock %}
