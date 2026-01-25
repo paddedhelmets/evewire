@@ -190,10 +190,113 @@
 
     <!-- All Jobs Table -->
     <div class="card">
-        <h2 style="margin-bottom: 1rem;">All Jobs</h2>
-        <p style="color: var(--text-secondary); margin-bottom: 1rem;">
-            <a href="{% url 'core:industry_jobs_list' %}">View all jobs with filters and pagination →</a>
-        </p>
+        <h2 style="margin-bottom: 1rem;">All Jobs ({{ jobs.paginator.count }} total)</h2>
+
+        <!-- Filters -->
+        <form method="get" style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end; margin-bottom: 1rem; padding: 1rem; background: var(--bg-primary); border-radius: 4px;">
+            <div>
+                <label for="activity" style="display: block; margin-bottom: 0.25rem; font-size: 0.9rem;">Activity:</label>
+                <select name="activity" id="activity" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
+                    <option value="">All Activities</option>
+                    <option value="1" {% if activity_filter == '1' %}selected{% endif %}>Manufacturing</option>
+                    <option value="3" {% if activity_filter == '3' %}selected{% endif %}>TE Research</option>
+                    <option value="4" {% if activity_filter == '4' %}selected{% endif %}>ME Research</option>
+                    <option value="5" {% if activity_filter == '5' %}selected{% endif %}>Copying</option>
+                    <option value="8" {% if activity_filter == '8' %}selected{% endif %}>Invention</option>
+                </select>
+            </div>
+            <div>
+                <label for="status" style="display: block; margin-bottom: 0.25rem; font-size: 0.9rem;">Status:</label>
+                <select name="status" id="status" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
+                    <option value="">All Statuses</option>
+                    <option value="1" {% if status_filter == '1' %}selected{% endif %}>Active</option>
+                    <option value="2" {% if status_filter == '2' %}selected{% endif %}>Paused</option>
+                    <option value="104" {% if status_filter == '104' %}selected{% endif %}>Delivered</option>
+                    <option value="102" {% if status_filter == '102' %}selected{% endif %}>Cancelled</option>
+                </select>
+            </div>
+            <div>
+                <label for="character" style="display: block; margin-bottom: 0.25rem; font-size: 0.9rem;">Pilot:</label>
+                <select name="character" id="character" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
+                    <option value="">All Pilots</option>
+                    {% for char in characters %}
+                    <option value="{{ char.id }}" {% if character_filter == char.id|stringformat:"s" %}selected{% endif %}>{{ char.character_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn">Apply Filters</button>
+            {% if activity_filter or status_filter or character_filter %}
+            <a href="{% url 'core:industry_summary' %}" class="btn" style="background: var(--text-secondary);">Clear</a>
+            {% endif %}
+        </form>
+
+        {% if jobs %}
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 2px solid var(--border-color);">
+                    <th style="padding: 0.75rem; text-align: left;">Pilot</th>
+                    <th style="padding: 0.75rem; text-align: left;">Activity</th>
+                    <th style="padding: 0.75rem; text-align: left;">Product</th>
+                    <th style="padding: 0.75rem; text-align: left;">Status</th>
+                    <th style="padding: 0.75rem; text-align: left;">End Date</th>
+                    <th style="padding: 0.75rem; text-align: right;">Runs</th>
+                    <th style="padding: 0.75rem; text-align: center;">Progress</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for job in jobs %}
+                <tr style="border-bottom: 1px solid var(--table-border); {% if job.status != 1 %}opacity: 0.6;{% endif %}">
+                    <td style="padding: 0.75rem;">{{ job.character.character_name }}</td>
+                    <td style="padding: 0.75rem;">
+                        <span style="font-size: 0.9rem;">{{ job.activity_name }}</span>
+                    </td>
+                    <td style="padding: 0.75rem;">
+                        <span style="font-size: 0.9rem;">{{ job.product_type_id }}</span>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary);">{{ job.blueprint_type_id }}</div>
+                    </td>
+                    <td style="padding: 0.75rem;">
+                        <span style="font-size: 0.9rem; padding: 2px 6px; border-radius: 3px; background: {% if job.status == 1 %}var(--alert-success-bg){% elif job.status == 104 %}var(--alert-info-bg){% else %}var(--alert-error-bg){% endif %}; color: {% if job.status == 1 %}var(--alert-success-text){% elif job.status == 104 %}var(--alert-info-text){% else %}var(--alert-error-text){% endif %};">
+                            {% if job.status == 1 %}Active{% elif job.status == 2 %}Paused{% elif job.status == 104 %}Delivered{% elif job.status == 102 %}Cancelled{% else %}{{ job.status }}{% endif %}
+                        </span>
+                    </td>
+                    <td style="padding: 0.75rem;">{{ job.end_date|date:"M d H:i" }}</td>
+                    <td style="padding: 0.75rem; text-align: right;">{{ job.runs }}</td>
+                    <td style="padding: 0.75rem; text-align: center;">
+                        {% if job.status == 1 %}
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <div style="flex: 1; height: 6px; background: var(--bg-primary); border-radius: 3px; overflow: hidden;">
+                                <div style="width: {{ job.progress_percent }}%; height: 100%; background: var(--btn-primary);"></div>
+                            </div>
+                            <span style="font-size: 0.8rem;">{{ job.progress_percent|floatformat:0 }}%</span>
+                        </div>
+                        {% else %}
+                        <span style="font-size: 0.8rem; color: var(--text-secondary);">—</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- Pagination -->
+        {% if jobs.has_other_pages %}
+        <div style="margin-top: 1.5rem; display: flex; justify-content: center; gap: 0.5rem; align-items: center;">
+            {% if jobs.has_previous %}
+            <a href="?page={{ jobs.previous_page_number }}{% if activity_filter %}&activity={{ activity_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if character_filter %}&character={{ character_filter }}{% endif %}" class="btn">&laquo; Previous</a>
+            {% endif %}
+
+            <span style="font-size: 0.9rem;">
+                Page {{ jobs.number }} of {{ jobs.paginator.num_pages }}
+            </span>
+
+            {% if jobs.has_next %}
+            <a href="?page={{ jobs.next_page_number }}{% if activity_filter %}&activity={{ activity_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if character_filter %}&character={{ character_filter }}{% endif %}" class="btn">Next &raquo;</a>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% else %}
+        <p style="color: var(--text-secondary);">No industry jobs found.</p>
+        {% endif %}
     </div>
 </div>
 

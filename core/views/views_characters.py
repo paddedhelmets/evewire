@@ -94,10 +94,11 @@ def set_main_character(request: HttpRequest, character_id: int) -> HttpResponse:
 
 @login_required
 def industry_summary(request: HttpRequest) -> HttpResponse:
-    """Multi-character industry summary with aggregate stats and per-pilot breakdown."""
+    """Multi-character industry summary with aggregate stats and jobs table."""
     from core.models import Character
     from django.utils import timezone
     from datetime import timedelta
+    from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 
     # Get all characters for this user
     characters = request.user.characters.all()
@@ -135,9 +136,36 @@ def industry_summary(request: HttpRequest) -> HttpResponse:
             'reaction_pct': reaction_pct,
         })
 
+    # Get all jobs with filters and pagination
+    from core.character.models import IndustryJob
+    jobs_qs = IndustryJob.objects.filter(
+        character__user=request.user
+    ).select_related('character').order_by('end_date')
+
+    # Apply filters
+    activity_filter = request.GET.get('activity')
+    status_filter = request.GET.get('status')
+    character_filter = request.GET.get('character')
+
+    if activity_filter:
+        jobs_qs = jobs_qs.filter(activity_id=activity_filter)
+    if status_filter:
+        jobs_qs = jobs_qs.filter(status=status_filter)
+    if character_filter:
+        jobs_qs = jobs_qs.filter(character_id=character_filter)
+
+    # Paginate
+    paginator = Paginator(jobs_qs, 50)
+    page = request.GET.get('page', 1)
+    try:
+        jobs = paginator.page(page)
+    except PageNotAnInteger:
+        jobs = paginator.page(1)
+    except EmptyPage:
+        jobs = paginator.page(paginator.num_pages)
+
     # Get expiring soon jobs across all pilots (within 1 hour)
     one_hour_from_now = timezone.now() + timedelta(hours=1)
-    from core.character.models import IndustryJob
     expiring_jobs = IndustryJob.objects.filter(
         character__user=request.user,
         status=1,
@@ -156,6 +184,11 @@ def industry_summary(request: HttpRequest) -> HttpResponse:
         'reaction_utilization': reaction_utilization,
         'pilot_stats': pilot_stats,
         'expiring_jobs': expiring_jobs,
+        'jobs': jobs,
+        'activity_filter': activity_filter,
+        'status_filter': status_filter,
+        'character_filter': character_filter,
+        'characters': characters,
     })
 
 
