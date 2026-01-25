@@ -9,6 +9,49 @@ from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from mptt.models import MPTTModel, TreeForeignKey
+from django.core.exceptions import ObjectDoesNotExist
+
+
+class AnnotatedCountProperty:
+    """
+    A descriptor that supports both QuerySet annotation and direct property access.
+
+    When used with .annotate(name=Count('field')), the annotated value is stored
+    on the instance and returned. When accessed without annotation, it falls back
+    to computing the value dynamically.
+
+    This allows:
+    - Efficient counting via annotation in queries
+    - Lazy computation when annotation isn't present
+    - Transparent access in both templates and code
+    """
+    def __init__(self, field_name: str):
+        self.field_name = field_name
+
+    def __get__(self, instance, owner=None):
+        if instance is None:
+            return self
+
+        # Check if annotated value exists on instance
+        annotated_value = instance.__dict__.get(f'_{self.field_name}_annotated')
+        if annotated_value is not None:
+            return annotated_value
+
+        # Fall back to dynamic computation
+        # For child_count, count related children
+        if self.field_name == 'child_count':
+            # Use the related manager's count() method
+            # This is efficient for MPTT models
+            try:
+                return instance.children.count()
+            except ObjectDoesNotExist:
+                return 0
+
+        raise AttributeError(f"'{type(instance).__name__}' object has no attribute '{self.field_name}'")
+
+    def __set__(self, instance, value):
+        # Store annotated value with a private name
+        instance.__dict__[f'_{self.field_name}_annotated'] = value
 
 
 class CharacterSkill(models.Model):
@@ -321,6 +364,9 @@ class CharacterAsset(MPTTModel):
     # Cache metadata
     synced_at = models.DateTimeField(auto_now_add=True)
 
+    # Annotated count property (supports both annotation and direct access)
+    child_count = AnnotatedCountProperty('child_count')
+
     class Meta:
         verbose_name = _('character asset')
         verbose_name_plural = _('character assets')
@@ -430,17 +476,6 @@ class CharacterAsset(MPTTModel):
                 return float(item.sell_price or 0) * self.quantity
         except ItemType.DoesNotExist:
             return 0.0
-
-    @property
-    def child_count(self) -> int:
-        """
-        Get the count of direct children without loading them.
-
-        Uses MPTT's efficient counting. This is cached by MPTT.
-        """
-        # MPTT provides get_children() which uses the tree structure efficiently
-        # For counting, we use the children related_name which is already cached
-        return self.children.count()
 
 
 class WalletJournalEntry(models.Model):
