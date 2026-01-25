@@ -121,9 +121,17 @@ def industry_summary(request: HttpRequest, character_id: int = None) -> HttpResp
         end_date__lte=one_hour_from_now
     ).order_by('end_date')[:10]
 
+    # Get activity breakdown for active jobs
+    from core.character.models import IndustryJob
+    activities = IndustryJob.objects.filter(
+        character=character,
+        status=1
+    ).values_list('activity_id', 'activity_name').distinct()
+
     return render(request, 'core/industry_summary.html', {
         'character': character,
         'expiring_jobs': expiring_jobs,
+        'activities': activities,
     })
 
 

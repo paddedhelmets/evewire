@@ -79,11 +79,11 @@
 </div>
 
 <!-- Jobs by Activity Type -->
-{% if character.industry_jobs.exists %}
+{% if activities %}
 <div class="card">
     <h2>Active Jobs by Activity Type</h2>
     <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem;">
-        {% for activity_id, activity_name in character.industry_jobs.filter(status=1).values_list('activity_id', 'activity_name').distinct %}
+        {% for activity_id, activity_name in activities %}
             <div style="border: 1px solid var(--border-color); border-radius: 4px; padding: 0.75rem;">
                 <p style="margin: 0; color: var(--text-secondary); font-size: 0.9rem;">{{ activity_name }}</p>
                 <p style="margin: 0.25rem 0 0 0; font-size: 1.5rem; font-weight: bold;">{{ character.industry_jobs.filter(activity_id=activity_id, status=1).count }}</p>
