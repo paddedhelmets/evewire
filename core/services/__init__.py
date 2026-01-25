@@ -12,6 +12,7 @@ from typing import Optional, Any
 from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
+from django.db import transaction
 
 logger = logging.getLogger('evewire')
 
@@ -352,6 +353,7 @@ class AuthService:
     """Service for handling EVE SSO authentication flow."""
 
     @staticmethod
+    @transaction.atomic
     def handle_callback(code: str, request_user=None, reauth_char_id=None):
         """
         Handle EVE SSO OAuth callback.
@@ -439,17 +441,20 @@ class AuthService:
                 # Fetch corporation/alliance names from ESI
                 update_character_corporation_info(character)
             else:
-                # Create new character for this user
-                character = Character.objects.create(
+                # Create new character for this user (use get_or_create for race condition safety)
+                character, char_created = Character.objects.get_or_create(
                     id=character_id,
-                    user=user,
-                    character_name=character_name,
-                    corporation_id=corporation_id,
+                    defaults={
+                        'user': user,
+                        'character_name': character_name,
+                        'corporation_id': corporation_id,
+                    }
                 )
                 character.set_refresh_token(refresh_token)
                 character.token_expires = timezone.now() + timedelta(seconds=expires_in)
                 character.save()
-                character_added = True
+                if char_created:
+                    character_added = True
 
                 # Fetch corporation/alliance names from ESI
                 update_character_corporation_info(character)
@@ -476,12 +481,14 @@ class AuthService:
                 user.last_login = timezone.now()
                 user.save()
 
-                # Create character
-                character = Character.objects.create(
+                # Create character (use get_or_create for race condition safety)
+                character, char_created = Character.objects.get_or_create(
                     id=character_id,
-                    user=user,
-                    character_name=character_name,
-                    corporation_id=corporation_id,
+                    defaults={
+                        'user': user,
+                        'character_name': character_name,
+                        'corporation_id': corporation_id,
+                    }
                 )
                 character.set_refresh_token(refresh_token)
                 character.token_expires = timezone.now() + timedelta(seconds=expires_in)
