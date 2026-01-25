@@ -19,6 +19,7 @@ urlpatterns = [
     path('verify-email/<str:token>/', views.verify_email_login, name='verify_email_login'),
     path('email-prompt/', views.email_prompt_page, name='email_prompt'),
     path('account-claim/', views.account_claim_page, name='account_claim'),
+    path('profile/', views.user_profile, name='user_profile'),
 
     # Character Management
     path('characters/', views.characters_list, name='characters'),

@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}Profile - evewire{% endblock %}
+
+{% block content %}
+<div style="max-width: 600px; margin: 0 auto;">
+    <div class="card">
+        <h1>Account Profile</h1>
+
+        <div style="margin-bottom: 2rem;">
+            <h2 style="font-size: 1.2rem; margin-bottom: 1rem;">Email Verification</h2>
+
+            {% if email %}
+                <div style="padding: 1rem; background: var(--bg-primary); border-radius: 4px; margin-bottom: 1rem;">
+                    <p style="margin: 0;">
+                        <strong>Email:</strong> {{ email_masked }}<br>
+                        <strong>Status:</strong>
+                        {% if email_verified %}
+                            <span style="color: var(--alert-success-text);">✓ Verified</span>
+                        {% else %}
+                            <span style="color: var(--alert-error-text);">⚠ Not Verified</span>
+                        {% endif %}
+                    </p>
+                </div>
+
+                {% if not email_verified %}
+                <form method="post">
+                    {% csrf_token %}
+                    <button type="submit" name="action" value="resend_verification" class="btn">
+                        📧 Resend Verification Email
+                    </button>
+                    <button type="submit" name="action" value="remove_email" class="btn" style="background: var(--alert-error-text); margin-left: 0.5rem;">
+                        Remove Email
+                    </button>
+                </form>
+                {% else %}
+                <form method="post">
+                    {% csrf_token %}
+                    <button type="submit" name="action" value="remove_email" class="btn" style="background: var(--alert-error-text);">
+                        Remove Email
+                    </button>
+                </form>
+                {% endif %}
+
+            {% else %}
+                <div style="padding: 1rem; background: var(--alert-error-bg); border-radius: 4px; margin-bottom: 1rem;">
+                    <p style="margin: 0; color: var(--alert-error-text);">
+                        <strong>⚠ No email configured</strong><br>
+                        Without email verification, you may lose access to your account if you log out.
+                    </p>
+                </div>
+
+                <form method="post">
+                    {% csrf_token %}
+                    <div style="margin-bottom: 1rem;">
+                        <label for="email" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Email Address</label>
+                        <input
+                            type="email"
+                            id="email"
+                            name="email"
+                            required
+                            placeholder="you@example.com"
+                            style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 4px; font-size: 1rem;"
+                        >
+                    </div>
+                    <button type="submit" name="action" value="update_email" class="btn">
+                        Add Email
+                    </button>
+                </form>
+            {% endif %}
+        </div>
+
+        <div style="padding: 1rem; background: var(--bg-primary); border-radius: 4px; font-size: 0.9rem; color: var(--text-secondary);">
+            <p style="margin: 0;"><strong>Why add email?</strong></p>
+            <ul style="margin: 0.5rem 0 0 1.5rem;">
+                <li>Recover your account if you lose access</li>
+                <li>Log in from multiple browsers</li>
+                <li>Receive security notifications</li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}

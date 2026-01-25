@@ -111,6 +111,12 @@
                                     {% if user.settings.theme == 'dark' %}☀️{% else %}🌙{% endif %}
                                 </button>
                             </form>
+                            <a href="{% url 'core:user_profile' %}" style="display: flex; align-items: center; gap: 0.25rem;">
+                                {% if user.email %}
+                                    {% if user.email_verified %}✓{% else %}⚠{% endif %}
+                                {% endif %}
+                                {{ user.display_name }}
+                            </a>
                             <a href="{% url 'core:characters' %}">+ Add Character</a>
                             <a href="{% url 'core:logout' %}">Logout</a>
                         {% else %}

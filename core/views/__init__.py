@@ -219,6 +219,64 @@ def verify_email_login(request: HttpRequest, token: str) -> HttpResponse:
 
 
 @login_required
+def user_profile(request: HttpRequest) -> HttpResponse:
+    """User profile page - show email status and account settings."""
+    from django.contrib import messages
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        if action == 'update_email':
+            email = request.POST.get('email', '').strip()
+            from core.models import User
+
+            # Check if email is already used by another account
+            existing_user = User.objects.filter(email=email).exclude(id=request.user.id).first()
+            if existing_user:
+                messages.error(request, 'This email is already associated with another account.')
+            else:
+                request.user.email = email
+                request.user.email_verified = False
+                request.user.save()
+
+                # Send verification email
+                from core.email_verification import send_verification_email
+                send_verification_email(request.user, request)
+
+                messages.success(request, 'Email updated. Please check your inbox for a verification link.')
+                return redirect('core:user_profile')
+
+        elif action == 'resend_verification':
+            if request.user.email:
+                from core.email_verification import send_verification_email
+                send_verification_email(request.user, request)
+                messages.success(request, 'Verification email sent. Please check your inbox.')
+            else:
+                messages.error(request, 'No email address configured.')
+
+        elif action == 'remove_email':
+            request.user.email = None
+            request.user.email_verified = False
+            request.user.save()
+            messages.success(request, 'Email removed from your account.')
+
+        return redirect('core:user_profile')
+
+    # Mask email for display
+    email_masked = None
+    if request.user.email:
+        email_parts = request.user.email.split('@')
+        if len(email_parts) == 2:
+            email_masked = f"{email_parts[0][0]}{'*' * (len(email_parts[0]) - 1)}@{email_parts[1]}"
+
+    return render(request, 'core/user_profile.html', {
+        'email': request.user.email,
+        'email_masked': email_masked,
+        'email_verified': request.user.email_verified,
+    })
+
+
+@login_required
 def dashboard(request: HttpRequest) -> HttpResponse:
     """Main dashboard showing user's characters with aggregated stats."""
     from core.models import Character
