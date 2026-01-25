@@ -382,15 +382,15 @@ class Character(models.Model):
         return age.total_seconds() > max_age_seconds
 
     # Industry slot calculation methods
-    # Manufacturing: Mass Production (3380) + Adv Mass Production (24325)
-    # Science: Laboratory Operation (24268) + Adv Lab Operation (24270)
+    # Manufacturing: Mass Production (3387) + Adv Mass Production (24625)
+    # Science: Laboratory Operation (3406) + Adv Lab Operation (24624)
     # Reactions: Mass Reactions (45748) + Adv Mass Reactions (45749)
     # Each level adds 1 slot to base of 1, max 11 slots per category
 
-    MASS_PRODUCTION_SKILL_ID = 3380
-    ADV_MASS_PRODUCTION_SKILL_ID = 24325
-    LAB_OPERATION_SKILL_ID = 24268
-    ADV_LAB_OPERATION_SKILL_ID = 24270
+    MASS_PRODUCTION_SKILL_ID = 3387
+    ADV_MASS_PRODUCTION_SKILL_ID = 24625
+    LAB_OPERATION_SKILL_ID = 3406
+    ADV_LAB_OPERATION_SKILL_ID = 24624
     MASS_REACTIONS_SKILL_ID = 45748
     ADV_MASS_REACTIONS_SKILL_ID = 45749
 
