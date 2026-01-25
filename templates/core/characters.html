@@ -6,6 +6,15 @@
 {% block content %}
 <h1>My Characters</h1>
 
+<div class="card" style="margin-bottom: 1rem; padding: 1rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+    <h3 style="margin-top: 0;">📢 New Feature: Structure Names</h3>
+    <p style="margin-bottom: 0;">
+        We've added support for displaying player structure names (Citadels, Engineering Complexes, etc.)!
+        <strong>Click "Re-auth" on each character</strong> to grant the new scope needed to fetch structure names from ESI.
+        This is a one-time action - your existing tokens will continue to work for all other features.
+    </p>
+</div>
+
 <div style="margin-bottom: 1rem;">
     <a href="{% url 'core:add_character' %}" class="btn">+ Add Character</a>
 </div>
@@ -54,23 +63,25 @@
                         {% endif %}
                     </td>
                     <td style="padding: 0.75rem; text-align: center;">
-                        {% if character.last_sync_status == 'needs_reauth' %}
-                            <form method="get" action="{% url 'core:reauthenticate_character' character.id %}" style="display: inline;">
-                                {% csrf_token %}
-                                <button type="submit" class="btn" style="background: var(--color-primary); color: white; padding: 0.5rem 1rem; font-size: 0.9rem;">Re-authenticate</button>
-                            </form>
-                        {% else %}
-                            <a href="{% url 'core:character_detail' character.id %}" style="margin-right: 0.5rem;">View</a>
+                        <div style="display: flex; gap: 0.5rem; justify-content: center; align-items: center; flex-wrap: wrap;">
                             <form method="post" action="{% url 'core:sync_character' character.id %}" style="display: inline;">
                                 {% csrf_token %}
                                 <button type="submit" class="btn" style="padding: 0.25rem 0.5rem; font-size: 0.9rem;">Sync</button>
                             </form>
-                        {% endif %}
-                        {% if characters.count > 1 %}
-                            <form method="post" action="{% url 'core:remove_character' character.id %}" style="display: inline; margin-left: 0.5rem;" onsubmit="return confirm('Are you sure you want to remove {{ character.character_name }}? This will remove all their data from your account.');">
+                            <form method="get" action="{% url 'core:reauthenticate_character' character.id %}" style="display: inline;">
+                                {% csrf_token %}
+                                <button type="submit" class="btn" style="background: #6c757d; color: white; padding: 0.25rem 0.5rem; font-size: 0.9rem;" title="Update SSO scopes">Re-auth</button>
+                            </form>
+                            <a href="{% url 'core:character_detail' character.id %}" style="font-size: 0.9rem;">View</a>
+                            {% if characters.count > 1 %}
+                            <form method="post" action="{% url 'core:remove_character' character.id %}" style="display: inline; margin-left: 0.25rem;" onsubmit="return confirm('Are you sure you want to remove {{ character.character_name }}? This will remove all their data from your account.');">
                                 {% csrf_token %}
                                 <button type="submit" style="background: transparent; color: var(--alert-error-text); border: 1px solid var(--alert-error-text); padding: 0.25rem 0.5rem; border-radius: 4px; cursor: pointer; font-size: 0.9rem;">Remove</button>
                             </form>
+                            {% endif %}
+                        </div>
+                        {% if character.last_sync_status == 'needs_reauth' %}
+                        <small style="color: var(--alert-error-text); display: block; margin-top: 0.25rem;">⚠️ Token expired - please re-auth</small>
                         {% endif %}
                     </td>
                 </tr>
