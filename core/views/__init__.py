@@ -545,3 +545,11 @@ def reauthenticate_character(request: HttpRequest, character_id: int) -> HttpRes
     sso_url = TokenManager.get_sso_login_url()
     return redirect(sso_url)
 
+
+# Re-export views from split modules
+from core.views_pkg.views_skills import *
+from core.views_pkg.views_econ import *
+from core.views_pkg.views_assets import *
+from core.views_pkg.views_characters import *
+from core.views_pkg.views_exports import *
+from core.views_pkg.views_fittings import *
