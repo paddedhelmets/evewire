@@ -81,8 +81,48 @@ def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
         child_count=Count('children')
     )
 
+    # Select related ItemType to avoid N+1 queries on type_name property
+    # Note: ItemType isn't a direct ForeignKey on CharacterAsset, so we need to handle it differently
+    # The type_name property queries ItemType.objects.get(id=self.type_id)
+
     # Fetch only root-level assets (lazy-loading - children loaded via AJAX)
     root_assets = list(assets_query)
+
+    # Bulk-fetch all unique ItemTypes for these assets
+    type_ids = set(asset.type_id for asset in root_assets)
+    item_types = {}
+    if type_ids:
+        from core.eve.models import ItemType
+        item_types = {
+            item.id: item
+            for item in ItemType.objects.filter(id__in=type_ids)
+        }
+
+    # Bulk-fetch all unique locations (Station and SolarSystem)
+    location_ids = set(asset.location_id for asset in root_assets if asset.location_id)
+    station_names = {}
+    system_names = {}
+
+    if location_ids:
+        # Fetch stations
+        try:
+            from core.eve.models import Station
+            station_names = {
+                s.id: s.name
+                for s in Station.objects.filter(id__in=location_ids)
+            }
+        except Exception:
+            pass
+
+        # Fetch solar systems
+        try:
+            from core.eve.models import SolarSystem
+            system_names = {
+                s.id: s.name
+                for s in SolarSystem.objects.filter(id__in=location_ids)
+            }
+        except Exception:
+            pass
 
     # Group root assets by location for display
     location_groups = defaultdict(list)
@@ -91,30 +131,29 @@ def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
     all_locations = {}
 
     for asset in root_assets:
+        # Attach the pre-fetched ItemType to avoid queries in template
+        if asset.type_id in item_types:
+            asset._cached_type = item_types[asset.type_id]
+
+        # Determine and cache location name for this asset
+        location_name = None
+        if asset.location_id in station_names:
+            location_name = station_names[asset.location_id]
+        elif asset.location_id in system_names:
+            location_name = system_names[asset.location_id]
+        elif asset.location_type == 'structure':
+            location_name = f"Structure {asset.location_id}"
+        else:
+            location_name = f"Location {asset.location_id} ({asset.location_type})"
+
+        asset._cached_location_name = location_name
+
         # Group by location
         location_key = (asset.location_id, asset.location_type)
         location_groups[location_key].append(asset)
 
-        # Build location name lookup
+        # Build location name lookup (using pre-fetched data)
         if asset.location_id not in all_locations:
-            location_name = None
-            # Try Station first
-            try:
-                station = Station.objects.get(id=asset.location_id)
-                location_name = station.name
-            except Station.DoesNotExist:
-                pass
-            # Try SolarSystem
-            if not location_name:
-                try:
-                    system = SolarSystem.objects.get(id=asset.location_id)
-                    location_name = system.name
-                except SolarSystem.DoesNotExist:
-                    pass
-            # Fallback
-            if not location_name:
-                location_name = f"Location {asset.location_id} ({asset.location_type})"
-
             all_locations[asset.location_id] = {
                 'id': asset.location_id,
                 'name': location_name,

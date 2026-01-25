@@ -121,16 +121,73 @@ def api_asset_children(request, asset_id: int) -> JsonResponse:
     paginator = Paginator(children_query, per_page)
     page_obj = paginator.get_page(page)
 
+    # Get the actual children from this page
+    children = list(page_obj)
+
+    # Bulk-fetch ItemTypes to avoid N+1 queries
+    type_ids = set(child.type_id for child in children)
+    item_types = {}
+    if type_ids:
+        from core.eve.models import ItemType
+        item_types = {
+            item.id: item
+            for item in ItemType.objects.filter(id__in=type_ids)
+        }
+
+    # Bulk-fetch location data (Station and SolarSystem)
+    location_ids = set(child.location_id for child in children if child.location_id)
+    station_names = {}
+    system_names = {}
+
+    if location_ids:
+        # Fetch stations
+        try:
+            from core.eve.models import Station
+            station_names = {
+                s.id: s.name
+                for s in Station.objects.filter(id__in=location_ids)
+            }
+        except Exception:
+            pass
+
+        # Fetch solar systems
+        try:
+            from core.eve.models import SolarSystem
+            system_names = {
+                s.id: s.name
+                for s in SolarSystem.objects.filter(id__in=location_ids)
+            }
+        except Exception:
+            pass
+
     # Build response data
     children_data = []
-    for child in page_obj:
+    for child in children:
+        # Get type name (using pre-fetched data)
+        type_name = item_types.get(child.type_id)
+        if type_name:
+            type_name = type_name.name
+        else:
+            type_name = f"Type {child.type_id}"
+
+        # Get location name (using pre-fetched data)
+        location_name = None
+        if child.location_id in station_names:
+            location_name = station_names[child.location_id]
+        elif child.location_id in system_names:
+            location_name = system_names[child.location_id]
+        elif child.location_type == 'structure':
+            location_name = f"Structure {child.location_id}"
+        else:
+            location_name = f"Location {child.location_id} ({child.location_type})"
+
         children_data.append({
             'item_id': child.item_id,
             'type_id': child.type_id,
-            'type_name': child.type_name,
+            'type_name': type_name,
             'quantity': child.quantity,
             'location_flag': child.location_flag,
-            'location_name': child.location_name,
+            'location_name': location_name,
             'is_singleton': child.is_singleton,
             'is_blueprint_copy': child.is_blueprint_copy,
             'has_children': child.child_count > 0,

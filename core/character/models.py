@@ -377,7 +377,14 @@ class CharacterAsset(MPTTModel):
 
     @property
     def type_name(self) -> str:
-        """Get the item type name from ItemType."""
+        """Get the item type name from ItemType.
+
+        Uses cached type if available (set by views to avoid N+1 queries).
+        """
+        # Check if view pre-fetched and cached the type
+        if hasattr(self, '_cached_type'):
+            return self._cached_type.name
+
         from core.eve.models import ItemType
         try:
             return ItemType.objects.get(id=self.type_id).name
@@ -393,7 +400,14 @@ class CharacterAsset(MPTTModel):
 
     @property
     def location_name(self) -> str:
-        """Get human-readable location name."""
+        """Get human-readable location name.
+
+        Uses cached location name if available (set by views to avoid N+1 queries).
+        """
+        # Check if view pre-fetched and cached the location name
+        if hasattr(self, '_cached_location_name'):
+            return self._cached_location_name
+
         from core.eve.models import Station, SolarSystem
 
         if self.location_type == 'station':
