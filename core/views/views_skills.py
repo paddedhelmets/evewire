@@ -12,8 +12,10 @@ from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.urls import reverse
 from django.db import models
 from django.utils import timezone
+from core.views import get_users_character
 
-logger = logging.getLogger('evewire')
+
+logger = logging.getLogger(__name__)
 # Skill Plan Views
 
 @login_required
