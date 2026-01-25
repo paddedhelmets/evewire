@@ -110,8 +110,8 @@ class SkillQueueItem(models.Model):
     finish_level = models.SmallIntegerField()  # Target level (1-5)
     level_start_sp = models.IntegerField()
     level_end_sp = models.IntegerField()
-    training_start_time = models.DateTimeField()
-    finish_date = models.DateTimeField()
+    training_start_time = models.DateTimeField(null=True, blank=True)
+    finish_date = models.DateTimeField(null=True, blank=True)
 
     # Cache metadata
     synced_at = models.DateTimeField(auto_now_add=True)
@@ -621,8 +621,8 @@ class MarketOrder(models.Model):
     is_buy_order = models.BooleanField(default=False)
     type_id = models.IntegerField(db_index=True)  # FK to ItemType
     region_id = models.IntegerField(db_index=True)
-    station_id = models.BigIntegerField()
-    system_id = models.IntegerField()
+    station_id = models.BigIntegerField(null=True, blank=True)
+    system_id = models.IntegerField(null=True, blank=True)
     volume_remain = models.IntegerField()
     volume_total = models.IntegerField()
     min_volume = models.IntegerField(default=1)
@@ -701,8 +701,8 @@ class MarketOrderHistory(models.Model):
     is_buy_order = models.BooleanField(default=False)
     type_id = models.IntegerField(db_index=True)  # FK to ItemType
     region_id = models.IntegerField(db_index=True)
-    station_id = models.BigIntegerField()
-    system_id = models.IntegerField()
+    station_id = models.BigIntegerField(null=True, blank=True)
+    system_id = models.IntegerField(null=True, blank=True)
     volume_remain = models.IntegerField()
     volume_total = models.IntegerField()
     min_volume = models.IntegerField(default=1)

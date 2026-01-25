@@ -614,6 +614,12 @@ def sync_character_data(character) -> bool:
         character.last_sync_status = SyncStatus.IN_PROGRESS
         character.save(update_fields=['last_sync_status'])
 
+        # First, fetch and update basic character info (corporation_id may have changed)
+        char_info_response = ESIClient.get_character_info(character.id)
+        char_info = char_info_response.data
+        character.corporation_id = char_info.get('corporation_id')
+        character.save(update_fields=['corporation_id'])
+
         _sync_skills(character)
         _sync_skill_queue(character)
         _sync_attributes(character)
@@ -623,7 +629,15 @@ def sync_character_data(character) -> bool:
         _sync_orders(character)
         _sync_orders_history(character)
         _sync_industry_jobs(character)
-        _sync_contracts(character)
+
+        # Contracts might fail with 401 if scope not granted - handle gracefully
+        try:
+            _sync_contracts(character)
+        except HTTPError as e:
+            if e.response is not None and e.response.status_code == 401:
+                logger.warning(f'Contracts not available for character {character.id} (missing scope)')
+            else:
+                raise
 
         # Update corporation/alliance names (can change over time)
         update_character_corporation_info(character)
@@ -654,7 +668,8 @@ def sync_character_data(character) -> bool:
         character.last_sync_error = str(e)[:500]
         character.save(update_fields=['last_sync_status', 'last_sync_error'])
 
-        logger.error(f'Sync failed for character {character.id}: {e}')
+        import traceback
+        logger.error(f'Sync failed for character {character.id}: {e}\n{traceback.format_exc()}')
         return False
 
 
@@ -700,10 +715,10 @@ def _sync_skill_queue(character) -> None:
             queue_position=i,
             skill_id=queue_item['skill_id'],
             finish_level=queue_item['finished_level'],
-            level_start_sp=queue_item['level_start_sp'],
-            level_end_sp=queue_item['level_end_sp'],
-            training_start_time=queue_item['start_time'],
-            finish_date=queue_item['finish_date'],
+            level_start_sp=queue_item.get('level_start_sp', 0),
+            level_end_sp=queue_item.get('level_end_sp', 0),
+            training_start_time=queue_item.get('start_date'),
+            finish_date=queue_item.get('finish_date'),
         )
 
 

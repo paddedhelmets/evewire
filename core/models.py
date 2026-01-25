@@ -312,6 +312,7 @@ class Character(models.Model):
     # Total SP (cached for quick display)
     total_sp = models.IntegerField(null=True, blank=True)
     skills_synced_at = models.DateTimeField(null=True, blank=True)
+    assets_synced_at = models.DateTimeField(null=True, blank=True)
     industry_jobs_synced_at = models.DateTimeField(null=True, blank=True)
     orders_synced_at = models.DateTimeField(null=True, blank=True)
     contracts_synced_at = models.DateTimeField(null=True, blank=True)
