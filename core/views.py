@@ -72,9 +72,26 @@ def oauth_callback(request: HttpRequest) -> HttpResponse:
 
         # Pass request.user if logged in (for adding character to existing account)
         request_user = request.user if request.user.is_authenticated else None
-        user = AuthService.handle_callback(code, request_user=request_user, reauth_char_id=reauth_char_id)
+        status, user = AuthService.handle_callback(code, request_user=request_user, reauth_char_id=reauth_char_id, request=request)
 
-        # If not already logged in, login the user
+        # Handle different authentication status codes
+        if status == AuthService.ACCOUNT_CLAIM_REQUIRED:
+            # Character exists on another account with email - show claiming page
+            return redirect('core:account_claim')
+
+        elif status == AuthService.SUCCESS_WITH_WARNING:
+            # Logged in but account has no email - show warning
+            messages.warning(request, 'Your account does not have a verified email. You may lose access if you log out. Consider adding email in settings.')
+            if not request_user:
+                login(request, user)
+            return redirect('core:characters')
+
+        elif status == AuthService.NEW_USER:
+            # New user created - log in and show email prompt
+            login(request, user)
+            return redirect('core:email_prompt')
+
+        # Normal login or character added
         if not request_user:
             login(request, user)
 
@@ -95,6 +112,110 @@ def logout_view(request: HttpRequest) -> HttpResponse:
     logger.info(f'User {request.user.display_name} logged out')
     logout(request)
     return redirect('core:index')
+
+
+def account_claim_page(request: HttpRequest) -> HttpResponse:
+    """Show options when character is already linked to another account."""
+    from core.models import User
+    from django.contrib import messages
+
+    user_id = request.session.get('found_account_user_id')
+    if not user_id:
+        messages.error(request, 'Account claiming session expired. Please try logging in again.')
+        return redirect('core:login')
+
+    try:
+        owner_user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        messages.error(request, 'Account not found.')
+        return redirect('core:login')
+
+    if request.method == 'POST':
+        choice = request.POST.get('choice')
+
+        if choice == 'send_email':
+            # Send magic link to registered email
+            from core.email_verification import send_verification_email
+            send_verification_email(owner_user, request)
+            return render(request, 'core/email_sent.html', {
+                'email': owner_user.email,
+            })
+
+        elif choice == 'create_new':
+            # User opts to create new account - warn them heavily
+            # This is a destructive action - they'll lose access to the original account
+            request.session['confirm_new_account'] = True
+            return render(request, 'core/confirm_new_account.html', {
+                'character_id': request.session.get('pending_character_data', {}).get('id'),
+                'character_name': request.session.get('pending_character_data', {}).get('name'),
+            })
+
+    # Check if this is a confirmation of new account creation
+    if request.session.get('confirm_new_account') and request.method == 'POST':
+        if request.POST.get('confirm') == 'yes':
+            # User confirmed - create new account (WARNING: this creates duplicate character situation)
+            # TODO: This should be handled better in the future
+            # For now, we'll re-trigger the OAuth flow which will create a new account
+            # The original character will still exist in the old account
+            request.session.pop('confirm_new_account', None)
+            messages.warning(request, 'Creating a new account. The original account still exists - you may want to merge them later.')
+            # Redirect to login to start fresh
+            return redirect('core:login')
+
+    return render(request, 'core/account_claim.html', {
+        'owner_user': owner_user,
+        'has_email': bool(owner_user.email),
+        'email_masked': f"{owner_user.email[:3]}...{owner_user.email.split('@')[1][-3:]}" if owner_user.email else None,
+    })
+
+
+@login_required
+def email_prompt_page(request: HttpRequest) -> HttpResponse:
+    """Prompt user to add email for account recovery (optional but encouraged)."""
+    from django.contrib import messages
+
+    if request.method == 'POST':
+        email = request.POST.get('email', '').strip()
+
+        if not email:
+            messages.error(request, 'Please enter a valid email address.')
+        else:
+            # Check if email is already used by another account
+            from core.models import User
+            existing_user = User.objects.filter(email=email).exclude(id=request.user.id).first()
+            if existing_user:
+                messages.error(request, 'This email is already associated with another account.')
+            else:
+                # Update user's email
+                request.user.email = email
+                request.user.email_verified = False  # Require verification
+                request.user.save()
+
+                # Send verification email
+                from core.email_verification import send_verification_email
+                send_verification_email(request.user, request)
+
+                return render(request, 'core/email_sent.html', {
+                    'email': email,
+                })
+
+    return render(request, 'core/email_prompt.html')
+
+
+def verify_email_login(request: HttpRequest, token: str) -> HttpResponse:
+    """Handle magic link from email verification."""
+    from django.contrib import messages
+    from core.email_verification import verify_email_token
+
+    user = verify_email_token(token)
+    if user:
+        login(request, user)
+        messages.success(request, f'Welcome back, {user.display_name}!')
+        logger.info(f'User {user.display_name} logged in via email magic link')
+        return redirect('core:dashboard')
+    else:
+        messages.error(request, 'Invalid or expired login link. Please request a new one.')
+        return redirect('core:login')
 
 
 @login_required

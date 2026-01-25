@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}Account Claim Required - evewire{% endblock %}
+
+{% block content %}
+<div style="max-width: 600px; margin: 0 auto;">
+    <div class="card" style="border-left: 4px solid var(--alert-warning-text);">
+        <h1 style="color: var(--alert-warning-text);">Character Already Linked</h1>
+        <p>This EVE character is already linked to another account.</p>
+
+        {% if has_email %}
+        <p>The account owner has registered an email address. You can request a login link be sent to their email.</p>
+        {% else %}
+        <p><strong>Warning:</strong> The existing account has no email address registered. Without email verification, the account may be inaccessible if you lose your session.</p>
+        {% endif %}
+
+        <div style="margin: 1.5rem 0; padding: 1rem; background: var(--bg-secondary); border-radius: 4px;">
+            <p style="margin: 0; font-size: 0.9rem; color: var(--text-secondary);">
+                <strong>Character:</strong> {{ pending_character_data.name }}<br>
+                <strong>Corporation:</strong> {{ owner_user.corporation_name|default:"Unknown" }}
+            </p>
+        </div>
+
+        <form method="post" style="margin-top: 2rem;">
+            {% if has_email %}
+            <button type="submit" name="choice" value="send_email" class="btn" style="width: 100%; margin-bottom: 1rem;">
+                📧 Send Login Link to Email ({{ email_masked }})
+            </button>
+            {% endif %}
+            <button type="submit" name="choice" value="create_new" class="btn" style="width: 100%; background: var(--alert-error-text);">
+                Create New Account Instead
+            </button>
+        </form>
+
+        <p style="margin-top: 1.5rem; font-size: 0.85rem; color: var(--text-secondary);">
+            <strong>Note:</strong> Creating a new account will leave the original account intact. The character will be linked to your new account instead.
+        </p>
+    </div>
+</div>
+{% endblock %}

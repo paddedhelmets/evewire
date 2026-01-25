@@ -16,6 +16,9 @@ SECRET_KEY = config('SECRET_KEY', default='django-insecure-change-this-in-produc
 DEBUG = config('DEBUG', default=True, cast=bool)
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=lambda v: [s.strip() for s in v.split(',')])
 
+# Email verification (DEV_EMAIL_LOG=True prints codes to console instead of sending emails)
+DEV_EMAIL_LOG = config('DEV_EMAIL_LOG', default=True, cast=bool)
+
 # Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',

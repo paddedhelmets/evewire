@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}Verify Your Email - evewire{% endblock %}
+
+{% block content %}
+<div style="max-width: 500px; margin: 0 auto;">
+    <div class="card">
+        <h1>✉️ Email Sent</h1>
+        <p>We've sent a login link to:</p>
+        <p style="font-family: monospace; font-size: 1.1rem; padding: 0.5rem; background: var(--bg-secondary); border-radius: 4px; text-align: center;">
+            {{ email }}
+        </p>
+        <p style="color: var(--text-secondary);">Click the link in the email to log in to your account.</p>
+        <p style="font-size: 0.85rem; color: var(--text-secondary);">The link will expire in 24 hours.</p>
+
+        <div style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+            <p style="margin: 0; font-size: 0.9rem;">Didn't receive the email?</p>
+            <ul style="margin: 0.5rem 0 1rem 1.5rem; font-size: 0.9rem;">
+                <li>Check your spam folder</li>
+                <li>Make sure the email address is correct</li>
+                <li>The link expires after 24 hours</li>
+            </ul>
+        </div>
+
+        <div style="margin-top: 1rem;">
+            <a href="{% url 'core:login' %}" class="btn">Back to Login</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

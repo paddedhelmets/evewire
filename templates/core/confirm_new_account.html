@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}Confirm New Account - evewire{% endblock %}
+
+{% block content %}
+<div style="max-width: 600px; margin: 0 auto;">
+    <div class="card" style="border-left: 4px solid var(--alert-error-bg); background: var(--alert-error-bg);">
+        <h1 style="color: var(--alert-error-text);">⚠️ Create New Account?</h1>
+
+        <p style="color: var(--alert-error-text);"><strong>Warning:</strong> You are about to create a new account. The character <strong>{{ character_name }}</strong> will be unlinked from its original account.</p>
+
+        <div style="margin: 1.5rem 0; padding: 1rem; background: var(--bg-secondary); border-radius: 4px;">
+            <p style="margin: 0; font-size: 0.9rem; color: var(--text-secondary);">
+                <strong>What this means:</strong>
+            </p>
+            <ul style="margin: 0.5rem 0 0 1.5rem; font-size: 0.9rem; color: var(--text-secondary);">
+                <li>A new user account will be created</li>
+                <li>{{ character_name }} will be linked to this new account</li>
+                <li>The <strong>original account will still exist</strong> with all its other characters</li>
+                <li>You will <strong>lose access</strong> to the original account unless you have another character linked to it</li>
+            </ul>
+        </div>
+
+        <p style="margin-bottom: 1rem;">Are you absolutely sure you want to proceed?</p>
+
+        <form method="post">
+            <button type="submit" name="confirm" value="yes" class="btn" style="background: var(--alert-error-text); width: 100%; margin-bottom: 1rem;">
+                Yes, Create New Account
+            </button>
+            <a href="{% url 'core:account_claim' %}" class="btn" style="width: 100%; display: block; text-align: center; background: var(--text-secondary); text-decoration: none;">
+                Cancel
+            </a>
+        </form>
+    </div>
+</div>
+{% endblock %}

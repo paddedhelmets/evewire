@@ -143,6 +143,28 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     settings = models.JSONField(default=dict, blank=True)
 
+    # Email verification (optional but encouraged for account recovery)
+    email = models.EmailField(
+        blank=True,
+        null=True,
+        unique=True,
+        help_text=_('Email address for account recovery and verification')
+    )
+    email_verified = models.BooleanField(
+        default=False,
+        help_text=_('Whether the email address has been verified')
+    )
+    email_verification_token = models.UUIDField(
+        blank=True,
+        null=True,
+        help_text=_('Token for email verification magic links')
+    )
+    email_verification_expires = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text=_('Expiration time for email verification token')
+    )
+
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
 

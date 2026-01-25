@@ -352,9 +352,15 @@ class ESIClient:
 class AuthService:
     """Service for handling EVE SSO authentication flow."""
 
+    # Return status codes for handle_callback
+    SUCCESS = 'success'
+    ACCOUNT_CLAIM_REQUIRED = 'account_claim_required'
+    SUCCESS_WITH_WARNING = 'success_with_warning'
+    NEW_USER = 'new_user'
+
     @staticmethod
     @transaction.atomic
-    def handle_callback(code: str, request_user=None, reauth_char_id=None):
+    def handle_callback(code: str, request_user=None, reauth_char_id=None, request=None):
         """
         Handle EVE SSO OAuth callback.
 
@@ -462,7 +468,7 @@ class AuthService:
         else:
             # Not logged in - this is initial login
             if existing_character:
-                # Character already exists - log in as that user
+                # Character already exists - check for account claiming
                 user = existing_character.user
                 # Update token
                 existing_character.set_refresh_token(refresh_token)
@@ -475,6 +481,25 @@ class AuthService:
 
                 # Fetch corporation/alliance names from ESI
                 update_character_corporation_info(character)
+
+                # Check if account has email for account recovery
+                if user.email and user.email_verified:
+                    # Store claiming flow in session for UI to handle
+                    if request:
+                        request.session['found_account_user_id'] = str(user.id)
+                        request.session['pending_character_data'] = {
+                            'id': character_id,
+                            'name': character_name,
+                            'corporation_id': corporation_id,
+                            'token': refresh_token,
+                            'expires_in': expires_in,
+                        }
+                    # Return special status to trigger claiming UI
+                    return AuthService.ACCOUNT_CLAIM_REQUIRED, user
+                else:
+                    # No email - log in but warn user about ephemeral account
+                    # This is SUCCESS_WITH_WARNING to show warning banner
+                    return AuthService.SUCCESS_WITH_WARNING, user
             else:
                 # Create new user with this character
                 user = User(username=User.objects.generate_username())
@@ -507,6 +532,9 @@ class AuthService:
                 user.save()
                 created = True
 
+                # Return NEW_USER status to show email prompt
+                return AuthService.NEW_USER, user
+
         # Log the action
         if character_added:
             action = 'character_added'
@@ -523,7 +551,7 @@ class AuthService:
         )
 
         logger.info(f'User action: {action} - {character_name} ({character_id})')
-        return user
+        return AuthService.SUCCESS, user
 
 
 def update_character_corporation_info(character) -> bool:

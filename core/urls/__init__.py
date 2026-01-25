@@ -15,6 +15,11 @@ urlpatterns = [
     path('dashboard/', views.dashboard, name='dashboard'),
     path('theme/toggle/', views.toggle_theme, name='toggle_theme'),
 
+    # Email verification
+    path('verify-email/<str:token>/', views.verify_email_login, name='verify_email_login'),
+    path('email-prompt/', views.email_prompt_page, name='email_prompt'),
+    path('account-claim/', views.account_claim_page, name='account_claim'),
+
     # Character Management
     path('characters/', views.characters_list, name='characters'),
     path('characters/add/', views.add_character, name='add_character'),
