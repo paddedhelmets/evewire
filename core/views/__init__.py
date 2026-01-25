@@ -19,11 +19,11 @@ logger = logging.getLogger('evewire')
 
 
 def get_users_character(user):
-    """Get user's character (first character if multiple).
+    """Get user's first-registered character (lowest id).
     Returns None if user has no characters.
     """
     from core.models import Character
-    return Character.objects.filter(user=user).first()
+    return Character.objects.filter(user=user).order_by('id').first()
 
 
 def index(request: HttpRequest) -> HttpResponse:
