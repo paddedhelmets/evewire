@@ -185,7 +185,7 @@ LOGGING = {
     },
     'loggers': {
         'django': {'handlers': ['console'], 'level': config('DJANGO_LOG_LEVEL', default='INFO'), 'propagate': False},
-        'evewire': {'handlers': ['console', 'file'] if not DEBUG else ['console'], 'level': 'DEBUG', 'propagate': False},
+        'evewire': {'handlers': ['console', 'file'], 'level': 'DEBUG', 'propagate': False},
     },
 }
 
