@@ -83,9 +83,9 @@ def get_charge_typeids(sde_conn) -> Set[int]:
     # Query for all items in charge groups
     placeholders = ','.join('?' * len(charge_groups))
     cur.execute(f'''
-        SELECT DISTINCT it.id
+        SELECT DISTINCT it.typeID
         FROM core_itemtype it
-        WHERE it.group_id IN ({placeholders})
+        WHERE it.groupID IN ({placeholders})
     ''', charge_groups)
 
     charge_typeids = {row[0] for row in cur.fetchall()}
@@ -227,7 +227,7 @@ def reconcile_by_position(sde_conn, fits: List[Dict[str, Any]]) -> Tuple[Fitting
     # Get ship name
     ship_id = fits[0]['ship_id']
     cur = sde_conn.cursor()
-    cur.execute('SELECT name FROM core_itemtype WHERE id = ?', (ship_id,))
+    cur.execute('SELECT typeName FROM core_itemtype WHERE typeID = ?', (ship_id,))
     row = cur.fetchone()
     ship_name = row[0] if row else f"Ship {ship_id}"
     cluster_id = fits[0]['cluster_id']
@@ -268,7 +268,7 @@ def reconcile_ship_cluster(conn, sde_conn, ship_id: int, cluster_id: int,
     """Reconcile a single ship cluster and write output."""
     # Get ship name
     cur = sde_conn.cursor()
-    cur.execute('SELECT name FROM core_itemtype WHERE id = ?', (ship_id,))
+    cur.execute('SELECT typeName FROM core_itemtype WHERE typeID = ?', (ship_id,))
     row = cur.fetchone()
     if not row:
         return None
@@ -362,7 +362,7 @@ def main():
 
         # Get ship name
         cur = sde_conn.cursor()
-        cur.execute('SELECT name FROM core_itemtype WHERE id = ?', (ship_id,))
+        cur.execute('SELECT typeName FROM core_itemtype WHERE typeID = ?', (ship_id,))
         row = cur.fetchone()
         if not row:
             print(f"Ship {ship_id} not found in SDE, skipping...")
