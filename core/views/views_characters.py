@@ -105,24 +105,34 @@ def industry_summary(request: HttpRequest) -> HttpResponse:
     # Calculate aggregate stats across all pilots
     total_mfg_slots = sum(c.manufacturing_slots for c in characters)
     active_mfg_jobs = sum(c.active_manufacturing_jobs for c in characters)
+    mfg_utilization = (active_mfg_jobs / total_mfg_slots * 100) if total_mfg_slots > 0 else 0
 
     total_science_slots = sum(c.science_slots for c in characters)
     active_science_jobs = sum(c.active_research_jobs for c in characters)
+    science_utilization = (active_science_jobs / total_science_slots * 100) if total_science_slots > 0 else 0
 
     total_reaction_slots = sum(c.reaction_slots for c in characters)
     active_reaction_jobs = sum(c.active_reaction_jobs for c in characters)
+    reaction_utilization = (active_reaction_jobs / total_reaction_slots * 100) if total_reaction_slots > 0 else 0
 
-    # Build per-pilot breakdown
+    # Build per-pilot breakdown with percentages
     pilot_stats = []
     for char in characters:
+        mfg_pct = (char.active_manufacturing_jobs / char.manufacturing_slots * 100) if char.manufacturing_slots > 0 else 0
+        science_pct = (char.active_research_jobs / char.science_slots * 100) if char.science_slots > 0 else 0
+        reaction_pct = (char.active_reaction_jobs / char.reaction_slots * 100) if char.reaction_slots > 0 else 0
+
         pilot_stats.append({
             'character': char,
             'mfg_active': char.active_manufacturing_jobs,
             'mfg_total': char.manufacturing_slots,
+            'mfg_pct': mfg_pct,
             'science_active': char.active_research_jobs,
             'science_total': char.science_slots,
+            'science_pct': science_pct,
             'reaction_active': char.active_reaction_jobs,
             'reaction_total': char.reaction_slots,
+            'reaction_pct': reaction_pct,
         })
 
     # Get expiring soon jobs across all pilots (within 1 hour)
@@ -137,13 +147,15 @@ def industry_summary(request: HttpRequest) -> HttpResponse:
     return render(request, 'core/industry_summary.html', {
         'total_mfg_slots': total_mfg_slots,
         'active_mfg_jobs': active_mfg_jobs,
+        'mfg_utilization': mfg_utilization,
         'total_science_slots': total_science_slots,
         'active_science_jobs': active_science_jobs,
+        'science_utilization': science_utilization,
         'total_reaction_slots': total_reaction_slots,
         'active_reaction_jobs': active_reaction_jobs,
+        'reaction_utilization': reaction_utilization,
         'pilot_stats': pilot_stats,
         'expiring_jobs': expiring_jobs,
-        'characters': characters,
     })
 
 

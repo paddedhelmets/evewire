@@ -89,22 +89,22 @@
     <!-- Summary Cards -->
     <div class="summary-cards">
         <!-- Manufacturing -->
-        <div class="summary-card {% if active_mfg_jobs > total_mfg_slots * 0.8 %}nearly-full{% endif %}"
+        <div class="summary-card {% if mfg_utilization > 80 %}nearly-full{% endif %}"
              onclick="toggleBreakdown('mfg')">
             <div class="summary-card-title">Manufacturing</div>
             <div class="summary-card-value">{{ active_mfg_jobs }} / {{ total_mfg_slots }}</div>
             <div class="summary-card-sub">{{ active_mfg_jobs|floatformat:0 }} active job{{ active_mfg_jobs|pluralize }}</div>
             <div class="progress-bar">
-                <div class="progress-fill {% if active_mfg_jobs > total_mfg_slots * 0.8 %}nearly-full{% elif active_mfg_jobs > total_mfg_slots * 0.6 %}high{% endif %}"
-                     style="width: {% if total_mfg_slots > 0 %}{{ active_mfg_jobs|div:total_mfg_slots|mul:100 }}{% else %}0{% endif %}%"></div>
+                <div class="progress-fill {% if mfg_utilization > 80 %}nearly-full{% elif mfg_utilization > 60 %}high{% endif %}"
+                     style="width: {{ mfg_utilization|floatformat:0 }}%"></div>
             </div>
             <div class="pilot-breakdown" id="mfg-breakdown">
                 {% for stat in pilot_stats %}
                 <div class="pilot-row">
                     <span class="pilot-name">{{ stat.character.character_name }}</span>
                     <span>{{ stat.mfg_active }} / {{ stat.mfg_total }}</span>
-                    <span style="color: {% if stat.mfg_active >= stat.mfg_total %}var(--alert-error-text){% else %}var(--text-secondary){% endif %}">
-                        {% if stat.mfg_total > 0 %}{{ stat.mfg_active|div:stat.mfg_total|mul:100|floatformat:0 }}%{% else %}0%{% endif %}
+                    <span style="color: {% if stat.mfg_pct >= 100 %}var(--alert-error-text){% else %}var(--text-secondary){% endif %}">
+                        {{ stat.mfg_pct|floatformat:0 }}%
                     </span>
                 </div>
                 {% endfor %}
@@ -112,22 +112,22 @@
         </div>
 
         <!-- Science -->
-        <div class="summary-card {% if active_science_jobs > total_science_slots * 0.8 %}nearly-full{% endif %}"
+        <div class="summary-card {% if science_utilization > 80 %}nearly-full{% endif %}"
              onclick="toggleBreakdown('science')">
             <div class="summary-card-title">Research & Invention</div>
             <div class="summary-card-value">{{ active_science_jobs }} / {{ total_science_slots }}</div>
             <div class="summary-card-sub">{{ active_science_jobs|floatformat:0 }} active job{{ active_science_jobs|pluralize }}</div>
             <div class="progress-bar">
-                <div class="progress-fill {% if active_science_jobs > total_science_slots * 0.8 %}nearly-full{% elif active_science_jobs > total_science_slots * 0.6 %}high{% endif %}"
-                     style="width: {% if total_science_slots > 0 %}{{ active_science_jobs|div:total_science_slots|mul:100 }}{% else %}0{% endif %}%"></div>
+                <div class="progress-fill {% if science_utilization > 80 %}nearly-full{% elif science_utilization > 60 %}high{% endif %}"
+                     style="width: {{ science_utilization|floatformat:0 }}%"></div>
             </div>
             <div class="pilot-breakdown" id="science-breakdown">
                 {% for stat in pilot_stats %}
                 <div class="pilot-row">
                     <span class="pilot-name">{{ stat.character.character_name }}</span>
                     <span>{{ stat.science_active }} / {{ stat.science_total }}</span>
-                    <span style="color: {% if stat.science_active >= stat.science_total %}var(--alert-error-text){% else %}var(--text-secondary){% endif %}">
-                        {% if stat.science_total > 0 %}{{ stat.science_active|div:stat.science_total|mul:100|floatformat:0 }}%{% else %}0%{% endif %}
+                    <span style="color: {% if stat.science_pct >= 100 %}var(--alert-error-text){% else %}var(--text-secondary){% endif %}">
+                        {{ stat.science_pct|floatformat:0 }}%
                     </span>
                 </div>
                 {% endfor %}
@@ -135,22 +135,22 @@
         </div>
 
         <!-- Reactions -->
-        <div class="summary-card {% if active_reaction_jobs > total_reaction_slots * 0.8 %}nearly-full{% endif %}"
+        <div class="summary-card {% if reaction_utilization > 80 %}nearly-full{% endif %}"
              onclick="toggleBreakdown('reaction')">
             <div class="summary-card-title">Reactions</div>
             <div class="summary-card-value">{{ active_reaction_jobs }} / {{ total_reaction_slots }}</div>
             <div class="summary-card-sub">{{ active_reaction_jobs|floatformat:0 }} active job{{ active_reaction_jobs|pluralize }}</div>
             <div class="progress-bar">
-                <div class="progress-fill {% if active_reaction_jobs > total_reaction_slots * 0.8 %}nearly-full{% elif active_reaction_jobs > total_reaction_slots * 0.6 %}high{% endif %}"
-                     style="width: {% if total_reaction_slots > 0 %}{{ active_reaction_jobs|div:total_reaction_slots|mul:100 }}{% else %}0{% endif %}%"></div>
+                <div class="progress-fill {% if reaction_utilization > 80 %}nearly-full{% elif reaction_utilization > 60 %}high{% endif %}"
+                     style="width: {{ reaction_utilization|floatformat:0 }}%"></div>
             </div>
             <div class="pilot-breakdown" id="reaction-breakdown">
                 {% for stat in pilot_stats %}
                 <div class="pilot-row">
                     <span class="pilot-name">{{ stat.character.character_name }}</span>
                     <span>{{ stat.reaction_active }} / {{ stat.reaction_total }}</span>
-                    <span style="color: {% if stat.reaction_active >= stat.reaction_total %}var(--alert-error-text){% else %}var(--text-secondary){% endif %}">
-                        {% if stat.reaction_total > 0 %}{{ stat.reaction_active|div:stat.reaction_total|mul:100|floatformat:0 }}%{% else %}0%{% endif %}
+                    <span style="color: {% if stat.reaction_pct >= 100 %}var(--alert-error-text){% else %}var(--text-secondary){% endif %}">
+                        {{ stat.reaction_pct|floatformat:0 }}%
                     </span>
                 </div>
                 {% endfor %}
