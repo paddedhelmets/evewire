@@ -98,13 +98,18 @@ def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
             for item in ItemType.objects.filter(id__in=type_ids)
         }
 
-    # Bulk-fetch all unique locations (Station and SolarSystem)
+    # Bulk-fetch all unique locations (Station, SolarSystem, Structure)
     location_ids = set(asset.location_id for asset in root_assets if asset.location_id)
     station_names = {}
     system_names = {}
+    structure_names = {}
+
+    # Identify structure IDs (location_type == 'structure')
+    structure_ids = set(asset.location_id for asset in root_assets
+                        if asset.location_type == 'structure' and asset.location_id)
 
     if location_ids:
-        # Fetch stations
+        # Fetch stations (from SDE)
         try:
             from core.eve.models import Station
             station_names = {
@@ -114,7 +119,7 @@ def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
         except Exception:
             pass
 
-        # Fetch solar systems
+        # Fetch solar systems (from SDE)
         try:
             from core.eve.models import SolarSystem
             system_names = {
@@ -123,6 +128,18 @@ def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
             }
         except Exception:
             pass
+
+    # Fetch structure data (from cache or ESI)
+    if structure_ids:
+        from core.esi_client import ensure_structure_data
+
+        for structure_id in structure_ids:
+            structure = ensure_structure_data(structure_id, user=request.user)
+            if structure:
+                structure_names[structure_id] = structure.name
+            else:
+                # Could not fetch - use fallback
+                structure_names[structure_id] = f"Structure {structure_id}"
 
     # Group root assets by location for display
     location_groups = defaultdict(list)
@@ -141,8 +158,8 @@ def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
             location_name = station_names[asset.location_id]
         elif asset.location_id in system_names:
             location_name = system_names[asset.location_id]
-        elif asset.location_type == 'structure':
-            location_name = f"Structure {asset.location_id}"
+        elif asset.location_id in structure_names:
+            location_name = structure_names[asset.location_id]
         else:
             location_name = f"Location {asset.location_id} ({asset.location_type})"
 

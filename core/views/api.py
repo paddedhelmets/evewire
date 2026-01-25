@@ -134,13 +134,18 @@ def api_asset_children(request, asset_id: int) -> JsonResponse:
             for item in ItemType.objects.filter(id__in=type_ids)
         }
 
-    # Bulk-fetch location data (Station and SolarSystem)
+    # Bulk-fetch location data (Station, SolarSystem, Structure)
     location_ids = set(child.location_id for child in children if child.location_id)
     station_names = {}
     system_names = {}
+    structure_names = {}
+
+    # Identify structure IDs
+    structure_ids = set(child.location_id for child in children
+                       if child.location_type == 'structure' and child.location_id)
 
     if location_ids:
-        # Fetch stations
+        # Fetch stations (from SDE)
         try:
             from core.eve.models import Station
             station_names = {
@@ -150,7 +155,7 @@ def api_asset_children(request, asset_id: int) -> JsonResponse:
         except Exception:
             pass
 
-        # Fetch solar systems
+        # Fetch solar systems (from SDE)
         try:
             from core.eve.models import SolarSystem
             system_names = {
@@ -159,6 +164,24 @@ def api_asset_children(request, asset_id: int) -> JsonResponse:
             }
         except Exception:
             pass
+
+    # Fetch structure data (from cache or ESI)
+    if structure_ids:
+        from core.esi_client import ensure_structure_data
+        from core.models import User
+
+        # Get user from request (for character tokens)
+        # For API endpoint, we need to infer user from the assets
+        user = None
+        if children:
+            user = children[0].character.user
+
+        for structure_id in structure_ids:
+            structure = ensure_structure_data(structure_id, user=user)
+            if structure:
+                structure_names[structure_id] = structure.name
+            else:
+                structure_names[structure_id] = f"Structure {structure_id}"
 
     # Build response data
     children_data = []
@@ -176,8 +199,8 @@ def api_asset_children(request, asset_id: int) -> JsonResponse:
             location_name = station_names[child.location_id]
         elif child.location_id in system_names:
             location_name = system_names[child.location_id]
-        elif child.location_type == 'structure':
-            location_name = f"Structure {child.location_id}"
+        elif child.location_id in structure_names:
+            location_name = structure_names[child.location_id]
         else:
             location_name = f"Location {child.location_id} ({child.location_type})"
 

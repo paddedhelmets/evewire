@@ -325,3 +325,53 @@ class TypeAttribute(models.Model):
             return f"{item.name}: attr_{self.attribute_id} = {self.value_int or self.value_float}"
         except ItemType.DoesNotExist:
             return f"Type {self.type_id}: attr_{self.attribute_id} = {self.value_int or self.value_float}"
+
+
+class Structure(models.Model):
+    """
+    A player-owned structure in EVE (Citadel, Engineering Complex, etc.).
+
+    Cached from ESI: GET /universe/structures/{structure_id}/
+
+    Structures are NOT in the SDE - they're dynamic player-owned entities.
+    This model caches their data to avoid excessive ESI calls.
+
+    Structures are created lazily when first encountered in assets/jobs/etc.
+    """
+    structure_id = models.BigIntegerField(primary_key=True)
+    name = models.CharField(max_length=255)
+    owner_id = models.IntegerField(db_index=True, help_text='Corporation ID that owns the structure')
+    solar_system_id = models.IntegerField(db_index=True)
+    position_x = models.FloatField(null=True, blank=True)
+    position_y = models.FloatField(null=True, blank=True)
+    position_z = models.FloatField(null=True, blank=True)
+    type_id = models.IntegerField(db_index=True, help_text='ItemType ID of the structure')
+
+    # Metadata
+    first_seen = models.DateTimeField(auto_now_add=True)
+    last_updated = models.DateTimeField(auto_now=True)
+    last_sync_status = models.CharField(max_length=20, default='pending')  # pending, ok, error
+    last_sync_error = models.TextField(blank=True)
+
+    class Meta:
+        verbose_name = _('Player Structure')
+        verbose_name_plural = _('Player Structures')
+        ordering = ['name']
+        db_table = 'core_structure'
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.structure_id})"
+
+    def is_stale(self) -> bool:
+        """
+        Check if cached data is stale.
+
+        - Errors are stale after 1 hour (retry quickly)
+        - Normal data is stale after 7 days
+        """
+        from django.utils import timezone
+
+        if self.last_sync_status == 'error':
+            return (timezone.now() - self.last_updated).total_seconds() > 3600
+
+        return (timezone.now() - self.last_updated).total_seconds() > 604800  # 7 days
