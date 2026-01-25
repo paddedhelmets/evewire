@@ -331,19 +331,19 @@
     </div>
 
     {% if location_groups %}
-        {% for (location_id, location_type), assets in location_groups %}
+        {% for location in location_groups %}
         <div class="location-section">
             <div class="location-header">
-                {% if location_type == 'station' %}
-                    Station {{ location_id }}
-                {% elif location_type == 'solar_system' %}
-                    System {{ location_id }}
-                {% elif location_type == 'structure' %}
-                    Structure {{ location_id }}
+                {% if location.location_type == 'station' %}
+                    Station {{ location.location_id }}
+                {% elif location.location_type == 'solar_system' %}
+                    System {{ location.location_id }}
+                {% elif location.location_type == 'structure' %}
+                    Structure {{ location.location_id }}
                 {% else %}
-                    Other Location {{ location_id }}
+                    Other Location {{ location.location_id }}
                 {% endif %}
-                <span class="location-type">{{ location_type }}</span>
+                <span class="location-type">{{ location.location_type }}</span>
             </div>
 
             <table class="asset-table">
@@ -362,7 +362,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for asset in assets %}
+                    {% for asset in location.assets %}
                         {% include 'core/asset_row.html' with asset=asset indent=0 %}
                     {% endfor %}
                 </tbody>

@@ -105,11 +105,23 @@ def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
                 'type': asset.location_type,
             }
 
-    # Sort locations by name
+    # Sort locations by name and flatten for template iteration
+    # Django templates can be finicky with nested tuple unpacking,
+    # so we use a list of dicts with explicit keys
     sorted_locations = sorted(
         location_groups.items(),
         key=lambda x: x[0][1] + str(x[0][0])  # Sort by location_type then location_id
     )
+
+    # Flatten to list of dicts for easier template unpacking
+    location_groups_flat = [
+        {
+            'location_id': key[0],
+            'location_type': key[1],
+            'assets': value,
+        }
+        for key, value in sorted_locations
+    ]
 
     # Sort available locations for dropdown by name
     sorted_available_locations = sorted(
@@ -119,7 +131,7 @@ def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
 
     return render(request, 'core/assets_list.html', {
         'character': character,
-        'location_groups': sorted_locations,
+        'location_groups': location_groups_flat,
         'total_assets': all_assets.count(),
         'location_filter': location_filter,
         'available_locations': sorted_available_locations,
