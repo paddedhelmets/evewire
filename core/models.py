@@ -154,9 +154,11 @@ class User(AbstractBaseUser, PermissionsMixin):
         default=False,
         help_text=_('Whether the email address has been verified')
     )
-    email_verification_token = models.UUIDField(
+    email_verification_token = models.CharField(
+        max_length=255,
         blank=True,
         null=True,
+        unique=True,
         help_text=_('Token for email verification magic links')
     )
     email_verification_expires = models.DateTimeField(
