@@ -173,6 +173,12 @@ def account_claim_page(request: HttpRequest) -> HttpResponse:
 def email_prompt_page(request: HttpRequest) -> HttpResponse:
     """Prompt user to add email for account recovery (optional but encouraged)."""
     from django.contrib import messages
+    from django.shortcuts import redirect
+
+    # If user already has an email, redirect to profile page
+    if request.user.email:
+        messages.info(request, 'You already have an email configured. Remove it first to add a different one.')
+        return redirect('core:user_profile')
 
     if request.method == 'POST':
         email = request.POST.get('email', '').strip()
