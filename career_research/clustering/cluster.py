@@ -92,48 +92,76 @@ class FitClusterer:
                 centers = [row['center_id'] for row in cur]
                 n_clusters = len(centers)
 
-                # Assign each fit to its nearest center using pgvector
+                # Clear existing clusters for this ship
+                cur.execute("UPDATE fits SET cluster_id = NULL WHERE ship_id = %s", [ship_id])
+
+                # Assign each fit to its nearest center using proper k-means logic
+                # For each fit, find the closest center and assign it
                 results = []
-                for cluster_idx, center_id in enumerate(centers):
-                    # Update fits that are closest to this center
-                    # Using <=> for cosine distance, and NOT EXISTS to prevent re-assignment
-                    cur.execute("""
-                        WITH center_vec AS (
-                            SELECT fit_vector FROM fits WHERE id = %s
-                        ),
-                        distances AS (
-                            SELECT
-                                f.id,
-                                f.fit_vector <=> c.fit_vector as distance
-                            FROM fits f, center_vec c
-                            WHERE f.ship_id = %s
-                                AND f.fit_vector IS NOT NULL
-                                AND f.id NOT IN (SELECT id FROM fits WHERE cluster_id IS NOT NULL)
-                        ),
-                        closest AS (
-                            SELECT d.id
-                            FROM distances d
-                            WHERE d.distance = (SELECT MIN(distance) FROM distances)
+
+                # Build a CTE with all centers for distance comparison
+                center_values = ', '.join([f"({cid}, {idx + 1})" for idx, cid in enumerate(centers)])
+
+                cur.execute(f"""
+                    WITH centers(center_id, cluster_num) AS (VALUES {center_values}),
+                    distances AS (
+                        SELECT
+                            f.id,
+                            c.cluster_num,
+                            f.fit_vector <=> (SELECT fit_vector FROM fits WHERE id = c.center_id) as distance
+                        FROM fits f
+                        CROSS JOIN centers c
+                        WHERE f.ship_id = %s AND f.fit_vector IS NOT NULL
+                    ),
+                    closest AS (
+                        SELECT
+                            id,
+                            cluster_num
+                        FROM distances
+                        WHERE (id, distance) IN (
+                            SELECT id, MIN(distance)
+                            FROM distances
+                            GROUP BY id
                         )
-                        UPDATE fits
-                        SET cluster_id = %s
-                        WHERE id IN (SELECT id FROM closest)
-                        RETURNING id
-                    """, [center_id, ship_id, cluster_idx + 1])
-
-                    assigned = cur.fetchall()
-                    fit_count = len(assigned)
-
-                    if fit_count > 0:
-                        results.append(ClusterResult(
-                            ship_id=ship_id,
-                            cluster_id=cluster_idx + 1,
-                            fit_count=fit_count,
-                            representative_id=center_id,
-                            sample_fits=[row['id'] for row in assigned[:10]],
-                        ))
+                    )
+                    UPDATE fits f
+                    SET cluster_id = c.cluster_num
+                    FROM closest c
+                    WHERE f.id = c.id
+                """, [ship_id])
 
                 conn.commit()
+
+                # Query results directly (RETURNING doesn't work with this complex UPDATE)
+                cur.execute("""
+                    SELECT
+                        cluster_id,
+                        COUNT(*) as fit_count,
+                        array_agg(id ORDER BY RANDOM()) as sample_ids
+                    FROM fits
+                    WHERE ship_id = %s AND cluster_id IS NOT NULL
+                    GROUP BY cluster_id
+                    ORDER BY cluster_id
+                """, [ship_id])
+
+                # Build a map of cluster_id -> results
+                cluster_map = {row['cluster_id']: row for row in cur.fetchall()}
+
+                # Build results in center order
+                for cluster_idx, center_id in enumerate(centers):
+                    cluster_id = cluster_idx + 1
+                    if cluster_id in cluster_map:
+                        row = cluster_map[cluster_id]
+                        fit_count = row['fit_count']
+                        sample_ids = row['sample_ids'][:10] if row['sample_ids'] else []
+
+                        results.append(ClusterResult(
+                            ship_id=ship_id,
+                            cluster_id=cluster_id,
+                            fit_count=fit_count,
+                            representative_id=center_id,
+                            sample_fits=sample_ids,
+                        ))
 
         logger.info(f"Clustered ship {ship_id} into {len(results)} clusters")
         return results
