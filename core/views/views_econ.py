@@ -3,7 +3,7 @@ Core views for evewire.
 """
 
 import logging
-from datetime import timedelta
+from datetime import timedelta, datetime, timezone as dt_timezone
 from django.shortcuts import render, redirect
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
@@ -534,11 +534,11 @@ def trade_overview(request: HttpRequest, character_id: int = None) -> HttpRespon
             pass
     elif year and month:
         # Use specific month
-        start_date = timezone.datetime(int(year), int(month), 1).replace(tzinfo=timezone.utc)
+        start_date = datetime(int(year), int(month), 1).replace(tzinfo=dt_timezone.utc)
         if int(month) == 12:
-            end_date = timezone.datetime(int(year) + 1, 1, 1).replace(tzinfo=timezone.utc) - timedelta(seconds=1)
+            end_date = datetime(int(year) + 1, 1, 1).replace(tzinfo=dt_timezone.utc) - timedelta(seconds=1)
         else:
-            end_date = timezone.datetime(int(year), int(month) + 1, 1).replace(tzinfo=timezone.utc) - timedelta(seconds=1)
+            end_date = datetime(int(year), int(month) + 1, 1).replace(tzinfo=dt_timezone.utc) - timedelta(seconds=1)
         summaries = TradeAnalyzer.analyze_timeframe(character, start_date, end_date)
         timeframe_label = f"{year}-{month.zfill(2)}"
     elif timeframe == '30d':
@@ -561,7 +561,7 @@ def trade_overview(request: HttpRequest, character_id: int = None) -> HttpRespon
         stats = TradeAnalyzer.get_overview_stats(character)
         summaries = TradeAnalyzer.analyze_timeframe(
             character,
-            start_date=timezone.datetime(2000, 1, 1).replace(tzinfo=timezone.utc),
+            start_date=datetime(2000, 1, 1).replace(tzinfo=dt_timezone.utc),
             end_date=timezone.now()
         )
 
@@ -630,11 +630,11 @@ def trade_item_detail(request: HttpRequest, character_id: int, type_id: int) -> 
             start_date = None
             end_date = None
     elif year and month:
-        start_date = timezone.datetime(int(year), int(month), 1).replace(tzinfo=timezone.utc)
+        start_date = datetime(int(year), int(month), 1).replace(tzinfo=dt_timezone.utc)
         if int(month) == 12:
-            end_date = timezone.datetime(int(year) + 1, 1, 1).replace(tzinfo=timezone.utc) - timedelta(seconds=1)
+            end_date = datetime(int(year) + 1, 1, 1).replace(tzinfo=dt_timezone.utc) - timedelta(seconds=1)
         else:
-            end_date = timezone.datetime(int(year), int(month) + 1, 1).replace(tzinfo=timezone.utc) - timedelta(seconds=1)
+            end_date = datetime(int(year), int(month) + 1, 1).replace(tzinfo=dt_timezone.utc) - timedelta(seconds=1)
     elif timeframe == '30d':
         start_date = timezone.now() - timedelta(days=30)
         end_date = timezone.now()
