@@ -93,45 +93,57 @@ def set_main_character(request: HttpRequest, character_id: int) -> HttpResponse:
 # Industry Views
 
 @login_required
-def industry_summary(request: HttpRequest, character_id: int = None) -> HttpResponse:
-    """View industry summary across all characters or a specific character."""
+def industry_summary(request: HttpRequest) -> HttpResponse:
+    """Multi-character industry summary with aggregate stats and per-pilot breakdown."""
     from core.models import Character
     from django.utils import timezone
     from datetime import timedelta
 
-    # Get character
-    if character_id:
-        try:
-            character = Character.objects.get(id=character_id, user=request.user)
-        except Character.DoesNotExist:
-            return render(request, 'core/error.html', {
-                'message': 'Character not found',
-            }, status=404)
-    else:
-        character = get_users_character(request.user)
-        if not character:
-            return render(request, 'core/error.html', {
-                'message': 'Character not found',
-            }, status=404)
+    # Get all characters for this user
+    characters = request.user.characters.all()
 
-    # Get expiring soon jobs (within 1 hour)
+    # Calculate aggregate stats across all pilots
+    total_mfg_slots = sum(c.manufacturing_slots for c in characters)
+    active_mfg_jobs = sum(c.active_manufacturing_jobs for c in characters)
+
+    total_science_slots = sum(c.science_slots for c in characters)
+    active_science_jobs = sum(c.active_research_jobs for c in characters)
+
+    total_reaction_slots = sum(c.reaction_slots for c in characters)
+    active_reaction_jobs = sum(c.active_reaction_jobs for c in characters)
+
+    # Build per-pilot breakdown
+    pilot_stats = []
+    for char in characters:
+        pilot_stats.append({
+            'character': char,
+            'mfg_active': char.active_manufacturing_jobs,
+            'mfg_total': char.manufacturing_slots,
+            'science_active': char.active_research_jobs,
+            'science_total': char.science_slots,
+            'reaction_active': char.active_reaction_jobs,
+            'reaction_total': char.reaction_slots,
+        })
+
+    # Get expiring soon jobs across all pilots (within 1 hour)
     one_hour_from_now = timezone.now() + timedelta(hours=1)
-    expiring_jobs = character.industry_jobs.filter(
+    from core.character.models import IndustryJob
+    expiring_jobs = IndustryJob.objects.filter(
+        character__user=request.user,
         status=1,
         end_date__lte=one_hour_from_now
-    ).order_by('end_date')[:10]
-
-    # Get activity breakdown for active jobs
-    from core.character.models import IndustryJob
-    activities = IndustryJob.objects.filter(
-        character=character,
-        status=1
-    ).values_list('activity_id', 'activity_name').distinct()
+    ).select_related('character').order_by('end_date')[:10]
 
     return render(request, 'core/industry_summary.html', {
-        'character': character,
+        'total_mfg_slots': total_mfg_slots,
+        'active_mfg_jobs': active_mfg_jobs,
+        'total_science_slots': total_science_slots,
+        'active_science_jobs': active_science_jobs,
+        'total_reaction_slots': total_reaction_slots,
+        'active_reaction_jobs': active_reaction_jobs,
+        'pilot_stats': pilot_stats,
         'expiring_jobs': expiring_jobs,
-        'activities': activities,
+        'characters': characters,
     })
 
 

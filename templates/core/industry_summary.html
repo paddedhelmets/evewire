@@ -1,134 +1,206 @@
 {% extends "base.html" %}
-{% load evewire %}
+{% load evewire evewire_math %}
 
-{% block title %}Industry Summary - {{ character.name }} - evewire{% endblock %}
+{% block title %}Industry - evewire{% endblock %}
 
 {% block content %}
-<h1>Industry Summary - {{ character.name }}</h1>
+<style>
+.summary-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+.summary-card {
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    padding: 1.5rem;
+    box-shadow: var(--card-shadow);
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    border-left: 4px solid var(--btn-primary);
+}
+.summary-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+.summary-card.nearly-full {
+    border-left-color: var(--alert-error-text);
+}
+.summary-card-title {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+.summary-card-value {
+    font-size: 2rem;
+    font-weight: bold;
+    margin-bottom: 0.25rem;
+}
+.summary-card-sub {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+.pilot-breakdown {
+    display: none;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+.pilot-breakdown.show {
+    display: block;
+}
+.pilot-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--table-border);
+}
+.pilot-row:last-child {
+    border-bottom: none;
+}
+.pilot-name {
+    font-weight: 500;
+}
+.progress-bar {
+    height: 8px;
+    background: var(--border-color);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 0.25rem;
+}
+.progress-fill {
+    height: 100%;
+    background: var(--btn-primary);
+    transition: width 0.3s;
+}
+.progress-fill.nearly-full {
+    background: var(--alert-error-text);
+}
+.progress-fill.high {
+    background: #f39c12;
+}
+</style>
 
-<div style="margin-bottom: 1rem;">
-    <a href="{% url 'core:dashboard' %}">Dashboard</a>
-    <span style="margin: 0 0.5rem;">&rarr;</span>
-    <a href="{% url 'core:character_detail' character.id %}">{{ character.name }}</a>
-    <span style="margin: 0 0.5rem;">&rarr;</span>
-    <span>Industry</span>
-</div>
+<div style="max-width: 1400px; margin: 0 auto;">
+    <h1 style="margin-bottom: 1.5rem;">Industry Overview</h1>
 
-<!-- Slot Utilization Cards -->
-<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
-    <!-- Manufacturing Slots -->
-    <div class="card">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-            <h2 style="margin: 0;">Manufacturing</h2>
-            <span style="padding: 4px 8px; border-radius: 3px; background: {% if character.is_manufacturing_nearly_full %}var(--alert-error-bg); color: var(--alert-error-text){% elif character.manufacturing_utilization > 50 %}var(--alert-warning-bg); color: var(--alert-warning-text){% else %}var(--alert-success-bg); color: var(--alert-success-text){% endif %}; font-size: 0.85rem;">
-                {% if character.active_manufacturing_jobs == character.manufacturing_slots %}Full{% elif character.is_manufacturing_nearly_full %}Nearly Full{% else %}Available{% endif %}
-            </span>
-        </div>
-        <p style="font-size: 2rem; font-weight: bold; margin: 0.5rem 0;">
-            {{ character.active_manufacturing_jobs }} / {{ character.manufacturing_slots }}
-        </p>
-        <div style="background: var(--bg-primary); height: 20px; border-radius: 4px; overflow: hidden;">
-            <div style="background: {% if character.manufacturing_utilization >= 100 %}var(--alert-error-text){% elif character.is_manufacturing_nearly_full %}var(--alert-warning-text){% else %}var(--alert-success-text){% endif %}; height: 100%; width: {{ character.manufacturing_utilization }}%;"></div>
-        </div>
-        <p style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 0.5rem;">{{ character.manufacturing_utilization|floatformat:0 }}% utilized ({{ character.manufacturing_slots|add:character.active_manufacturing_jobs|add:"-" }} available)</p>
-    </div>
-
-    <!-- Research & Science Slots -->
-    <div class="card">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-            <h2 style="margin: 0;">Research & Labs</h2>
-            <span style="padding: 4px 8px; border-radius: 3px; background: {% if character.is_science_nearly_full %}var(--alert-error-bg); color: var(--alert-error-text){% elif character.science_utilization > 50 %}var(--alert-warning-bg); color: var(--alert-warning-text){% else %}var(--alert-success-bg); color: var(--alert-success-text){% endif %}; font-size: 0.85rem;">
-                {% if character.active_research_jobs == character.science_slots %}Full{% elif character.is_science_nearly_full %}Nearly Full{% else %}Available{% endif %}
-            </span>
-        </div>
-        <p style="font-size: 2rem; font-weight: bold; margin: 0.5rem 0;">
-            {{ character.active_research_jobs }} / {{ character.science_slots }}
-        </p>
-        <div style="background: var(--bg-primary); height: 20px; border-radius: 4px; overflow: hidden;">
-            <div style="background: {% if character.science_utilization >= 100 %}var(--alert-error-text){% elif character.is_science_nearly_full %}var(--alert-warning-text){% else %}var(--alert-success-text){% endif %}; height: 100%; width: {{ character.science_utilization }}%;"></div>
-        </div>
-        <p style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 0.5rem;">{{ character.science_utilization|floatformat:0 }}% utilized ({{ character.science_slots|add:character.active_research_jobs|add:"-" }} available)</p>
-    </div>
-
-    <!-- Reaction Slots -->
-    <div class="card">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-            <h2 style="margin: 0;">Reactions</h2>
-            <span style="padding: 4px 8px; border-radius: 3px; background: {% if character.is_reaction_nearly_full %}var(--alert-error-bg); color: var(--alert-error-text){% elif character.reaction_utilization > 50 %}var(--alert-warning-bg); color: var(--alert-warning-text){% else %}var(--alert-success-bg); color: var(--alert-success-text){% endif %}; font-size: 0.85rem;">
-                {% if character.active_reaction_jobs == character.reaction_slots %}Full{% elif character.is_reaction_nearly_full %}Nearly Full{% else %}Available{% endif %}
-            </span>
-        </div>
-        <p style="font-size: 2rem; font-weight: bold; margin: 0.5rem 0;">
-            {{ character.active_reaction_jobs }} / {{ character.reaction_slots }}
-        </p>
-        <div style="background: var(--bg-primary); height: 20px; border-radius: 4px; overflow: hidden;">
-            <div style="background: {% if character.reaction_utilization >= 100 %}var(--alert-error-text){% elif character.is_reaction_nearly_full %}var(--alert-warning-text){% else %}var(--alert-success-text){% endif %}; height: 100%; width: {{ character.reaction_utilization }}%;"></div>
-        </div>
-        <p style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 0.5rem;">{{ character.reaction_utilization|floatformat:0 }}% utilized ({{ character.reaction_slots|add:character.active_reaction_jobs|add:"-" }} available)</p>
-    </div>
-</div>
-
-<!-- Quick Links -->
-<div class="card">
-    <h2>Quick Links</h2>
-    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-        <a href="{% url 'core:industry_jobs_list' character.id %}" class="btn">View All Jobs</a>
-        <a href="{% url 'core:blueprints_list' character.id %}" class="btn">Blueprints</a>
-        <a href="{% url 'core:character_detail' character.id %}#industry-jobs" class="btn">Character Detail</a>
-    </div>
-</div>
-
-<!-- Jobs by Activity Type -->
-{% if activities %}
-<div class="card">
-    <h2>Active Jobs by Activity Type</h2>
-    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem;">
-        {% for activity_id, activity_name in activities %}
-            <div style="border: 1px solid var(--border-color); border-radius: 4px; padding: 0.75rem;">
-                <p style="margin: 0; color: var(--text-secondary); font-size: 0.9rem;">{{ activity_name }}</p>
-                <p style="margin: 0.25rem 0 0 0; font-size: 1.5rem; font-weight: bold;">{{ character.industry_jobs.filter(activity_id=activity_id, status=1).count }}</p>
+    <!-- Summary Cards -->
+    <div class="summary-cards">
+        <!-- Manufacturing -->
+        <div class="summary-card {% if active_mfg_jobs > total_mfg_slots * 0.8 %}nearly-full{% endif %}"
+             onclick="toggleBreakdown('mfg')">
+            <div class="summary-card-title">Manufacturing</div>
+            <div class="summary-card-value">{{ active_mfg_jobs }} / {{ total_mfg_slots }}</div>
+            <div class="summary-card-sub">{{ active_mfg_jobs|floatformat:0 }} active job{{ active_mfg_jobs|pluralize }}</div>
+            <div class="progress-bar">
+                <div class="progress-fill {% if active_mfg_jobs > total_mfg_slots * 0.8 %}nearly-full{% elif active_mfg_jobs > total_mfg_slots * 0.6 %}high{% endif %}"
+                     style="width: {% if total_mfg_slots > 0 %}{{ active_mfg_jobs|div:total_mfg_slots|mul:100 }}{% else %}0{% endif %}%"></div>
             </div>
-        {% endfor %}
+            <div class="pilot-breakdown" id="mfg-breakdown">
+                {% for stat in pilot_stats %}
+                <div class="pilot-row">
+                    <span class="pilot-name">{{ stat.character.character_name }}</span>
+                    <span>{{ stat.mfg_active }} / {{ stat.mfg_total }}</span>
+                    <span style="color: {% if stat.mfg_active >= stat.mfg_total %}var(--alert-error-text){% else %}var(--text-secondary){% endif %}">
+                        {% if stat.mfg_total > 0 %}{{ stat.mfg_active|div:stat.mfg_total|mul:100|floatformat:0 }}%{% else %}0%{% endif %}
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Science -->
+        <div class="summary-card {% if active_science_jobs > total_science_slots * 0.8 %}nearly-full{% endif %}"
+             onclick="toggleBreakdown('science')">
+            <div class="summary-card-title">Research & Invention</div>
+            <div class="summary-card-value">{{ active_science_jobs }} / {{ total_science_slots }}</div>
+            <div class="summary-card-sub">{{ active_science_jobs|floatformat:0 }} active job{{ active_science_jobs|pluralize }}</div>
+            <div class="progress-bar">
+                <div class="progress-fill {% if active_science_jobs > total_science_slots * 0.8 %}nearly-full{% elif active_science_jobs > total_science_slots * 0.6 %}high{% endif %}"
+                     style="width: {% if total_science_slots > 0 %}{{ active_science_jobs|div:total_science_slots|mul:100 }}{% else %}0{% endif %}%"></div>
+            </div>
+            <div class="pilot-breakdown" id="science-breakdown">
+                {% for stat in pilot_stats %}
+                <div class="pilot-row">
+                    <span class="pilot-name">{{ stat.character.character_name }}</span>
+                    <span>{{ stat.science_active }} / {{ stat.science_total }}</span>
+                    <span style="color: {% if stat.science_active >= stat.science_total %}var(--alert-error-text){% else %}var(--text-secondary){% endif %}">
+                        {% if stat.science_total > 0 %}{{ stat.science_active|div:stat.science_total|mul:100|floatformat:0 }}%{% else %}0%{% endif %}
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Reactions -->
+        <div class="summary-card {% if active_reaction_jobs > total_reaction_slots * 0.8 %}nearly-full{% endif %}"
+             onclick="toggleBreakdown('reaction')">
+            <div class="summary-card-title">Reactions</div>
+            <div class="summary-card-value">{{ active_reaction_jobs }} / {{ total_reaction_slots }}</div>
+            <div class="summary-card-sub">{{ active_reaction_jobs|floatformat:0 }} active job{{ active_reaction_jobs|pluralize }}</div>
+            <div class="progress-bar">
+                <div class="progress-fill {% if active_reaction_jobs > total_reaction_slots * 0.8 %}nearly-full{% elif active_reaction_jobs > total_reaction_slots * 0.6 %}high{% endif %}"
+                     style="width: {% if total_reaction_slots > 0 %}{{ active_reaction_jobs|div:total_reaction_slots|mul:100 }}{% else %}0{% endif %}%"></div>
+            </div>
+            <div class="pilot-breakdown" id="reaction-breakdown">
+                {% for stat in pilot_stats %}
+                <div class="pilot-row">
+                    <span class="pilot-name">{{ stat.character.character_name }}</span>
+                    <span>{{ stat.reaction_active }} / {{ stat.reaction_total }}</span>
+                    <span style="color: {% if stat.reaction_active >= stat.reaction_total %}var(--alert-error-text){% else %}var(--text-secondary){% endif %}">
+                        {% if stat.reaction_total > 0 %}{{ stat.reaction_active|div:stat.reaction_total|mul:100|floatformat:0 }}%{% else %}0%{% endif %}
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Expiring Soon Alert -->
+    {% if expiring_jobs %}
+    <div class="card" style="border-left: 4px solid var(--alert-warning-text); margin-bottom: 2rem;">
+        <h2 style="color: var(--alert-warning-text);">⚠️ Expiring Soon (within 1 hour)</h2>
+        <p style="color: var(--text-secondary); margin-bottom: 1rem;">{{ expiring_jobs|length }} job{{ expiring_jobs|length|pluralize }} completing soon</p>
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 2px solid var(--border-color);">
+                    <th style="padding: 0.5rem; text-align: left;">Character</th>
+                    <th style="padding: 0.5rem; text-align: left;">Activity</th>
+                    <th style="padding: 0.5rem; text-align: left;">Product</th>
+                    <th style="padding: 0.5rem; text-align: left;">End Date</th>
+                    <th style="padding: 0.5rem; text-align: left;">Progress</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for job in expiring_jobs %}
+                <tr style="border-bottom: 1px solid var(--table-border);">
+                    <td style="padding: 0.5rem;">{{ job.character.character_name }}</td>
+                    <td style="padding: 0.5rem;">{{ job.activity_name }}</td>
+                    <td style="padding: 0.5rem;">{{ job.product_type_id }}</td>
+                    <td style="padding: 0.5rem; font-size: 0.9rem;">{{ job.end_date|date:"M d H:i" }}</td>
+                    <td style="padding: 0.5rem; font-size: 0.9rem;">{{ job.progress_percent|floatformat:0 }}%</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- All Jobs Table -->
+    <div class="card">
+        <h2 style="margin-bottom: 1rem;">All Jobs</h2>
+        <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+            <a href="{% url 'core:industry_jobs_list' %}">View all jobs with filters and pagination →</a>
+        </p>
     </div>
 </div>
-{% endif %}
 
-<!-- Expiring Soon -->
-{% if expiring_jobs %}
-<div class="card" style="border-left: 4px solid var(--alert-warning-text);">
-    <h2 style="color: var(--alert-warning-text);">Expiring Soon (within 1 hour)</h2>
-    <p style="color: var(--text-secondary); margin-bottom: 1rem;">{{ expiring_jobs|length }} job{{ expiring_jobs|length|pluralize }} completing soon</p>
-    <table style="width: 100%; border-collapse: collapse;">
-        <thead>
-            <tr style="border-bottom: 2px solid var(--border-color);">
-                <th style="padding: 0.5rem; text-align: left;">Activity</th>
-                <th style="padding: 0.5rem; text-align: left;">Product</th>
-                <th style="padding: 0.5rem; text-align: left;">End Date</th>
-                <th style="padding: 0.5rem; text-align: left;">Progress</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for job in expiring_jobs %}
-            <tr style="border-bottom: 1px solid var(--table-border);">
-                <td style="padding: 0.5rem;">{{ job.activity_name }}</td>
-                <td style="padding: 0.5rem;">{{ job.product_name }}</td>
-                <td style="padding: 0.5rem; font-size: 0.9rem;">{{ job.end_date|date:"M d H:i" }}</td>
-                <td style="padding: 0.5rem; font-size: 0.9rem;">{{ job.progress_percent|floatformat:0 }}%</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-{% endif %}
-
-<!-- No Jobs Message -->
-{% if expiring_jobs|length == 0 and character.active_manufacturing_jobs == 0 and character.active_research_jobs == 0 and character.active_reaction_jobs == 0 %}
-<div class="card">
-    <p style="color: var(--text-secondary);">No active industry jobs for this character.</p>
-</div>
-{% endif %}
-
-<div style="margin-bottom: 1rem;">
-    <a href="{% url 'core:character_detail' character.id %}" class="btn">Back to Character</a>
-</div>
+<script>
+function toggleBreakdown(type) {
+    const breakdown = document.getElementById(type + '-breakdown');
+    breakdown.classList.toggle('show');
+}
+</script>
 {% endblock %}
