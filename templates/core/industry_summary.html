@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}Industry Summary - {{ character.name }} - evewire{% endblock %}
+
+{% block content %}
+<h1>Industry Summary - {{ character.name }}</h1>
+
+<div style="margin-bottom: 1rem;">
+    <a href="{% url 'core:dashboard' %}">Dashboard</a>
+    <span style="margin: 0 0.5rem;">&rarr;</span>
+    <a href="{% url 'core:character_detail' character.id %}">{{ character.name }}</a>
+    <span style="margin: 0 0.5rem;">&rarr;</span>
+    <span>Industry</span>
+</div>
+
+<!-- Slot Utilization Cards -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+    <!-- Manufacturing Slots -->
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <h2 style="margin: 0;">Manufacturing</h2>
+            <span style="padding: 4px 8px; border-radius: 3px; background: {% if character.is_manufacturing_nearly_full %}var(--alert-error-bg); color: var(--alert-error-text){% elif character.manufacturing_utilization > 50 %}var(--alert-warning-bg); color: var(--alert-warning-text){% else %}var(--alert-success-bg); color: var(--alert-success-text){% endif %}; font-size: 0.85rem;">
+                {% if character.active_manufacturing_jobs == character.manufacturing_slots %}Full{% elif character.is_manufacturing_nearly_full %}Nearly Full{% else %}Available{% endif %}
+            </span>
+        </div>
+        <p style="font-size: 2rem; font-weight: bold; margin: 0.5rem 0;">
+            {{ character.active_manufacturing_jobs }} / {{ character.manufacturing_slots }}
+        </p>
+        <div style="background: var(--bg-primary); height: 20px; border-radius: 4px; overflow: hidden;">
+            <div style="background: {% if character.manufacturing_utilization >= 100 %}var(--alert-error-text){% elif character.is_manufacturing_nearly_full %}var(--alert-warning-text){% else %}var(--alert-success-text){% endif %}; height: 100%; width: {{ character.manufacturing_utilization }}%;"></div>
+        </div>
+        <p style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 0.5rem;">{{ character.manufacturing_utilization|floatformat:0 }}% utilized ({{ character.manufacturing_slots|add:character.active_manufacturing_jobs|add:"-" }} available)</p>
+    </div>
+
+    <!-- Research & Science Slots -->
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <h2 style="margin: 0;">Research & Labs</h2>
+            <span style="padding: 4px 8px; border-radius: 3px; background: {% if character.is_science_nearly_full %}var(--alert-error-bg); color: var(--alert-error-text){% elif character.science_utilization > 50 %}var(--alert-warning-bg); color: var(--alert-warning-text){% else %}var(--alert-success-bg); color: var(--alert-success-text){% endif %}; font-size: 0.85rem;">
+                {% if character.active_research_jobs == character.science_slots %}Full{% elif character.is_science_nearly_full %}Nearly Full{% else %}Available{% endif %}
+            </span>
+        </div>
+        <p style="font-size: 2rem; font-weight: bold; margin: 0.5rem 0;">
+            {{ character.active_research_jobs }} / {{ character.science_slots }}
+        </p>
+        <div style="background: var(--bg-primary); height: 20px; border-radius: 4px; overflow: hidden;">
+            <div style="background: {% if character.science_utilization >= 100 %}var(--alert-error-text){% elif character.is_science_nearly_full %}var(--alert-warning-text){% else %}var(--alert-success-text){% endif %}; height: 100%; width: {{ character.science_utilization }}%;"></div>
+        </div>
+        <p style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 0.5rem;">{{ character.science_utilization|floatformat:0 }}% utilized ({{ character.science_slots|add:character.active_research_jobs|add:"-" }} available)</p>
+    </div>
+
+    <!-- Reaction Slots -->
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <h2 style="margin: 0;">Reactions</h2>
+            <span style="padding: 4px 8px; border-radius: 3px; background: {% if character.is_reaction_nearly_full %}var(--alert-error-bg); color: var(--alert-error-text){% elif character.reaction_utilization > 50 %}var(--alert-warning-bg); color: var(--alert-warning-text){% else %}var(--alert-success-bg); color: var(--alert-success-text){% endif %}; font-size: 0.85rem;">
+                {% if character.active_reaction_jobs == character.reaction_slots %}Full{% elif character.is_reaction_nearly_full %}Nearly Full{% else %}Available{% endif %}
+            </span>
+        </div>
+        <p style="font-size: 2rem; font-weight: bold; margin: 0.5rem 0;">
+            {{ character.active_reaction_jobs }} / {{ character.reaction_slots }}
+        </p>
+        <div style="background: var(--bg-primary); height: 20px; border-radius: 4px; overflow: hidden;">
+            <div style="background: {% if character.reaction_utilization >= 100 %}var(--alert-error-text){% elif character.is_reaction_nearly_full %}var(--alert-warning-text){% else %}var(--alert-success-text){% endif %}; height: 100%; width: {{ character.reaction_utilization }}%;"></div>
+        </div>
+        <p style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 0.5rem;">{{ character.reaction_utilization|floatformat:0 }}% utilized ({{ character.reaction_slots|add:character.active_reaction_jobs|add:"-" }} available)</p>
+    </div>
+</div>
+
+<!-- Quick Links -->
+<div class="card">
+    <h2>Quick Links</h2>
+    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+        <a href="{% url 'core:industry_jobs_list' character.id %}" class="btn">View All Jobs</a>
+        <a href="{% url 'core:blueprints_list' character.id %}" class="btn">Blueprints</a>
+        <a href="{% url 'core:character_detail' character.id %}#industry-jobs" class="btn">Character Detail</a>
+    </div>
+</div>
+
+<!-- Jobs by Activity Type -->
+{% if character.industry_jobs.exists %}
+<div class="card">
+    <h2>Active Jobs by Activity Type</h2>
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem;">
+        {% for activity_id, activity_name in character.industry_jobs.filter(status=1).values_list('activity_id', 'activity_name').distinct %}
+            <div style="border: 1px solid var(--border-color); border-radius: 4px; padding: 0.75rem;">
+                <p style="margin: 0; color: var(--text-secondary); font-size: 0.9rem;">{{ activity_name }}</p>
+                <p style="margin: 0.25rem 0 0 0; font-size: 1.5rem; font-weight: bold;">{{ character.industry_jobs.filter(activity_id=activity_id, status=1).count }}</p>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Expiring Soon -->
+{% if expiring_jobs %}
+<div class="card" style="border-left: 4px solid var(--alert-warning-text);">
+    <h2 style="color: var(--alert-warning-text);">Expiring Soon (within 1 hour)</h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">{{ expiring_jobs|length }} job{{ expiring_jobs|length|pluralize }} completing soon</p>
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid var(--border-color);">
+                <th style="padding: 0.5rem; text-align: left;">Activity</th>
+                <th style="padding: 0.5rem; text-align: left;">Product</th>
+                <th style="padding: 0.5rem; text-align: left;">End Date</th>
+                <th style="padding: 0.5rem; text-align: left;">Progress</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for job in expiring_jobs %}
+            <tr style="border-bottom: 1px solid var(--table-border);">
+                <td style="padding: 0.5rem;">{{ job.activity_name }}</td>
+                <td style="padding: 0.5rem;">{{ job.product_name }}</td>
+                <td style="padding: 0.5rem; font-size: 0.9rem;">{{ job.end_date|date:"M d H:i" }}</td>
+                <td style="padding: 0.5rem; font-size: 0.9rem;">{{ job.progress_percent|floatformat:0 }}%</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- No Jobs Message -->
+{% if expiring_jobs|length == 0 and character.active_manufacturing_jobs == 0 and character.active_research_jobs == 0 and character.active_reaction_jobs == 0 %}
+<div class="card">
+    <p style="color: var(--text-secondary);">No active industry jobs for this character.</p>
+</div>
+{% endif %}
+
+<div style="margin-bottom: 1rem;">
+    <a href="{% url 'core:character_detail' character.id %}" class="btn">Back to Character</a>
+</div>
+{% endblock %}

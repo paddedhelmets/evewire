@@ -2588,6 +2588,8 @@ def set_main_character(request: HttpRequest, character_id: int) -> HttpResponse:
 def industry_summary(request: HttpRequest, character_id: int = None) -> HttpResponse:
     """View industry summary across all characters or a specific character."""
     from core.models import Character
+    from django.utils import timezone
+    from datetime import timedelta
 
     # Get character
     if character_id:
@@ -2604,8 +2606,16 @@ def industry_summary(request: HttpRequest, character_id: int = None) -> HttpResp
                 'message': 'Character not found',
             }, status=404)
 
+    # Get expiring soon jobs (within 1 hour)
+    one_hour_from_now = timezone.now() + timedelta(hours=1)
+    expiring_jobs = character.industry_jobs.filter(
+        status=1,
+        end_date__lte=one_hour_from_now
+    ).order_by('end_date')[:10]
+
     return render(request, 'core/industry_summary.html', {
         'character': character,
+        'expiring_jobs': expiring_jobs,
     })
 
 
