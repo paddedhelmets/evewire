@@ -22,7 +22,7 @@
             </p>
         </div>
 
-        <form method="post" style="margin-top: 2rem;">
+        <form method="post" style="margin-top: 2rem;">{% csrf_token %}
             {% if has_email %}
             <button type="submit" name="choice" value="send_email" class="btn" style="width: 100%; margin-bottom: 1rem;">
                 📧 Send Login Link to Email ({{ email_masked }})

@@ -24,7 +24,7 @@
 
         <p style="margin-bottom: 1rem;">Are you absolutely sure you want to proceed?</p>
 
-        <form method="post">
+        <form method="post">{% csrf_token %}
             <button type="submit" name="confirm" value="yes" class="btn" style="background: var(--alert-error-text); width: 100%; margin-bottom: 1rem;">
                 Yes, Create New Account
             </button>

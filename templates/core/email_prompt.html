@@ -13,7 +13,7 @@
             This is <strong>optional but highly recommended</strong>.
         </p>
 
-        <form method="post">
+        <form method="post">{% csrf_token %}
             <div style="margin-bottom: 1rem;">
                 <label for="email" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Email Address</label>
                 <input
