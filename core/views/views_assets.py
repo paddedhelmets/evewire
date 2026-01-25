@@ -26,26 +26,34 @@ def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
     from core.eve.models import ItemType, Station, SolarSystem
     from collections import defaultdict
 
-    # Get character
+    all_characters = request.user.characters.all()
+
+    # Get location filter
+    location_filter = request.GET.get('location', '')
+
+    # Get pilot filter
+    pilot_filter = request.GET.getlist('pilots')
+    pilot_filter_ints = [int(pid) for pid in pilot_filter if pid.isdigit()]
+
+    # Get all assets for this user's characters
     if character_id:
         try:
             character = Character.objects.get(id=character_id, user=request.user)
+            all_assets = CharacterAsset.objects.filter(character=character).select_related()
+            is_account_wide = False
         except Character.DoesNotExist:
             return render(request, 'core/error.html', {
                 'message': 'Character not found',
             }, status=404)
     else:
-        character = get_users_character(request.user)
-        if not character:
-            return render(request, 'core/error.html', {
-                'message': 'Character not found',
-            }, status=404)
+        # Account-wide view - show all assets across all characters
+        all_assets = CharacterAsset.objects.filter(character__user=request.user).select_related('character')
+        is_account_wide = True
+        character = None
 
-    # Get location filter
-    location_filter = request.GET.get('location', '')
-
-    # Get all assets for this character
-    all_assets = CharacterAsset.objects.filter(character=character).select_related()
+    # Apply pilot filter if specified
+    if pilot_filter_ints:
+        all_assets = all_assets.filter(character_id__in=pilot_filter_ints)
 
     # Apply location filter if specified
     if location_filter:
@@ -115,6 +123,9 @@ def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
         'total_assets': all_assets.count(),
         'location_filter': location_filter,
         'available_locations': sorted_available_locations,
+        'is_account_wide': is_account_wide,
+        'all_characters': all_characters,
+        'pilot_filter': pilot_filter_ints,
     })
 
 
