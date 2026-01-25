@@ -168,16 +168,10 @@ def api_asset_children(request, asset_id: int) -> JsonResponse:
     # Fetch structure data (from cache or ESI)
     if structure_ids:
         from core.esi_client import ensure_structure_data
-        from core.models import User
 
-        # Get user from request (for character tokens)
-        # For API endpoint, we need to infer user from the assets
-        user = None
-        if children:
-            user = children[0].character.user
-
+        # Use authenticated request user for character tokens
         for structure_id in structure_ids:
-            structure = ensure_structure_data(structure_id, user=user)
+            structure = ensure_structure_data(structure_id, user=request.user)
             if structure:
                 structure_names[structure_id] = structure.name
             else:
