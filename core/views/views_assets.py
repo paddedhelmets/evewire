@@ -20,11 +20,17 @@ logger = logging.getLogger(__name__)
 
 @login_required
 def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
-    """View character assets with hierarchical tree display."""
+    """
+    View character assets with hierarchical tree display.
+
+    Uses lazy-loading: only root-level assets are loaded initially.
+    Child assets are fetched via AJAX when containers are expanded.
+    """
     from core.models import Character
     from core.character.models import CharacterAsset
     from core.eve.models import ItemType, Station, SolarSystem
     from collections import defaultdict
+    from django.db.models import Count, Q
 
     all_characters = request.user.characters.all()
 
@@ -35,11 +41,15 @@ def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
     pilot_filter = request.GET.getlist('pilots')
     pilot_filter_ints = [int(pid) for pid in pilot_filter if pid.isdigit()]
 
-    # Get all assets for this user's characters
+    # Build query for root-level assets only (lazy-loading)
+    # We only fetch parent=None assets, children are loaded via AJAX
     if character_id:
         try:
             character = Character.objects.get(id=character_id, user=request.user)
-            all_assets = CharacterAsset.objects.filter(character=character).select_related()
+            assets_query = CharacterAsset.objects.filter(
+                character=character,
+                parent=None  # Only root-level assets
+            ).select_related('character')
             is_account_wide = False
         except Character.DoesNotExist:
             return render(request, 'core/error.html', {
@@ -47,37 +57,43 @@ def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
             }, status=404)
     else:
         # Account-wide view - show all assets across all characters
-        all_assets = CharacterAsset.objects.filter(character__user=request.user).select_related('character')
+        assets_query = CharacterAsset.objects.filter(
+            character__user=request.user,
+            parent=None  # Only root-level assets
+        ).select_related('character')
         is_account_wide = True
         character = None
 
     # Apply pilot filter if specified
     if pilot_filter_ints:
-        all_assets = all_assets.filter(character_id__in=pilot_filter_ints)
+        assets_query = assets_query.filter(character_id__in=pilot_filter_ints)
 
     # Apply location filter if specified
     if location_filter:
         try:
             location_id = int(location_filter)
-            all_assets = all_assets.filter(location_id=location_id)
+            assets_query = assets_query.filter(location_id=location_id)
         except (ValueError, TypeError):
             pass  # Invalid filter, ignore
 
-    # Build asset lookup map
-    asset_map = {asset.item_id: asset for asset in all_assets}
+    # Annotate with child counts for display
+    assets_query = assets_query.annotate(
+        child_count=Count('children')
+    )
 
-    # Get top-level assets (no parent) and build hierarchy
-    root_assets = []
+    # Fetch only root-level assets (lazy-loading - children loaded via AJAX)
+    root_assets = list(assets_query)
+
+    # Group root assets by location for display
     location_groups = defaultdict(list)
 
     # Also collect all unique locations for the filter dropdown
     all_locations = {}
 
-    for asset in all_assets:
-        if not asset.parent_id:
-            # Top-level asset
-            location_key = (asset.location_id, asset.location_type)
-            location_groups[location_key].append(asset)
+    for asset in root_assets:
+        # Group by location
+        location_key = (asset.location_id, asset.location_type)
+        location_groups[location_key].append(asset)
 
         # Build location name lookup
         if asset.location_id not in all_locations:
@@ -129,10 +145,13 @@ def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
         key=lambda x: x['name']
     )
 
+    # Count total root assets (not nested children, since we're lazy-loading)
+    total_root_assets = len(root_assets)
+
     return render(request, 'core/assets_list.html', {
         'character': character,
         'location_groups': location_groups_flat,
-        'total_assets': all_assets.count(),
+        'total_assets': total_root_assets,  # Only counting root assets
         'location_filter': location_filter,
         'available_locations': sorted_available_locations,
         'is_account_wide': is_account_wide,

@@ -617,3 +617,6 @@ from core.views.views_assets import *
 from core.views.views_characters import *
 from core.views.views_exports import *
 from core.views.views_fittings import *
+
+# API views (not re-exported, accessed via core.views.api)
+from core.views import api

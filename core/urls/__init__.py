@@ -4,6 +4,7 @@ URL configuration for core app.
 
 from django.urls import path
 from core import views
+from core.views import api
 
 app_name = 'core'
 
@@ -129,4 +130,10 @@ urlpatterns = [
     path('shopping-lists/', views.shopping_lists_list, name='shopping_lists_list'),
     path('character/<int:character_id>/shopping-lists/', views.shopping_lists_list, name='character_shopping_lists_list'),
     path('shopping-lists/<int:list_id>/', views.shopping_list_detail, name='shopping_list_detail'),
+
+    # API endpoints
+    path('api/assets/<int:asset_id>/children/', api.api_asset_children, name='api_asset_children'),
+    path('api/assets/tree/<int:character_id>/', api.api_asset_tree, name='api_asset_tree'),
+    path('api/assets/tree/', api.api_asset_tree, name='api_asset_tree_account'),
+    path('api/assets/cache/invalidate/', api.api_assets_invalidate_cache, name='api_assets_invalidate_cache'),
 ]

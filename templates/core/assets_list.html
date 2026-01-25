@@ -231,6 +231,35 @@
         color: #66b3ff;
     }
 
+    .child-count-badge {
+        font-size: 0.7rem;
+        padding: 0.1rem 0.4rem;
+        border-radius: 3px;
+        background: #e2e3e5;
+        color: #383d41;
+        margin-left: 0.25rem;
+    }
+
+    [data-theme="dark"] .child-count-badge {
+        background: #2d2d2d;
+        color: #a0a0a0;
+    }
+
+    .loading-spinner {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border: 2px solid var(--border-color);
+        border-top-color: var(--link-color);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-left: 0.5rem;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
     .location-type {
         font-size: 0.75rem;
         text-transform: uppercase;
@@ -378,34 +407,205 @@
 </div>
 
 <script>
-function toggleExpand(button) {
-    const targetId = button.getAttribute('data-target');
-    const children = document.querySelectorAll(targetId);
+// Track loaded children to avoid redundant fetches
+const loadedChildren = new Set();
+// Track expand state (persisted in localStorage)
+let expandState = JSON.parse(localStorage.getItem('assetExpandState') || '{}');
+
+/**
+ * Lazy-load children via AJAX when expanding a container
+ */
+async function lazyLoadChildren(button) {
+    const assetId = button.getAttribute('data-asset-id');
+    const row = button.closest('.asset-row');
+    const childrenLoaded = row.getAttribute('data-children-loaded') === 'true';
     const isExpanded = button.classList.contains('expanded');
 
-    if (isExpanded) {
-        button.classList.remove('expanded');
-        button.innerHTML = '&#9654;';  // Right triangle
-        children.forEach(row => row.classList.remove('visible'));
-    } else {
-        button.classList.add('expanded');
-        button.innerHTML = '&#9660;';  // Down triangle
-        children.forEach(row => row.classList.add('visible'));
+    // If already loaded, just toggle visibility
+    if (childrenLoaded) {
+        toggleExpand(button);
+        return;
+    }
+
+    // Show loading spinner
+    const originalContent = button.innerHTML;
+    button.innerHTML = '<span class="loading-spinner"></span>';
+    button.disabled = true;
+
+    try {
+        // Build URL with pilot filter if present
+        let url = `/api/assets/${assetId}/children/`;
+        const params = new URLSearchParams();
+
+        // Add pilot filter from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const pilots = urlParams.getAll('pilots');
+        if (pilots.length > 0) {
+            pilots.forEach(p => params.append('pilot_filter', p));
+        }
+
+        if (params.toString()) {
+            url += '?' + params.toString();
+        }
+
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to load children');
+        }
+
+        // Render children rows
+        const childrenContainer = document.getElementById(`asset-children-${assetId}`);
+        if (childrenContainer && data.children.length > 0) {
+            childrenContainer.innerHTML = renderChildRows(data.children, assetId);
+            childrenContainer.style.display = 'table-row-group';
+
+            // Mark as loaded
+            row.setAttribute('data-children-loaded', 'true');
+            loadedChildren.add(assetId);
+
+            // Update button to expanded state
+            button.innerHTML = '&#9660;';  // Down triangle
+            button.classList.add('expanded');
+            button.disabled = false;
+        } else {
+            // No children
+            button.innerHTML = originalContent;
+            button.disabled = false;
+            row.setAttribute('data-children-loaded', 'true');
+        }
+
+        // Save expand state
+        expandState[assetId] = true;
+        saveExpandState();
+
+    } catch (error) {
+        console.error('Failed to load children:', error);
+        button.innerHTML = originalContent;
+        button.disabled = false;
+        alert('Failed to load children: ' + error.message);
     }
 }
 
-function expandAll() {
-    document.querySelectorAll('.asset-expand').forEach(btn => {
-        if (!btn.classList.contains('expanded')) {
-            toggleExpand(btn);
+/**
+ * Render child asset rows from API data
+ */
+function renderChildRows(children, parentAssetId) {
+    const isAccountWide = document.querySelector('.asset-table th:nth-child(2)')?.textContent === 'Pilot';
+
+    return children.map(child => {
+        const hasChildren = child.has_children;
+        const expandIcon = hasChildren
+            ? `<span class="asset-expand" data-asset-id="${child.item_id}" onclick="lazyLoadChildren(this)">&#9654;</span>`
+            : '<span style="width: 16px; display: inline-block;"></span>';
+        const childCountBadge = hasChildren ? `<span class="child-count-badge">(${child.child_count})</span>` : '';
+        const pilotColumn = isAccountWide ? `
+            <td>
+                <a href="/characters/${child.character_id}/" style="font-size: 0.85rem; color: var(--link-color);">
+                    ${child.character_name}
+                </a>
+            </td>
+        ` : '';
+        const singletonIndicator = child.is_singleton
+            ? '<span style="color: #0066cc;">&#10003;</span>'
+            : '<span style="color: var(--text-secondary);">&mdash;</span>';
+        const blueprintBadge = child.is_blueprint_copy
+            ? '<span class="blueprint-badge blueprint-bpc">BPC</span>' : '';
+        const singletonBadge = child.is_singleton
+            ? '<span class="singleton-badge">Assembled</span>' : '';
+
+        return `
+            <tr class="asset-row"
+                data-asset-id="${child.item_id}"
+                data-has-children="${hasChildren}"
+                data-child-count="${child.child_count}"
+                data-children-loaded="false">
+                <td>
+                    <div class="asset-item-name asset-indent">
+                        ${expandIcon}
+                        ${childCountBadge}
+                        <span class="asset-name">${child.type_name}</span>
+                        ${blueprintBadge}
+                        ${singletonBadge}
+                    </div>
+                </td>
+                ${pilotColumn}
+                <td style="color: var(--text-secondary); font-size: 0.85rem;">${child.type_id}</td>
+                <td style="color: var(--text-secondary); font-size: 0.85rem;">${child.location_flag || '&mdash;'}</td>
+                <td style="text-align: right;">${child.quantity}</td>
+                <td style="color: var(--text-secondary); font-size: 0.85rem;">${child.location_name}</td>
+                <td>${singletonIndicator}</td>
+            </tr>
+            <tbody class="asset-children-container" id="asset-children-${child.item_id}" style="display: none;"></tbody>
+        `;
+    }).join('');
+}
+
+/**
+ * Toggle expand/collapse for already-loaded children
+ */
+function toggleExpand(button) {
+    const assetId = button.getAttribute('data-asset-id');
+    const childrenContainer = document.getElementById(`asset-children-${assetId}`);
+    const isExpanded = button.classList.contains('expanded');
+
+    if (childrenContainer) {
+        if (isExpanded) {
+            button.classList.remove('expanded');
+            button.innerHTML = '&#9654;';
+            childrenContainer.style.display = 'none';
+            expandState[assetId] = false;
+        } else {
+            button.classList.add('expanded');
+            button.innerHTML = '&#9660;';
+            childrenContainer.style.display = 'table-row-group';
+            expandState[assetId] = true;
         }
+        saveExpandState();
+    }
+}
+
+/**
+ * Save expand state to localStorage
+ */
+function saveExpandState() {
+    localStorage.setItem('assetExpandState', JSON.stringify(expandState));
+}
+
+/**
+ * Expand all root-level assets (without loading children)
+ */
+function expandAll() {
+    document.querySelectorAll('.asset-row[data-children-loaded="false"] .asset-expand').forEach(btn => {
+        // Auto-load and expand
+        lazyLoadChildren(btn);
     });
 }
 
+/**
+ * Collapse all expanded nodes
+ */
 function collapseAll() {
     document.querySelectorAll('.asset-expand.expanded').forEach(btn => {
         toggleExpand(btn);
     });
 }
+
+// Restore expand state on page load
+document.addEventListener('DOMContentLoaded', () => {
+    Object.entries(expandState).forEach(([assetId, isExpanded]) => {
+        if (isExpanded) {
+            const button = document.querySelector(`.asset-expand[data-asset-id="${assetId}"]`);
+            if (button) {
+                lazyLoadChildren(button);
+            }
+        }
+    });
+});
 </script>
 {% endblock %}

@@ -1,14 +1,19 @@
 {% load evewire %}
 
-<tr class="asset-row" data-asset-id="{{ asset.item_id }}">
+<tr class="asset-row"
+    data-asset-id="{{ asset.item_id }}"
+    data-has-children="{{ asset.child_count|yesno:'true,false' }}"
+    data-child-count="{{ asset.child_count|default:0 }}"
+    data-children-loaded="false">
     <td>
         <div class="asset-item-name">
-            {% if asset.children.exists %}
+            {% if asset.child_count > 0 %}
                 <span class="asset-expand"
-                      data-target=".asset-children-{{ asset.item_id }}"
-                      onclick="toggleExpand(this)">
+                      data-asset-id="{{ asset.item_id }}"
+                      onclick="lazyLoadChildren(this)">
                     &#9654;
                 </span>
+                <span class="child-count-badge">({{ asset.child_count }})</span>
             {% else %}
                 <span style="width: 16px; display: inline-block;"></span>
             {% endif %}
@@ -51,14 +56,6 @@
     </td>
 </tr>
 
-{% if asset.children.exists %}
-    {% for child in asset.children.all %}
-        <tr class="asset-children asset-children-{{ asset.item_id }}">
-            <td colspan="{% if is_account_wide %}7{% else %}6{% endif %}" style="padding: 0; border: none;">
-                <table class="asset-table" style="margin: 0;">
-                    {% include 'core/asset_row.html' with asset=child indent=indent|add:1 %}
-                </table>
-            </td>
-        </tr>
-    {% endfor %}
-{% endif %}
+<!-- Children will be loaded via AJAX and inserted here -->
+<tbody class="asset-children-container" id="asset-children-{{ asset.item_id }}" style="display: none;">
+</tbody>

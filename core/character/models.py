@@ -431,6 +431,17 @@ class CharacterAsset(MPTTModel):
         except ItemType.DoesNotExist:
             return 0.0
 
+    @property
+    def child_count(self) -> int:
+        """
+        Get the count of direct children without loading them.
+
+        Uses MPTT's efficient counting. This is cached by MPTT.
+        """
+        # MPTT provides get_children() which uses the tree structure efficiently
+        # For counting, we use the children related_name which is already cached
+        return self.children.count()
+
 
 class WalletJournalEntry(models.Model):
     """
