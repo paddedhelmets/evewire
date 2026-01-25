@@ -60,8 +60,10 @@ def fittings_list(request: HttpRequest, character_id: int = None) -> HttpRespons
     # Prefetch related data
     fittings_qs = fittings_qs.select_related()
 
-    # Get all ship types for filter dropdown
-    ship_types = ItemType.objects.filter(category_id=6).order_by('name')
+    # Get all ship types for filter dropdown (category 6 = Ships in EVE SDE)
+    from core.eve.models import ItemGroup
+    ship_group_ids = ItemGroup.objects.filter(category_id=6, published=True).values_list('id', flat=True)
+    ship_types = ItemType.objects.filter(group_id__in=ship_group_ids, published=True).order_by('name')
 
     # Get all unique tags from active fittings
     all_tags = set()
