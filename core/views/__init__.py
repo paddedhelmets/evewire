@@ -353,6 +353,7 @@ def dashboard(request: HttpRequest) -> HttpResponse:
             'training': current_skill,
             'queue_count': queue_count,
             'orders_count': char.market_orders.count(),
+            'location': char.location_name if char.location_synced_at else None,
         })
 
     return render(request, 'core/dashboard.html', {
@@ -368,6 +369,11 @@ def dashboard(request: HttpRequest) -> HttpResponse:
             'reactions': {'slots': total_reaction_slots, 'active': total_active_reactions, 'utilization': reaction_utilization},
         },
     })
+
+    # Queue location sync for all characters (fast endpoint, can be called frequently)
+    from django_q.tasks import async_task
+    for char in characters:
+        async_task('core.services.sync_character_location', char.id, group='location_sync')
 
 
 @login_required

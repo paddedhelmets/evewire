@@ -257,6 +257,17 @@ class ESIClient:
         return cls.get_public(f'/characters/{character_id}/portrait/')
 
     @classmethod
+    def get_location(cls, character) -> ESIResponse:
+        """Get character's current location.
+
+        ESI Endpoint: GET /characters/{character_id}/location/
+        Scope: esi-location.read_location.v1
+
+        Returns location data with solar_system_id and optionally station_id or structure_id.
+        """
+        return cls.get(f'/characters/{character.id}/location/', character)
+
+    @classmethod
     def get_skills(cls, character) -> ESIResponse:
         """Get character skills."""
         return cls.get(f'/characters/{character.id}/skills/', character)
@@ -631,11 +642,19 @@ def sync_character_data(character) -> bool:
         _sync_skill_queue(character)
         _sync_attributes(character)
         _sync_implants(character)
+        _sync_location(character)
         _sync_wallet(character)
         _sync_assets(character)
         _sync_orders(character)
         _sync_orders_history(character)
         _sync_industry_jobs(character)
+
+        # Location might fail with 401 if scope not granted - handle gracefully
+        except HTTPError as e:
+            if e.response is not None and e.response.status_code == 401:
+                logger.warning(f'Location not available for character {character.id} (missing scope)')
+            else:
+                raise
 
         # Contracts might fail with 401 if scope not granted - handle gracefully
         try:
@@ -782,6 +801,26 @@ def _sync_wallet(character) -> None:
 
     # Sync transactions with fromID walking
     _sync_wallet_transactions(character)
+
+
+def _sync_location(character) -> None:
+    """Sync character location from ESI.
+
+    ESI Endpoint: GET /characters/{character_id}/location/
+    Scope: esi-location.read_location.v1
+
+    Returns solar_system_id and optionally station_id or structure_id.
+    """
+    from core.eve.models import SolarSystem
+
+    response = ESIClient.get_location(character)
+    location_data = response.data
+
+    character.solar_system_id = location_data.get('solar_system_id')
+    character.station_id = location_data.get('station_id')
+    character.structure_id = location_data.get('structure_id')
+    character.location_synced_at = timezone.now()
+    character.save(update_fields=['solar_system_id', 'station_id', 'structure_id', 'location_synced_at'])
 
 
 def _sync_wallet_journal(character) -> None:
@@ -1652,3 +1691,42 @@ def _sync_contract_items(character, contract) -> None:
             contract=contract,
             item_id__in=items_to_delete
         ).delete()
+
+
+def sync_character_location(character_id: int) -> bool:
+    """
+    Sync a single character's location from ESI.
+
+    This is designed to be called via django-q for background processing.
+    It's lightweight and can be called frequently (e.g., on page load).
+
+    Args:
+        character_id: Character ID to sync location for
+
+    Returns:
+        True if successful, False otherwise
+    """
+    from core.models import Character, SyncStatus
+    from requests.exceptions import HTTPError
+
+    try:
+        character = Character.objects.get(id=character_id)
+    except Character.DoesNotExist:
+        logger.warning(f'Character {character_id} not found for location sync')
+        return False
+
+    try:
+        _sync_location(character)
+        logger.debug(f'Location synced for character {character_id}')
+        return True
+
+    except HTTPError as e:
+        if e.response is not None and e.response.status_code == 401:
+            logger.warning(f'Location sync failed for character {character_id}: missing scope')
+        else:
+            logger.error(f'Location sync failed for character {character_id}: {e}')
+        return False
+
+    except Exception as e:
+        logger.error(f'Location sync failed for character {character_id}: {e}')
+        return False

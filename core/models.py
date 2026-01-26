@@ -245,6 +245,7 @@ class EveScope(models.TextChoices):
     ORDERS_READ = 'esi-markets.read_character_orders.v1', 'Read Market Orders'
     INDUSTRY_JOBS_READ = 'esi-industry.read_character_jobs.v1', 'Read Industry Jobs'
     UNIVERSE_READ_STRUCTURES = 'esi-universe.read_structures.v1', 'Read Structure Info'
+    LOCATION_READ = 'esi-location.read_location.v1', 'Read Location'
 
     @classmethod
     def mvp_scopes(cls) -> list[str]:
@@ -259,6 +260,7 @@ class EveScope(models.TextChoices):
             cls.ORDERS_READ.value,
             cls.INDUSTRY_JOBS_READ.value,
             cls.UNIVERSE_READ_STRUCTURES.value,  # Required for structure names
+            cls.LOCATION_READ.value,  # Character location
         ]
 
 
@@ -304,6 +306,12 @@ class Character(models.Model):
     corporation_name = models.CharField(max_length=255, blank=True)
     alliance_id = models.BigIntegerField(null=True, blank=True)
     alliance_name = models.CharField(max_length=255, blank=True)
+
+    # Current location (cached for quick display)
+    solar_system_id = models.IntegerField(null=True, blank=True, help_text=_('Current solar system ID'))
+    station_id = models.BigIntegerField(null=True, blank=True, help_text=_('Current station ID (if docked)'))
+    structure_id = models.BigIntegerField(null=True, blank=True, help_text=_('Current structure ID (if in structure)'))
+    location_synced_at = models.DateTimeField(null=True, blank=True, help_text=_('When location was last synced'))
 
     # Wallet balance (cached for quick display)
     wallet_balance = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
@@ -376,6 +384,40 @@ class Character(models.Model):
             return True
         age = timezone.now() - self.wallet_synced_at
         return age.total_seconds() > max_age_seconds
+
+    @property
+    def location_name(self) -> str:
+        """Get human-readable location name for the character."""
+        if not self.solar_system_id:
+            return "Unknown"
+
+        from core.eve.models import SolarSystem, Station, Structure
+
+        # In station
+        if self.station_id:
+            try:
+                station = Station.objects.get(id=self.station_id)
+                return f"{station.name}"
+            except Station.DoesNotExist:
+                pass
+
+        # In structure
+        if self.structure_id:
+            try:
+                structure = Structure.objects.get(structure_id=self.structure_id)
+                if structure.name:
+                    return f"{structure.name}"
+                else:
+                    return f"Structure {self.structure_id}"
+            except Structure.DoesNotExist:
+                pass
+
+        # Get solar system name as fallback or base
+        try:
+            solar_system = SolarSystem.objects.get(id=self.solar_system_id)
+            return solar_system.name
+        except SolarSystem.DoesNotExist:
+            return f"System {self.solar_system_id}"
 
     def is_skills_stale(self, max_age_seconds: int = 3600) -> bool:
         """Check if skills data is stale."""

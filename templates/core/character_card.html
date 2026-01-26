@@ -17,7 +17,7 @@
 
             <!-- Right column: Location & SP -->
             <div class="char-card-right">
-                <div class="char-location">Character Location <span style="color: var(--text-secondary); font-size: 0.8em;">[NYI]</span></div>
+                <div class="char-location">{{ char.location|default:"Unknown" }}</div>
                 <div class="char-sp sp">{{ char.total_sp|commas|default:"—" }} SP</div>
             </div>
         </div>
