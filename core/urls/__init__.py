@@ -59,11 +59,9 @@ urlpatterns = [
 
     # Wallet
     path('wallet/journal/', views.wallet_journal, name='wallet_journal'),
-    path('wallet/transactions/', views.wallet_transactions, name='wallet_transactions'),
     path('wallet/balance/', views.wallet_balance, name='wallet_balance'),
     path('wallet/summary/', views.wallet_summary, name='wallet_summary'),
     path('character/<int:character_id>/wallet/journal/', views.wallet_journal, name='character_wallet_journal'),
-    path('character/<int:character_id>/wallet/transactions/', views.wallet_transactions, name='character_wallet_transactions'),
     path('character/<int:character_id>/wallet/balance/', views.wallet_balance, name='character_wallet_balance'),
     path('character/<int:character_id>/wallet/summary/', views.wallet_summary, name='character_wallet_summary'),
 
@@ -72,6 +70,8 @@ urlpatterns = [
     path('character/<int:character_id>/market/orders/', views.market_orders, name='character_market_orders'),
     path('market/orders/history/', views.market_orders_history, name='market_orders_history'),
     path('character/<int:character_id>/market/orders/history/', views.market_orders_history, name='character_market_orders_history'),
+    path('market/transactions/', views.wallet_transactions, name='market_transactions'),
+    path('character/<int:character_id>/market/transactions/', views.wallet_transactions, name='character_market_transactions'),
 
     # Trade Analysis
     path('trade/', views.trade_overview, name='trade_overview'),

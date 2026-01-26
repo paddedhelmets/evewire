@@ -4,7 +4,10 @@
 {% block title %}Order History - {{ character.name }} - evewire{% endblock %}
 
 {% block content %}
-<h1>Market Order History - {{ character.name }}</h1>
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+    <h1 style="margin: 0;">Market Order History - {{ character.name }}</h1>
+    <a href="{% url 'core:character_market_transactions' character.id %}" class="btn">Transactions</a>
+</div>
 
 <div style="margin-bottom: 1rem;">
     <a href="{% url 'core:dashboard' %}">Dashboard</a>

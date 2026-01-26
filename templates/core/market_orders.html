@@ -73,7 +73,13 @@
 </style>
 
 <div style="max-width: 1400px; margin: 0 auto;">
-    <h1 style="margin-bottom: 1.5rem;">Market Orders</h1>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+        <h1 style="margin: 0;">Market Orders</h1>
+        <div style="display: flex; gap: 0.5rem;">
+            <a href="{% url 'core:market_orders_history' %}" class="btn">Order History</a>
+            <a href="{% url 'core:market_transactions' %}" class="btn">Transactions</a>
+        </div>
+    </div>
 
     <!-- Summary Cards -->
     <div class="summary-cards">
@@ -230,11 +236,6 @@
         {% else %}
         <p style="color: var(--text-secondary);">No market orders found matching the current filters.</p>
         {% endif %}
-    </div>
-
-    <!-- Navigation -->
-    <div style="margin-top: 1.5rem;">
-        <a href="{% url 'core:market_orders_history' %}" class="btn">View Order History</a>
     </div>
 </div>
 

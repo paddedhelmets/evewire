@@ -58,7 +58,10 @@
 </style>
 
 <div style="max-width: 1400px; margin: 0 auto;">
-    <h1 style="margin-bottom: 1.5rem;">Wallet Journal</h1>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+        <h1 style="margin: 0;">Wallet Journal</h1>
+        <a href="{% url 'core:market_transactions' %}" class="btn">Market Transactions</a>
+    </div>
 
     <!-- Per-Pilot Balance Cards -->
     <div class="balance-cards">
@@ -177,12 +180,5 @@
         <p style="color: var(--text-secondary);">No journal entries found for the selected filters.</p>
     </div>
     {% endif %}
-
-    <!-- Navigation -->
-    <div style="margin-top: 1.5rem;">
-        <a href="{% url 'core:wallet_transactions' %}" class="btn">Transactions</a>
-        <a href="{% url 'core:wallet_balance' %}" class="btn" style="margin-left: 0.5rem;">Balance History</a>
-        <a href="{% url 'core:wallet_summary' %}" class="btn" style="margin-left: 0.5rem;">Income/Expense Summary</a>
-    </div>
 </div>
 {% endblock %}
