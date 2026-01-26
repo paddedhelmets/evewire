@@ -353,7 +353,6 @@ def dashboard(request: HttpRequest) -> HttpResponse:
             'training': current_skill,
             'queue_count': queue_count,
             'orders_count': char.market_orders.count(),
-            'location': char.location_name if char.location_synced_at else None,
         })
 
     return render(request, 'core/dashboard.html', {
