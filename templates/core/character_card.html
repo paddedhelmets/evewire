@@ -4,7 +4,7 @@
 <div class="char-card">
     <a href="{{ char_url }}" style="text-decoration: none; color: inherit;">
         <div class="char-card-main">
-            <!-- Left column: Name & Wallet -->
+            <!-- Left column: Name & Location -->
             <div class="char-card-left">
                 <div class="char-name">
                     {{ char.character_name }}
@@ -12,12 +12,12 @@
                     <span style="color: var(--text-secondary); font-size: 0.9em;">[{{ corporation_ticker }}]</span>
                     {% endif %}
                 </div>
-                <div class="char-wallet isk">{{ char.wallet_balance|floatformat:0|commas|default:"—" }} ISK</div>
+                <div class="char-location">{{ char.location_name|default:"Unknown" }}</div>
             </div>
 
-            <!-- Right column: Location & SP -->
+            <!-- Right column: Wallet & SP -->
             <div class="char-card-right">
-                <div class="char-location">{{ char.location_name|default:"Unknown" }}</div>
+                <div class="char-wallet isk">{{ char.wallet_balance|floatformat:0|commas|default:"—" }} ISK</div>
                 <div class="char-sp sp">{{ char.total_sp|commas|default:"—" }} SP</div>
             </div>
         </div>
