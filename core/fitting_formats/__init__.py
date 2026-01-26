@@ -5,6 +5,7 @@ Provides unified API for importing/exporting EVE Online fittings in multiple for
 - EFT (EVE Fitting Tool) - Human-readable text format
 - DNA - Compact type_id format
 - XML - CCP's official XML format
+- Markdown - Markdown format with embedded EFT fit and metadata
 
 Usage:
     from core.fitting_formats import FittingImporter, FittingExporter, detect_format
@@ -50,6 +51,7 @@ _FORMATS: Dict[str, tuple] = {
     'eft': None,  # Will be populated on first use
     'dna': None,
     'xml': None,
+    'md': None,   # Markdown format
 }
 
 
@@ -69,6 +71,9 @@ def _get_format_classes(format_name: str) -> tuple:
         elif format_name == 'xml':
             from .xml import XMLParser, XMLSerializer
             _FORMATS['xml'] = (XMLParser, XMLSerializer)
+        elif format_name == 'md':
+            from .markdown import MarkdownParser
+            _FORMATS['md'] = (MarkdownParser, None)  # No serializer needed for now
         else:
             raise FittingFormatError(f"Unknown format: {format_name}")
 
@@ -117,7 +122,7 @@ def detect_format(content: str) -> str:
         content: Fitting content as string
 
     Returns:
-        Format name ('eft', 'dna', or 'xml')
+        Format name ('eft', 'dna', 'xml', or 'md')
 
     Raises:
         FormatDetectionError: If format cannot be determined
@@ -127,6 +132,15 @@ def detect_format(content: str) -> str:
     # XML: starts with <?xml or <fittings
     if content.startswith('<?xml') or content.startswith('<fittings'):
         return 'xml'
+
+    # Markdown: check for # heading and ``` code block
+    # Also check for **Key**: Value metadata pattern
+    has_heading = content.startswith('#')
+    has_code_block = '```' in content
+    has_metadata = '**' in content and '**:' in content
+
+    if has_heading and has_code_block:
+        return 'md'
 
     # DNA: contains type_id:count; pattern with :: separator
     # Check for DNA-specific patterns: ship_id:slot1;count:slot2;count:::
@@ -235,6 +249,8 @@ class FittingImporter:
                 description=data.description,
                 ship_type_id=data.ship_type_id,
                 tags=data.metadata.get('tags', {}),
+                cluster_id=data.metadata.get('cluster_id'),
+                fit_count=data.metadata.get('fit_count'),
             )
 
             # Create module entries
@@ -464,4 +480,6 @@ __all__ = [
     'DNASerializer',
     'XMLParser',
     'XMLSerializer',
+    'MarkdownParser',
+    'MarkdownSerializer',
 ]

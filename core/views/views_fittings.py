@@ -287,7 +287,7 @@ def shopping_list_detail(request: HttpRequest, list_id: int) -> HttpResponse:
 @login_required
 @require_http_methods(['GET', 'POST'])
 def fitting_import(request: HttpRequest) -> HttpResponse:
-    """Import a fitting from EFT/DNA/XML format."""
+    """Import a fitting from EFT/DNA/XML/Markdown format."""
     from core.fitting_formats import FittingImporter, detect_format, FormatDetectionError
     from core.fitting_formats.exceptions import FittingFormatError
 
@@ -297,6 +297,7 @@ def fitting_import(request: HttpRequest) -> HttpResponse:
                 {'name': 'EFT', 'description': 'EVE Fitting Tool - Human-readable text format'},
                 {'name': 'DNA', 'description': 'Compact type_id format for chat links'},
                 {'name': 'XML', 'description': 'CCP official XML format'},
+                {'name': 'MD', 'description': 'Markdown format with embedded EFT fit and metadata'},
             ],
         })
 
@@ -312,6 +313,7 @@ def fitting_import(request: HttpRequest) -> HttpResponse:
                 {'name': 'EFT', 'description': 'EVE Fitting Tool - Human-readable text format'},
                 {'name': 'DNA', 'description': 'Compact type_id format for chat links'},
                 {'name': 'XML', 'description': 'CCP official XML format'},
+                {'name': 'MD', 'description': 'Markdown format with embedded EFT fit and metadata'},
             ],
         })
 
@@ -330,6 +332,7 @@ def fitting_import(request: HttpRequest) -> HttpResponse:
                 {'name': 'EFT', 'description': 'EVE Fitting Tool - Human-readable text format'},
                 {'name': 'DNA', 'description': 'Compact type_id format for chat links'},
                 {'name': 'XML', 'description': 'CCP official XML format'},
+                {'name': 'MD', 'description': 'Markdown format with embedded EFT fit and metadata'},
             ],
         })
 
@@ -341,6 +344,7 @@ def fitting_import(request: HttpRequest) -> HttpResponse:
                 {'name': 'EFT', 'description': 'EVE Fitting Tool - Human-readable text format'},
                 {'name': 'DNA', 'description': 'Compact type_id format for chat links'},
                 {'name': 'XML', 'description': 'CCP official XML format'},
+                {'name': 'MD', 'description': 'Markdown format with embedded EFT fit and metadata'},
             ],
         })
     except FittingFormatError as e:
@@ -351,6 +355,7 @@ def fitting_import(request: HttpRequest) -> HttpResponse:
                 {'name': 'EFT', 'description': 'EVE Fitting Tool - Human-readable text format'},
                 {'name': 'DNA', 'description': 'Compact type_id format for chat links'},
                 {'name': 'XML', 'description': 'CCP official XML format'},
+                {'name': 'MD', 'description': 'Markdown format with embedded EFT fit and metadata'},
             ],
         })
 
@@ -415,6 +420,7 @@ def fitting_bulk_import(request: HttpRequest) -> HttpResponse:
                 {'name': 'EFT', 'description': 'EVE Fitting Tool - Human-readable text format'},
                 {'name': 'DNA', 'description': 'Compact type_id format for chat links'},
                 {'name': 'XML', 'description': 'CCP official XML format'},
+                {'name': 'MD', 'description': 'Markdown format with embedded EFT fit and metadata'},
             ],
         })
 
@@ -430,6 +436,7 @@ def fitting_bulk_import(request: HttpRequest) -> HttpResponse:
                 {'name': 'EFT', 'description': 'EVE Fitting Tool - Human-readable text format'},
                 {'name': 'DNA', 'description': 'Compact type_id format for chat links'},
                 {'name': 'XML', 'description': 'CCP official XML format'},
+                {'name': 'MD', 'description': 'Markdown format with embedded EFT fit and metadata'},
             ],
         })
 
@@ -442,6 +449,7 @@ def fitting_bulk_import(request: HttpRequest) -> HttpResponse:
                 {'name': 'EFT', 'description': 'EVE Fitting Tool - Human-readable text format'},
                 {'name': 'DNA', 'description': 'Compact type_id format for chat links'},
                 {'name': 'XML', 'description': 'CCP official XML format'},
+                {'name': 'MD', 'description': 'Markdown format with embedded EFT fit and metadata'},
             ],
         })
 
@@ -450,7 +458,7 @@ def fitting_bulk_import(request: HttpRequest) -> HttpResponse:
     errors = []
 
     # For EFT format, split by [Ship, Name] headers
-    if format_name == 'eft' or (auto_detect and '[' in content and ']' in content):
+    if format_name == 'eft' or (auto_detect and '[' in content and ']' in content and '#' not in content.split('\n')[0]):
         # Split by fitting headers
         pattern = r'\[([^,\]]+),\s*([^\]]+)\]'
         parts = re.split(pattern, content)
@@ -511,7 +519,7 @@ def fitting_bulk_import(request: HttpRequest) -> HttpResponse:
             errors.append(f'XML parsing error: {e}')
 
     else:
-        # Single fitting
+        # Single fitting (Markdown, DNA, or single EFT)
         try:
             fitting = FittingImporter.import_from_string(
                 content,
@@ -530,5 +538,6 @@ def fitting_bulk_import(request: HttpRequest) -> HttpResponse:
             {'name': 'EFT', 'description': 'EVE Fitting Tool - Human-readable text format'},
             {'name': 'DNA', 'description': 'Compact type_id format for chat links'},
             {'name': 'XML', 'description': 'CCP official XML format'},
+            {'name': 'MD', 'description': 'Markdown format with embedded EFT fit and metadata'},
         ],
     })
