@@ -103,10 +103,10 @@
                 <strong>Quick Stats</strong>
                 <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
                     {% if character.wallet_balance is not None %}
-                        <li>Wallet: {{ character.wallet_balance|floatformat:2 }} ISK</li>
+                        <li>Wallet: {{ character.wallet_balance|commas|floatformat:2 }} ISK</li>
                     {% endif %}
                     {% if character.total_sp is not None %}
-                        <li>Total SP: {{ character.total_sp }}</li>
+                        <li>Total SP: {{ character.total_sp|commas }}</li>
                     {% endif %}
                     <li>Active Orders: {{ character.market_orders.count }}</li>
                 </ul>

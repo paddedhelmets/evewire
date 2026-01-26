@@ -40,8 +40,8 @@
 <div class="card">
     <h2>Character Information</h2>
     <p><strong>Character ID:</strong> {{ character.id }}</p>
-    <p><strong>Corporation:</strong> {{ character.user.corporation_name|default:"N/A" }}</p>
-    <p><strong>Alliance:</strong> {{ character.user.alliance_name|default:"None" }}</p>
+    <p><strong>Corporation:</strong> {{ character.corporation_name|default:"N/A" }}</p>
+    <p><strong>Alliance:</strong> {{ character.alliance_name|default:"None" }}</p>
 </div>
 
 <div class="card">
@@ -120,7 +120,7 @@
     <h2>Wallet</h2>
     {% if character.wallet_balance is not None %}
         <p style="font-size: 1.5rem; font-weight: bold;">
-            {{ character.wallet_balance|floatformat:2 }} ISK
+            {{ character.wallet_balance|commas|floatformat:2 }} ISK
         </p>
         <p style="color: #666;">Last updated: {{ character.wallet_synced_at|date:"Y-m-d H:i:s" }}</p>
         <div style="margin-top: 1rem;">
@@ -140,7 +140,7 @@
         <a href="{% url 'core:character_skills' character.id %}" style="font-size: 0.9rem;">View All Skills →</a>
     </div>
     {% if character.total_sp is not None %}
-        <p><strong>Total SP:</strong> {{ character.total_sp }}</p>
+        <p><strong>Total SP:</strong> {{ character.total_sp|commas }}</p>
         <p style="color: #666; margin-bottom: 1rem;">Last updated: {{ character.skills_synced_at|date:"Y-m-d H:i:s" }}</p>
 
         <h3>Skill Groups ({{ total_skill_groups }} groups)</h3>

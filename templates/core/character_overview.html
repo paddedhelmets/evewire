@@ -203,7 +203,7 @@
         </tr>
         <tr style="border-bottom: 1px solid var(--border-color);">
             <td style="padding: 0.75rem 0;"><strong>Wallet Balance:</strong></td>
-            <td style="padding: 0.75rem 0;">{{ character.wallet_balance|floatformat:2|default:"—" }} ISK</td>
+            <td style="padding: 0.75rem 0;">{{ character.wallet_balance|commas|floatformat:2|default:"—" }} ISK</td>
         </tr>
         <tr style="border-bottom: 1px solid var(--border-color);">
             <td style="padding: 0.75rem 0;"><strong>Corporation:</strong></td>
