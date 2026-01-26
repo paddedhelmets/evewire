@@ -152,63 +152,48 @@
 
     <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #ddd;">
         <h3>Add Skill</h3>
-        <form method="post" action="{% url 'core:skill_plan_add_skill' plan.id %}" style="display: flex; gap: 0.5rem; align-items: center;">
+        <form method="post" action="{% url 'core:skill_plan_add_skill' plan.id %}" style="display: flex; gap: 0.5rem; align-items: flex-start; flex-wrap: wrap;">
             {% csrf_token %}
-            <input type="text" id="skill_search" name="skill_id" placeholder="Search skills by name..." required style="padding: 0.5rem; min-width: 300px;" list="skill_results">
-            <datalist id="skill_results"></datalist>
-            <select name="level" style="padding: 0.5rem;">
-                <option value="">Required Level</option>
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
-                <option value="4">4</option>
-                <option value="5">5</option>
+            <select name="skill_id" required style="padding: 0.5rem; min-width: 300px; max-width: 500px;" size="8">
+                {% for group_name, skills in skills_by_group.items %}
+                <optgroup label="{{ group_name }}">
+                    {% for skill in skills %}
+                    <option value="{{ skill.id }}">{{ skill.name }}</option>
+                    {% endfor %}
+                </optgroup>
+                {% endfor %}
             </select>
-            <select name="recommended_level" style="padding: 0.5rem;">
-                <option value="">Recommended Level</option>
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
-                <option value="4">4</option>
-                <option value="5">5</option>
-            </select>
-            <button type="submit" class="btn">Add Skill</button>
+            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                <div>
+                    <label style="display: block; font-size: 0.85rem; margin-bottom: 0.25rem;">Required Level:</label>
+                    <select name="level" style="padding: 0.5rem; min-width: 120px;">
+                        <option value="">—</option>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="display: block; font-size: 0.85rem; margin-bottom: 0.25rem;">Recommended Level:</label>
+                    <select name="recommended_level" style="padding: 0.5rem; min-width: 120px;">
+                        <option value="">—</option>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn">Add Skill</button>
+            </div>
         </form>
         <p style="color: #666; font-size: 0.9rem; margin-top: 0.5rem;">
-            Start typing a skill name to search. Results will show the skill name and ID.
+            Select a skill from the list above. Skills are organized by group.
         </p>
     </div>
     <script>
-    (function() {
-        const searchInput = document.getElementById('skill_search');
-        const datalist = document.getElementById('skill_results');
-        let debounceTimer;
-
-        searchInput.addEventListener('input', function() {
-            clearTimeout(debounceTimer);
-            const query = this.value.trim();
-
-            if (query.length < 2) {
-                datalist.innerHTML = '';
-                return;
-            }
-
-            debounceTimer = setTimeout(function() {
-                fetch('{% url "core:skill_search" %}?q=' + encodeURIComponent(query))
-                    .then(response => response.json())
-                    .then(data => {
-                        datalist.innerHTML = '';
-                        data.results.forEach(skill => {
-                            const option = document.createElement('option');
-                            option.value = skill.id;
-                            option.textContent = skill.text + ' [' + skill.group + ']';
-                            datalist.appendChild(option);
-                        });
-                    })
-                    .catch(err => console.error('Search failed:', err));
-            }, 300);
-        });
-    })();
 
     // Prerequisite tooltip data and functions
     const prereqData = {

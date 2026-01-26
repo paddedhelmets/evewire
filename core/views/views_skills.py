@@ -218,6 +218,25 @@ def skill_plan_detail(request: HttpRequest, plan_id: int) -> HttpResponse:
 
         linked_fittings.append(fitting_progress)
 
+    # Get all skills organized by group for the Add Skill dropdown
+    from core.eve.models import ItemType, ItemGroup
+    from collections import defaultdict
+
+    skills_by_group = defaultdict(list)
+    skills = ItemType.objects.filter(
+        published=True,
+        group__category_id=16,  # Skills category
+        group__published=True
+    ).select_related('group').order_by('group__name', 'name')
+
+    for skill in skills:
+        skills_by_group[skill.group.name].append(skill)
+
+    # Sort groups and skills within groups
+    skills_by_group_dict = dict(sorted(skills_by_group.items()))
+    for group_name in skills_by_group_dict:
+        skills_by_group_dict[group_name] = sorted(skills_by_group_dict[group_name], key=lambda s: s.name)
+
     return render(request, 'core/skill_plan_detail.html', {
         'plan': plan,
         'entries': entries,
@@ -226,6 +245,7 @@ def skill_plan_detail(request: HttpRequest, plan_id: int) -> HttpResponse:
         'total_training_seconds': total_training_seconds,
         'show_filter': show_filter,
         'linked_fittings': linked_fittings,
+        'skills_by_group': skills_by_group_dict,
     })
 
 
