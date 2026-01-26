@@ -53,13 +53,16 @@ class FittingData:
     def get_slot_list(self, slot_type: str) -> List[int]:
         """Get the module list for a given slot type."""
         slot_map = {
-            'high': self.high_slots,
-            'med': self.med_slots,
-            'low': self.low_slots,
-            'rig': self.rig_slots,
-            'subsystem': self.subsystem_slots,
+            'high': 'high_slots',
+            'med': 'med_slots',
+            'low': 'low_slots',
+            'rig': 'rig_slots',
+            'subsystem': 'subsystem_slots',
         }
-        return slot_map.get(slot_type, [])
+        attr_name = slot_map.get(slot_type)
+        if attr_name:
+            return getattr(self, attr_name)
+        return []
 
     def set_slot_list(self, slot_type: str, modules: List[int]) -> None:
         """Set the module list for a given slot type."""

@@ -259,9 +259,9 @@ class FittingImporter:
 
             # Create module entries
             slot_map = {
-                'high': data.high_slots,
-                'med': data.med_slots,
                 'low': data.low_slots,
+                'med': data.med_slots,
+                'high': data.high_slots,
                 'rig': data.rig_slots,
                 'subsystem': data.subsystem_slots,
             }

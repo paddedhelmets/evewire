@@ -82,6 +82,30 @@ def get_item_name(type_id: int) -> str:
         return f"Type {type_id}"
 
 
+def is_charge_type(type_id: int) -> bool:
+    """
+    Check if an item type is a charge/ammo.
+
+    Args:
+        type_id: Item type ID
+
+    Returns:
+        True if the item is in the Charge category (category 8)
+    """
+    from core.eve.models import ItemType, ItemGroup
+
+    try:
+        item = ItemType.objects.get(id=type_id)
+        if item.group_id:
+            # Get the group and check its category
+            group = ItemGroup.objects.get(id=item.group_id)
+            return group.category_id == 8  # Category 8 is Charge
+    except (ItemType.DoesNotExist, ItemGroup.DoesNotExist):
+        pass
+
+    return False
+
+
 def normalize_slot_type(slot_str: str) -> Optional[str]:
     """
     Normalize a slot string to internal slot type.

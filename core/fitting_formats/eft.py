@@ -35,6 +35,7 @@ from .utils import (
     resolve_item_name,
     get_item_name,
     detect_ship_type,
+    is_charge_type,
 )
 
 
@@ -85,23 +86,24 @@ class EFTParser(FittingParser):
         # Split content by empty lines to find sections
         sections = []
         current_section = []
-        empty_line_count = 0
+        consecutive_empty_lines = 0
 
         for line in lines[1:]:
             line = line.strip()
             if not line:
-                empty_line_count += 1
+                consecutive_empty_lines += 1
                 if current_section:
                     sections.append(current_section)
                     current_section = []
 
                 # Two consecutive empty lines marks transition to drones/cargo
-                if empty_line_count >= 2:
+                if consecutive_empty_lines >= 2:
                     # Rest is drones and cargo
                     remaining_lines = lines[lines.index(line) + 1:]
                     self._parse_drones_and_cargo(remaining_lines, data)
                     break
             else:
+                consecutive_empty_lines = 0  # Reset when we see content
                 current_section.append(line)
 
         # Add last section if present
@@ -174,6 +176,32 @@ class EFTParser(FittingParser):
         type_id = resolve_item_name(line)
         if not type_id:
             raise ItemNotFoundError(line)
+
+        # Check if this is a charge (ammo, crystal, missile, etc.)
+        # Charges are listed after the module that uses them
+        if is_charge_type(type_id):
+            # Get the current slot list to find the previous module
+            slot_list = data.get_slot_list(slot_type)
+
+            # Count actual modules (non-zero entries) to find the last real module
+            module_count = sum(1 for x in slot_list if x != 0)
+
+            if module_count == 0:
+                # No module yet to associate charge with - skip
+                return
+
+            # Find the most recently added module (first non-zero from the end)
+            for i in range(len(slot_list) - 1, -1, -1):
+                if slot_list[i] != 0:
+                    # Found the most recent module
+                    # Calculate global position of this module
+                    global_pos = sum(len(data.get_slot_list(s)) for s in self.SECTIONS[:self.SECTIONS.index(slot_type)])
+                    global_pos += i
+                    # Store the charge for this position
+                    data.charges[global_pos] = type_id
+                    return
+            # No module found - skip the charge
+            return
 
         # Add to slot list
         slot_list = data.get_slot_list(slot_type)
