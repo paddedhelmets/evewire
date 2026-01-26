@@ -222,15 +222,25 @@ def skill_plan_detail(request: HttpRequest, plan_id: int) -> HttpResponse:
     from core.eve.models import ItemType, ItemGroup
     from collections import defaultdict
 
+    # Get all skill groups (category 16)
+    skill_group_ids = ItemGroup.objects.filter(
+        category_id=16,
+        published=True
+    ).values_list('id', flat=True)
+
+    # Get all skills in those groups
     skills_by_group = defaultdict(list)
     skills = ItemType.objects.filter(
         published=True,
-        group__category_id=16,  # Skills category
-        group__published=True
-    ).select_related('group').order_by('group__name', 'name')
+        group_id__in=skill_group_ids
+    ).order_by('name')
+
+    # Get group names for display
+    groups = {g.id: g.name for g in ItemGroup.objects.filter(id__in=skill_group_ids)}
 
     for skill in skills:
-        skills_by_group[skill.group.name].append(skill)
+        group_name = groups.get(skill.group_id, 'Unknown')
+        skills_by_group[group_name].append(skill)
 
     # Sort groups and skills within groups
     skills_by_group_dict = dict(sorted(skills_by_group.items()))
