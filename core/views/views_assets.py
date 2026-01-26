@@ -21,10 +21,12 @@ logger = logging.getLogger(__name__)
 @login_required
 def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
     """
-    View character assets with hierarchical tree display.
+    View character assets with layered hierarchical tree display.
 
-    Uses lazy-loading: only root-level assets are loaded initially.
-    Child assets are fetched via AJAX when containers are expanded.
+    Tree structure (evething-style):
+    - Level 1: Locations (stations/structures/systems) - loaded initially
+    - Level 2: Top-level assets at location - loaded when location expanded
+    - Level 3+: Container contents - loaded when container expanded
     """
     from core.models import Character
     from core.character.models import CharacterAsset
@@ -34,92 +36,71 @@ def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
 
     all_characters = request.user.characters.all()
 
-    # Get location filter
+    # Get location filter (only for true structures: station/structure/system)
     location_filter = request.GET.get('location', '')
 
     # Get pilot filter
     pilot_filter = request.GET.getlist('pilots')
     pilot_filter_ints = [int(pid) for pid in pilot_filter if pid.isdigit()]
 
-    # Build query for root-level assets only (lazy-loading)
-    # We only fetch parent=None assets, children are loaded via AJAX
+    # Get search query
+    search_query = request.GET.get('search', '').strip()
+
+    # Determine character(s) to query
     if character_id:
         try:
             character = Character.objects.get(id=character_id, user=request.user)
-            assets_query = CharacterAsset.objects.filter(
-                character=character,
-                parent=None  # Only root-level assets
-            ).select_related('character')
+            characters = [character]
             is_account_wide = False
         except Character.DoesNotExist:
             return render(request, 'core/error.html', {
                 'message': 'Character not found',
             }, status=404)
     else:
-        # Account-wide view - show all assets across all characters
-        assets_query = CharacterAsset.objects.filter(
-            character__user=request.user,
-            parent=None  # Only root-level assets
-        ).select_related('character')
+        characters = list(all_characters)
         is_account_wide = True
         character = None
 
     # Apply pilot filter if specified
     if pilot_filter_ints:
-        assets_query = assets_query.filter(character_id__in=pilot_filter_ints)
+        characters = [c for c in characters if c.id in pilot_filter_ints]
 
-    # Apply location filter if specified
+    # Build query for root-level assets (parent=None)
+    assets_query = CharacterAsset.objects.filter(
+        character__in=characters,
+        parent=None
+    )
+
+    # Apply location filter if specified (only for true structure types)
     if location_filter:
         try:
             location_id = int(location_filter)
-            assets_query = assets_query.filter(location_id=location_id)
+            # Only filter by location if it's a true structure type
+            assets_query = assets_query.filter(
+                location_id=location_id,
+                location_type__in=['station', 'solar_system', 'structure']
+            )
         except (ValueError, TypeError):
-            pass  # Invalid filter, ignore
+            pass
 
-    # Annotate with child counts for display
-    assets_query = assets_query.annotate(
-        child_count=Count('children')
-    )
+    # Group assets by location to get unique locations
+    location_groups = defaultdict(lambda: {'count': 0})
 
-    # Select related ItemType to avoid N+1 queries on type_name property
-    # Note: ItemType isn't a direct ForeignKey on CharacterAsset, so we need to handle it differently
-    # The type_name property queries ItemType.objects.get(id=self.type_id)
+    for asset in assets_query:
+        # Only count assets at true structure locations
+        if asset.location_type in ['station', 'solar_system', 'structure']:
+            key = (asset.location_id, asset.location_type)
+            location_groups[key]['count'] += 1
 
-    # Fetch only root-level assets (lazy-loading - children loaded via AJAX)
-    root_assets = list(assets_query)
-
-    # Bulk-fetch all unique ItemTypes for these assets
-    type_ids = set(asset.type_id for asset in root_assets)
-    item_types = {}
-    if type_ids:
-        from core.eve.models import ItemType
-        item_types = {
-            item.id: item
-            for item in ItemType.objects.filter(id__in=type_ids)
-        }
-
-    # Bulk-fetch all unique locations (Station, SolarSystem, Structure)
-    location_ids = set(asset.location_id for asset in root_assets if asset.location_id)
+    # Fetch location names
+    location_ids = set(loc_id for (loc_id, loc_type) in location_groups.keys() if loc_id)
     station_names = {}
     system_names = {}
     structure_names = {}
 
-    # Identify structure IDs (location_type == 'structure')
-    structure_ids = set(asset.location_id for asset in root_assets
-                        if asset.location_type == 'structure' and asset.location_id)
-
-    # Collect item location IDs (items inside containers/ships)
-    # These need to be resolved to their parent asset's type name
-    item_location_ids = set(asset.location_id for asset in root_assets
-                           if asset.location_type == 'item' and asset.location_id)
-
-    # Build character IDs for fetching parent assets
-    character_ids = set(asset.character_id for asset in root_assets)
-
     if location_ids:
-        # Fetch stations (from SDE)
+        # Fetch stations from SDE
         try:
-            from core.eve.models import Station
             station_names = {
                 s.id: s.name
                 for s in Station.objects.filter(id__in=location_ids)
@@ -127,9 +108,8 @@ def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
         except Exception:
             pass
 
-        # Fetch solar systems (from SDE)
+        # Fetch solar systems from SDE
         try:
-            from core.eve.models import SolarSystem
             system_names = {
                 s.id: s.name
                 for s in SolarSystem.objects.filter(id__in=location_ids)
@@ -137,112 +117,59 @@ def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
         except Exception:
             pass
 
-    # Fetch structure data (from cache or ESI)
+    # Fetch structure data from cache or ESI
+    structure_ids = set(loc_id for (loc_id, loc_type) in location_groups.keys()
+                       if loc_type == 'structure' and loc_id)
     if structure_ids:
         from core.esi_client import ensure_structure_data
-
         for structure_id in structure_ids:
             structure = ensure_structure_data(structure_id, user=request.user)
             if structure:
                 structure_names[structure_id] = structure.name
             else:
-                # Could not fetch - use fallback
                 structure_names[structure_id] = f"Structure {structure_id}"
 
-    # Fetch parent assets for item locations
-    # When location_type='item', location_id is the parent asset's item_id
-    item_location_names = {}
-    if item_location_ids and character_ids:
-        from core.character.models import CharacterAsset
-        parent_assets = CharacterAsset.objects.filter(
-            item_id__in=item_location_ids,
-            character_id__in=character_ids
-        )
-        # Build lookup of item_id -> type_name
-        for parent in parent_assets:
-            item_location_names[parent.item_id] = parent.type_name
-
-    # Group root assets by location for display
-    location_groups = defaultdict(list)
-
-    # Also collect all unique locations for the filter dropdown
-    all_locations = {}
-
-    for asset in root_assets:
-        # Attach the pre-fetched ItemType to avoid queries in template
-        if asset.type_id in item_types:
-            asset._cached_type = item_types[asset.type_id]
-
-        # Determine and cache location name for this asset
-        location_name = None
-        if asset.location_type == 'station':
-            location_name = station_names.get(asset.location_id, f"Station {asset.location_id}")
-        elif asset.location_type == 'solar_system':
-            location_name = system_names.get(asset.location_id, f"System {asset.location_id}")
-        elif asset.location_type == 'structure':
-            location_name = structure_names.get(asset.location_id, f"Structure {asset.location_id}")
-        elif asset.location_type == 'item':
-            # Resolve to parent container name
-            location_name = item_location_names.get(asset.location_id, f"Container {asset.location_id}")
+    # Build location list for template
+    locations = []
+    for (loc_id, loc_type), data in sorted(location_groups.items()):
+        if loc_type == 'station':
+            location_name = station_names.get(loc_id, f"Station {loc_id}")
+        elif loc_type == 'solar_system':
+            location_name = system_names.get(loc_id, f"System {loc_id}")
+        elif loc_type == 'structure':
+            location_name = structure_names.get(loc_id, f"Structure {loc_id}")
         else:
-            location_name = f"{asset.location_type.title()} {asset.location_id}"
+            location_name = f"{loc_type.title()} {loc_id}"
 
-        asset._cached_location_name = location_name
-
-        # Group by location
-        location_key = (asset.location_id, asset.location_type)
-        location_groups[location_key].append(asset)
-
-        # Build location name lookup (using pre-fetched data)
-        if asset.location_id not in all_locations:
-            all_locations[asset.location_id] = {
-                'id': asset.location_id,
-                'name': location_name,
-                'type': asset.location_type,
-            }
-
-    # Sort locations by name and flatten for template iteration
-    # Django templates can be finicky with nested tuple unpacking,
-    # so we use a list of dicts with explicit keys
-    sorted_locations = sorted(
-        location_groups.items(),
-        key=lambda x: x[0][1] + str(x[0][0])  # Sort by location_type then location_id
-    )
-
-    # Flatten to list of dicts for easier template unpacking
-    location_groups_flat = []
-    for key, value in sorted_locations:
-        location_id, location_type = key
-        # Get location name from first asset in group (they're all same location)
-        location_name = "Unknown"
-        if value:  # If there are assets at this location
-            location_name = value[0]._cached_location_name
-
-        location_groups_flat.append({
-            'location_id': location_id,
-            'location_type': location_type,
+        locations.append({
+            'location_id': loc_id,
+            'location_type': loc_type,
             'location_name': location_name,
-            'assets': value,
+            'asset_count': data['count'],
         })
 
-    # Sort available locations for dropdown by name
-    sorted_available_locations = sorted(
-        all_locations.values(),
-        key=lambda x: x['name']
-    )
+    # Sort by location name
+    locations.sort(key=lambda x: x['location_name'])
 
-    # Count total root assets (not nested children, since we're lazy-loading)
-    total_root_assets = len(root_assets)
+    # Build available locations for filter dropdown (only true structures)
+    available_locations = []
+    for loc in locations:
+        available_locations.append({
+            'id': loc['location_id'],
+            'name': loc['location_name'],
+            'type': loc['location_type'],
+        })
 
     return render(request, 'core/assets_list.html', {
         'character': character,
-        'location_groups': location_groups_flat,
-        'total_assets': total_root_assets,  # Only counting root assets
+        'locations': locations,
+        'total_locations': len(locations),
         'location_filter': location_filter,
-        'available_locations': sorted_available_locations,
+        'available_locations': available_locations,
         'is_account_wide': is_account_wide,
         'all_characters': all_characters,
         'pilot_filter': pilot_filter_ints,
+        'search_query': search_query,
     })
 
 

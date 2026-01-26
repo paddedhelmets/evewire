@@ -132,6 +132,8 @@ urlpatterns = [
     path('shopping-lists/<int:list_id>/', views.shopping_list_detail, name='shopping_list_detail'),
 
     # API endpoints
+    path('api/assets/locations/', api.api_asset_locations, name='api_asset_locations'),
+    path('api/assets/location/<int:location_id>/<str:location_type>/', api.api_location_assets, name='api_location_assets'),
     path('api/assets/<int:asset_id>/children/', api.api_asset_children, name='api_asset_children'),
     path('api/assets/tree/<int:character_id>/', api.api_asset_tree, name='api_asset_tree'),
     path('api/assets/tree/', api.api_asset_tree, name='api_asset_tree_account'),

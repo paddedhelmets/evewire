@@ -79,56 +79,119 @@
         margin: 0;
     }
 
-    .pilot-chips {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        margin-top: 0.5rem;
+    /* Search box */
+    .search-bar {
+        background: var(--bg-primary);
+        padding: 1rem;
+        border-radius: 4px;
+        margin-bottom: 1.5rem;
     }
 
-    .pilot-chip {
+    .search-input-wrapper {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+    }
+
+    .search-input-wrapper input {
+        flex: 1;
+        padding: 0.5rem;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        font-size: 0.9rem;
+    }
+
+    .search-input-wrapper button {
+        padding: 0.5rem 1rem;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.9rem;
+    }
+
+    .search-input-wrapper button.search-btn {
         background: var(--btn-primary);
         color: white;
-        padding: 0.25rem 0.5rem;
-        border-radius: 4px;
-        font-size: 0.85rem;
+    }
+
+    .search-input-wrapper button.clear-btn {
+        background: var(--text-secondary);
+        color: white;
+    }
+
+    /* Location tree */
+    .location-tree {
         display: flex;
-        align-items: center;
+        flex-direction: column;
         gap: 0.5rem;
     }
 
-    .pilot-chip button {
-        background: none;
-        border: none;
-        color: white;
-        cursor: pointer;
-        font-size: 1rem;
-        padding: 0;
-        line-height: 1;
-    }
-
-    .location-section {
-        margin-bottom: 2rem;
+    .location-node {
+        background: var(--bg-primary);
+        border-radius: 4px;
+        border: 1px solid var(--border-color);
     }
 
     .location-header {
-        background: var(--bg-primary);
         padding: 0.75rem 1rem;
-        border-radius: 4px;
-        font-weight: 600;
-        color: var(--text-primary);
-        margin-bottom: 0.5rem;
-        border-left: 4px solid var(--btn-primary);
+        cursor: pointer;
+        user-select: none;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        transition: background 0.2s;
     }
 
+    .location-header:hover {
+        background: var(--bg-secondary);
+    }
+
+    .location-expand {
+        width: 16px;
+        height: 16px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-secondary);
+        transition: transform 0.2s;
+    }
+
+    .location-expand.expanded {
+        transform: rotate(90deg);
+    }
+
+    .location-name {
+        font-weight: 600;
+        flex: 1;
+    }
+
+    .location-badge {
+        font-size: 0.75rem;
+        padding: 0.1rem 0.4rem;
+        border-radius: 3px;
+        background: #e2e3e5;
+        color: #383d41;
+    }
+
+    [data-theme="dark"] .location-badge {
+        background: #2d2d2d;
+        color: #a0a0a0;
+    }
+
+    /* Assets table */
     .asset-table {
         width: 100%;
         border-collapse: collapse;
         font-size: 0.9rem;
+        display: none;
+    }
+
+    .asset-table.visible {
+        display: table;
     }
 
     .asset-table th {
-        background: var(--bg-primary);
+        background: var(--bg-secondary);
         padding: 0.6rem 0.8rem;
         text-align: left;
         font-weight: 600;
@@ -142,7 +205,7 @@
     }
 
     .asset-table tr:hover {
-        background: var(--bg-primary);
+        background: var(--bg-secondary);
     }
 
     .asset-item-name {
@@ -171,24 +234,8 @@
         color: var(--link-color);
     }
 
-    .asset-children {
-        display: none;
-    }
-
-    .asset-children.visible {
-        display: table-row;
-    }
-
     .asset-indent {
         padding-left: 1.5rem;
-    }
-
-    .asset-indent-2 {
-        padding-left: 3rem;
-    }
-
-    .asset-indent-3 {
-        padding-left: 4.5rem;
     }
 
     .blueprint-badge {
@@ -253,7 +300,6 @@
         border-top-color: var(--link-color);
         border-radius: 50%;
         animation: spin 1s linear infinite;
-        margin-left: 0.5rem;
     }
 
     @keyframes spin {
@@ -264,13 +310,6 @@
         font-size: 0.75rem;
         text-transform: uppercase;
         color: var(--text-secondary);
-        margin-left: 0.5rem;
-    }
-
-    .pilot-indicator {
-        font-size: 0.75rem;
-        color: var(--text-secondary);
-        font-style: italic;
     }
 
     .no-assets {
@@ -295,15 +334,13 @@
             </p>
         </div>
         <div class="assets-stats">
-            <span>Total Items: <strong>{{ total_assets }}</strong></span>
+            <span>Locations: <strong>{{ total_locations }}</strong></span>
         </div>
         <div style="display: flex; gap: 0.5rem; align-items: center;">
             <a href="{% url 'core:assets_list' %}" class="btn" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">List</a>
             <a href="{% url 'core:assets_summary' %}" class="btn" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">Summary</a>
             <a href="{% url 'core:fitted_ships' %}" class="btn" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">Fitted Ships</a>
             <a href="{% url 'core:assets_export' %}" class="btn" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; background: #28a745;">Export CSV</a>
-            <button onclick="expandAll()" style="margin-left: 0.5rem;">Expand All</button>
-            <button onclick="collapseAll()">Collapse All</button>
         </div>
     </div>
 
@@ -335,12 +372,29 @@
     </div>
     {% endif %}
 
+    <!-- Search and Location Filter -->
+    <div class="search-bar">
+        <form method="get" class="search-input-wrapper">
+            {% for pid in pilot_filter %}
+            <input type="hidden" name="pilots" value="{{ pid }}">
+            {% endfor %}
+            <input type="text" name="search" placeholder="Search item names..." value="{{ search_query }}" id="search-input">
+            <button type="submit" class="search-btn">Search</button>
+            {% if search_query or location_filter %}
+            <a href="{% url 'core:assets_list' %}" class="btn clear-btn">Clear All</a>
+            {% endif %}
+        </form>
+    </div>
+
     <!-- Location Filter -->
     <div style="background: var(--bg-primary); padding: 1rem; border-radius: 4px; margin-bottom: 1.5rem;">
         <form method="get" style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
             {% for pid in pilot_filter %}
             <input type="hidden" name="pilots" value="{{ pid }}">
             {% endfor %}
+            {% if search_query %}
+            <input type="hidden" name="search" value="{{ search_query }}">
+            {% endif %}
             <div>
                 <label for="location" style="display: block; margin-bottom: 0.25rem; font-size: 0.9rem;">Filter by Location:</label>
                 <select name="location" id="location" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); min-width: 300px;">
@@ -353,43 +407,39 @@
                 </select>
             </div>
             <button type="submit" class="btn">Apply Filter</button>
-            {% if location_filter or pilot_filter %}
-            <a href="{% url 'core:assets_list' %}" class="btn" style="background: var(--text-secondary);">Clear All</a>
-            {% endif %}
         </form>
     </div>
 
-    {% if location_groups %}
-        {% for location in location_groups %}
-        <div class="location-section">
-            <div class="location-header">
-                {{ location.location_name }}
-                <span class="location-type">{{ location.location_type }}</span>
+    <!-- Location Tree -->
+    {% if locations %}
+        <div class="location-tree" id="location-tree">
+            {% for location in locations %}
+            <div class="location-node" data-location-id="{{ location.location_id }}" data-location-type="{{ location.location_type }}">
+                <div class="location-header" onclick="toggleLocation({{ location.location_id }}, '{{ location.location_type }}', this)">
+                    <span class="location-expand">&#9654;</span>
+                    <span class="location-name">{{ location.location_name }}</span>
+                    <span class="location-badge">{{ location.asset_count }} items</span>
+                    <span class="location-type">{{ location.location_type }}</span>
+                </div>
+                <table class="asset-table" id="assets-table-{{ location.location_id }}-{{ location.location_type }}">
+                    <thead>
+                        <tr>
+                            <th style="width: 40%;">Item</th>
+                            {% if is_account_wide %}
+                            <th style="width: 10%;">Pilot</th>
+                            {% endif %}
+                            <th style="width: 10%;">Flag</th>
+                            <th style="width: 10%; text-align: right;">Quantity</th>
+                            <th style="width: 15%;">Singleton</th>
+                        </tr>
+                    </thead>
+                    <tbody id="assets-tbody-{{ location.location_id }}-{{ location.location_type }}">
+                        <!-- Assets loaded via AJAX -->
+                    </tbody>
+                </table>
             </div>
-
-            <table class="asset-table">
-                <thead>
-                    <tr>
-                        <th style="width: 40%;">Item</th>
-                        {% if is_account_wide %}
-                        <th style="width: 10%;">Pilot</th>
-                        <th style="width: 25%;">Item</th>
-                        {% endif %}
-                        <th style="width: 15%;">Group</th>
-                        <th style="width: 10%;">Flag</th>
-                        <th style="width: 10%; text-align: right;">Quantity</th>
-                        <th style="width: 15%;">Location</th>
-                        <th style="width: 10%;">Singleton</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for asset in location.assets %}
-                        {% include 'core/asset_row.html' with asset=asset indent=0 %}
-                    {% endfor %}
-                </tbody>
-            </table>
+            {% endfor %}
         </div>
-        {% endfor %}
     {% else %}
         <div class="no-assets">
             <p>No assets found for this character.</p>
@@ -399,37 +449,178 @@
 </div>
 
 <script>
-// Track loaded children to avoid redundant fetches
+// Track loaded locations and assets
+const loadedLocations = new Set();
 const loadedChildren = new Set();
-// Track expand state (persisted in localStorage)
-let expandState = JSON.parse(localStorage.getItem('assetExpandState') || '{}');
+
+/**
+ * Toggle location expansion and load assets if needed
+ */
+async function toggleLocation(locationId, locationType, headerElement) {
+    const expandIcon = headerElement.querySelector('.location-expand');
+    const table = document.getElementById(`assets-table-${locationId}-${locationType}`);
+    const isExpanded = expandIcon.classList.contains('expanded');
+    const locationKey = `${locationId}-${locationType}`;
+
+    if (isExpanded) {
+        // Collapse
+        expandIcon.classList.remove('expanded');
+        expandIcon.innerHTML = '&#9654;';
+        table.classList.remove('visible');
+        return;
+    }
+
+    // Expand
+    if (loadedLocations.has(locationKey)) {
+        // Already loaded, just show
+        expandIcon.classList.add('expanded');
+        expandIcon.innerHTML = '&#9660;';
+        table.classList.add('visible');
+        return;
+    }
+
+    // Show loading state
+    expandIcon.innerHTML = '<span class="loading-spinner"></span>';
+
+    try {
+        // Build URL with filters
+        let url = `/api/assets/location/${locationId}/${locationType}/`;
+        const params = new URLSearchParams();
+
+        // Add pilot filter from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const pilots = urlParams.getAll('pilots');
+        if (pilots.length > 0) {
+            pilots.forEach(p => params.append('pilot_filter', p));
+        }
+
+        // Add search filter
+        const search = urlParams.get('search');
+        if (search) {
+            params.append('search', search);
+        }
+
+        if (params.toString()) {
+            url += '?' + params.toString();
+        }
+
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to load assets');
+        }
+
+        // Render assets
+        const tbody = document.getElementById(`assets-tbody-${locationId}-${locationType}`);
+        if (data.assets.length > 0) {
+            tbody.innerHTML = renderAssetRows(data.assets);
+        } else {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 2rem;">No assets at this location</td></tr>';
+        }
+
+        // Mark as loaded and show
+        loadedLocations.add(locationKey);
+        expandIcon.classList.add('expanded');
+        expandIcon.innerHTML = '&#9660;';
+        table.classList.add('visible');
+
+    } catch (error) {
+        console.error('Failed to load location assets:', error);
+        expandIcon.innerHTML = '&#9654;';
+        alert('Failed to load assets: ' + error.message);
+    }
+}
+
+/**
+ * Render asset rows from API data
+ */
+function renderAssetRows(assets) {
+    const isAccountWide = {{ 'true' if is_account_wide else 'false' }};
+
+    return assets.map(asset => {
+        const hasChildren = asset.has_children;
+        const expandIcon = hasChildren
+            ? `<span class="asset-expand" data-asset-id="${asset.item_id}" onclick="lazyLoadChildren(event, this)">&#9654;</span>`
+            : '<span style="width: 16px; display: inline-block;"></span>';
+        const childCountBadge = hasChildren ? `<span class="child-count-badge">(${asset.child_count})</span>` : '';
+        const pilotColumn = isAccountWide ? `
+            <td>
+                <a href="/characters/${asset.character_id}/" style="font-size: 0.85rem; color: var(--link-color);">
+                    ${asset.character_name}
+                </a>
+            </td>
+        ` : '';
+        const singletonIndicator = asset.is_singleton
+            ? '<span style="color: #0066cc;">&#10003;</span>'
+            : '<span style="color: var(--text-secondary);">&mdash;</span>';
+        const blueprintBadge = asset.is_blueprint_copy
+            ? '<span class="blueprint-badge blueprint-bpc">BPC</span>' : '';
+        const singletonBadge = asset.is_singleton
+            ? '<span class="singleton-badge">Assembled</span>' : '';
+
+        return `
+            <tr class="asset-row"
+                data-asset-id="${asset.item_id}"
+                data-has-children="${hasChildren}"
+                data-child-count="${asset.child_count}"
+                data-children-loaded="false">
+                <td>
+                    <div class="asset-item-name">
+                        ${expandIcon}
+                        ${childCountBadge}
+                        <span class="asset-name">${asset.type_name}</span>
+                        ${blueprintBadge}
+                        ${singletonBadge}
+                    </div>
+                </td>
+                ${pilotColumn}
+                <td style="color: var(--text-secondary); font-size: 0.85rem;">${asset.location_flag || '&mdash;'}</td>
+                <td style="text-align: right;">${asset.quantity}</td>
+                <td>${singletonIndicator}</td>
+            </tr>
+            <tbody class="asset-children-container" id="asset-children-${asset.item_id}" style="display: none;"></tbody>
+        `;
+    }).join('');
+}
 
 /**
  * Lazy-load children via AJAX when expanding a container
  */
-async function lazyLoadChildren(button) {
+async function lazyLoadChildren(event, button) {
+    event.stopPropagation();
+
     const assetId = button.getAttribute('data-asset-id');
-    const row = button.closest('.asset-row');
-    const childrenLoaded = row.getAttribute('data-children-loaded') === 'true';
+    const childrenContainer = document.getElementById(`asset-children-${assetId}`);
     const isExpanded = button.classList.contains('expanded');
 
-    // If already loaded, just toggle visibility
-    if (childrenLoaded) {
-        toggleExpand(button);
+    if (isExpanded) {
+        // Collapse
+        button.classList.remove('expanded');
+        button.innerHTML = '&#9654;';
+        childrenContainer.style.display = 'none';
         return;
     }
 
-    // Show loading spinner
-    const originalContent = button.innerHTML;
+    // Already loaded?
+    if (loadedChildren.has(assetId)) {
+        button.classList.add('expanded');
+        button.innerHTML = '&#9660;';
+        childrenContainer.style.display = 'table-row-group';
+        return;
+    }
+
+    // Show loading
     button.innerHTML = '<span class="loading-spinner"></span>';
-    button.disabled = true;
 
     try {
-        // Build URL with pilot filter if present
         let url = `/api/assets/${assetId}/children/`;
         const params = new URLSearchParams();
 
-        // Add pilot filter from URL
         const urlParams = new URLSearchParams(window.location.search);
         const pilots = urlParams.getAll('pilots');
         if (pilots.length > 0) {
@@ -451,35 +642,20 @@ async function lazyLoadChildren(button) {
             throw new Error(data.error || 'Failed to load children');
         }
 
-        // Render children rows
-        const childrenContainer = document.getElementById(`asset-children-${assetId}`);
-        if (childrenContainer && data.children.length > 0) {
-            childrenContainer.innerHTML = renderChildRows(data.children, assetId);
+        if (data.children.length > 0) {
+            childrenContainer.innerHTML = renderChildRows(data.children);
             childrenContainer.style.display = 'table-row-group';
-
-            // Mark as loaded
-            row.setAttribute('data-children-loaded', 'true');
             loadedChildren.add(assetId);
-
-            // Update button to expanded state
-            button.innerHTML = '&#9660;';  // Down triangle
             button.classList.add('expanded');
-            button.disabled = false;
+            button.innerHTML = '&#9660;';
         } else {
-            // No children
-            button.innerHTML = originalContent;
-            button.disabled = false;
-            row.setAttribute('data-children-loaded', 'true');
+            button.innerHTML = '&#9654;';
+            loadedChildren.add(assetId);
         }
-
-        // Save expand state
-        expandState[assetId] = true;
-        saveExpandState();
 
     } catch (error) {
         console.error('Failed to load children:', error);
-        button.innerHTML = originalContent;
-        button.disabled = false;
+        button.innerHTML = '&#9654;';
         alert('Failed to load children: ' + error.message);
     }
 }
@@ -487,22 +663,13 @@ async function lazyLoadChildren(button) {
 /**
  * Render child asset rows from API data
  */
-function renderChildRows(children, parentAssetId) {
-    const isAccountWide = document.querySelector('.asset-table th:nth-child(2)')?.textContent === 'Pilot';
-
+function renderChildRows(children) {
     return children.map(child => {
         const hasChildren = child.has_children;
         const expandIcon = hasChildren
-            ? `<span class="asset-expand" data-asset-id="${child.item_id}" onclick="lazyLoadChildren(this)">&#9654;</span>`
+            ? `<span class="asset-expand" data-asset-id="${child.item_id}" onclick="lazyLoadChildren(event, this)">&#9654;</span>`
             : '<span style="width: 16px; display: inline-block;"></span>';
         const childCountBadge = hasChildren ? `<span class="child-count-badge">(${child.child_count})</span>` : '';
-        const pilotColumn = isAccountWide ? `
-            <td>
-                <a href="/characters/${child.character_id}/" style="font-size: 0.85rem; color: var(--link-color);">
-                    ${child.character_name}
-                </a>
-            </td>
-        ` : '';
         const singletonIndicator = child.is_singleton
             ? '<span style="color: #0066cc;">&#10003;</span>'
             : '<span style="color: var(--text-secondary);">&mdash;</span>';
@@ -526,78 +693,13 @@ function renderChildRows(children, parentAssetId) {
                         ${singletonBadge}
                     </div>
                 </td>
-                ${pilotColumn}
-                <td style="color: var(--text-secondary); font-size: 0.85rem;">${child.type_id}</td>
                 <td style="color: var(--text-secondary); font-size: 0.85rem;">${child.location_flag || '&mdash;'}</td>
                 <td style="text-align: right;">${child.quantity}</td>
-                <td style="color: var(--text-secondary); font-size: 0.85rem;">${child.location_name}</td>
                 <td>${singletonIndicator}</td>
             </tr>
             <tbody class="asset-children-container" id="asset-children-${child.item_id}" style="display: none;"></tbody>
         `;
     }).join('');
 }
-
-/**
- * Toggle expand/collapse for already-loaded children
- */
-function toggleExpand(button) {
-    const assetId = button.getAttribute('data-asset-id');
-    const childrenContainer = document.getElementById(`asset-children-${assetId}`);
-    const isExpanded = button.classList.contains('expanded');
-
-    if (childrenContainer) {
-        if (isExpanded) {
-            button.classList.remove('expanded');
-            button.innerHTML = '&#9654;';
-            childrenContainer.style.display = 'none';
-            expandState[assetId] = false;
-        } else {
-            button.classList.add('expanded');
-            button.innerHTML = '&#9660;';
-            childrenContainer.style.display = 'table-row-group';
-            expandState[assetId] = true;
-        }
-        saveExpandState();
-    }
-}
-
-/**
- * Save expand state to localStorage
- */
-function saveExpandState() {
-    localStorage.setItem('assetExpandState', JSON.stringify(expandState));
-}
-
-/**
- * Expand all root-level assets (without loading children)
- */
-function expandAll() {
-    document.querySelectorAll('.asset-row[data-children-loaded="false"] .asset-expand').forEach(btn => {
-        // Auto-load and expand
-        lazyLoadChildren(btn);
-    });
-}
-
-/**
- * Collapse all expanded nodes
- */
-function collapseAll() {
-    document.querySelectorAll('.asset-expand.expanded').forEach(btn => {
-        toggleExpand(btn);
-    });
-}
-
-// Restore expand state on page load
-document.addEventListener('DOMContentLoaded', () => {
-    Object.entries(expandState).forEach(([assetId, isExpanded]) => {
-        if (isExpanded) {
-            const button = document.querySelector(`.asset-expand[data-asset-id="${assetId}"]`);
-            if (button) {
-                lazyLoadChildren(button);
-            }
-        }
-    });
-});
 </script>
 {% endblock %}

@@ -10,10 +10,307 @@ from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.core.cache import cache
 from django.views.decorators.http import require_http_methods
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Exists, OuterRef
 from django.core.paginator import Paginator
+from collections import defaultdict
 
 logger = logging.getLogger('evewire')
+
+
+@login_required
+@require_http_methods(['GET'])
+def api_asset_locations(request) -> JsonResponse:
+    """
+    API endpoint to fetch root-level locations for the layered tree view.
+
+    Returns locations (stations/structures/systems) that contain assets,
+    with asset counts for each location.
+
+    Query parameters:
+    - character_id: Filter by specific character (optional)
+    - pilot_filter: Comma-separated character IDs for account-wide view (optional)
+    - search: Search query for item type names (optional) - filters tree to show
+             only locations containing matching items
+
+    Returns:
+    {
+        "success": true,
+        "locations": [
+            {
+                "location_id": 60003760,
+                "location_type": "station",
+                "location_name": "Jita IV - Moon 4 - Caldari Navy Assembly Plant",
+                "asset_count": 42,
+                "has_contents": true
+            },
+            ...
+        ]
+    }
+    """
+    from core.models import Character
+    from core.character.models import CharacterAsset
+    from core.eve.models import ItemType, Station, SolarSystem
+
+    # Get search query
+    search_query = request.GET.get('search', '').strip()
+
+    # Get pilot filter
+    pilot_filter = request.GET.get('pilot_filter', '')
+    character_id = request.GET.get('character_id')
+
+    # Build character filter
+    if pilot_filter:
+        pilot_ids = [int(pid) for pid in pilot_filter.split(',') if pid.isdigit()]
+        characters = Character.objects.filter(
+            id__in=pilot_ids,
+            user=request.user
+        )
+        if not characters:
+            return JsonResponse({'success': False, 'error': 'No characters found'}, status=404)
+    elif character_id:
+        try:
+            character = Character.objects.get(id=int(character_id), user=request.user)
+            characters = [character]
+        except (ValueError, Character.DoesNotExist):
+            return JsonResponse({'success': False, 'error': 'Character not found'}, status=404)
+    else:
+        characters = Character.objects.filter(user=request.user)
+
+    # Build base query for root-level assets (parent=None)
+    assets_query = CharacterAsset.objects.filter(
+        character__in=characters,
+        parent=None
+    )
+
+    # Apply search filter if provided
+    if search_query:
+        # Search across ALL assets (including nested ones) to find matching items
+        # Then find locations/containers that contain matching items
+        matching_assets = CharacterAsset.objects.filter(
+            character__in=characters
+        ).filter(
+            type_id__in=ItemType.objects.filter(
+                name__icontains=search_query
+            ).values_list('id', flat=True)
+        )
+
+        # Collect all ancestor item_ids (parent containers) and location_ids
+        # that contain or are ancestors of matching items
+        from django.db import connection
+
+        with connection.cursor() as cursor:
+            # Get all MPTT ancestors of matching items
+            cursor.execute("""
+                SELECT DISTINCT parent_id
+                FROM core_characterasset
+                WHERE character_id IN (%s)
+                AND item_id IN (
+                    SELECT item_id FROM core_characterasset
+                    WHERE type_id IN (
+                        SELECT id FROM core_itemtype WHERE name ILIKE %s
+                    )
+                )
+                AND parent_id IS NOT NULL
+            """ % (','.join(str(c.id) for c in characters), '%s'))
+
+            ancestor_ids = set(row[0] for row in cursor.fetchall())
+
+        # Also get location_ids from matching assets
+        matching_location_ids = set(matching_assets.filter(
+            location_type__in=['station', 'solar_system', 'structure']
+        ).values_list('location_id', flat=True).distinct())
+
+        # Filter root assets to only those at matching locations
+        # OR root assets that are ancestors of matching items
+        if matching_location_ids:
+            assets_query = assets_query.filter(
+                Q(location_id__in=matching_location_ids) |
+                Q(item_id__in=ancestor_ids)
+            )
+        else:
+            assets_query = assets_query.filter(item_id__in=ancestor_ids)
+
+    # Group by location
+    location_data = defaultdict(lambda: {'count': 0, 'types': set()})
+
+    for asset in assets_query:
+        key = (asset.location_id, asset.location_type)
+        location_data[key]['count'] += 1
+        location_data[key]['types'].add(asset.location_type)
+
+    # Fetch location names
+    location_ids = set(loc_id for (loc_id, loc_type) in location_data.keys() if loc_id)
+    station_names = {}
+    system_names = {}
+    structure_names = {}
+
+    if location_ids:
+        # Fetch stations
+        try:
+            from core.eve.models import Station
+            station_names = {
+                s.id: s.name
+                for s in Station.objects.filter(id__in=location_ids)
+            }
+        except Exception:
+            pass
+
+        # Fetch solar systems
+        try:
+            from core.eve.models import SolarSystem
+            system_names = {
+                s.id: s.name
+                for s in SolarSystem.objects.filter(id__in=location_ids)
+            }
+        except Exception:
+            pass
+
+    # Fetch structure data
+    structure_ids = set(loc_id for (loc_id, loc_type) in location_data.keys()
+                       if loc_type == 'structure' and loc_id)
+    if structure_ids:
+        from core.esi_client import ensure_structure_data
+        for structure_id in structure_ids:
+            structure = ensure_structure_data(structure_id, user=request.user)
+            if structure:
+                structure_names[structure_id] = structure.name
+            else:
+                structure_names[structure_id] = f"Structure {structure_id}"
+
+    # Build response
+    locations = []
+    for (loc_id, loc_type), data in sorted(location_data.items()):
+        if loc_type == 'station':
+            location_name = station_names.get(loc_id, f"Station {loc_id}")
+        elif loc_type == 'solar_system':
+            location_name = system_names.get(loc_id, f"System {loc_id}")
+        elif loc_type == 'structure':
+            location_name = structure_names.get(loc_id, f"Structure {loc_id}")
+        else:
+            location_name = f"{loc_type.title()} {loc_id}"
+
+        locations.append({
+            'location_id': loc_id,
+            'location_type': loc_type,
+            'location_name': location_name,
+            'asset_count': data['count'],
+            'has_contents': data['count'] > 0,
+        })
+
+    # Sort by location name
+    locations.sort(key=lambda x: x['location_name'])
+
+    return JsonResponse({
+        'success': True,
+        'locations': locations,
+        'total': len(locations),
+    })
+
+
+@login_required
+@require_http_methods(['GET'])
+def api_location_assets(request, location_id: int, location_type: str) -> JsonResponse:
+    """
+    API endpoint to fetch top-level assets at a specific location.
+
+    Query parameters:
+    - pilot_filter: Comma-separated character IDs for account-wide view (optional)
+    - search: Search query to filter assets at this location (optional)
+
+    Returns:
+    {
+        "success": true,
+        "assets": [
+            {
+                "item_id": 123456789,
+                "type_id": 34,
+                "type_name": "Tritanium",
+                "quantity": 1000000,
+                "location_flag": "Hangar",
+                "is_singleton": false,
+                "is_blueprint_copy": false,
+                "has_children": true,
+                "child_count": 5,
+                "character_id": 90000001,
+                "character_name": "Kazanir"
+            },
+            ...
+        ]
+    }
+    """
+    from core.models import Character
+    from core.character.models import CharacterAsset
+    from core.eve.models import ItemType
+
+    # Get pilot filter
+    pilot_filter = request.GET.get('pilot_filter', '')
+    search_query = request.GET.get('search', '').strip()
+
+    # Build character filter
+    if pilot_filter:
+        pilot_ids = [int(pid) for pid in pilot_filter.split(',') if pid.isdigit()]
+        characters = Character.objects.filter(
+            id__in=pilot_ids,
+            user=request.user
+        )
+    else:
+        characters = Character.objects.filter(user=request.user)
+
+    # Query root-level assets at this location
+    assets_query = CharacterAsset.objects.filter(
+        character__in=characters,
+        location_id=location_id,
+        location_type=location_type,
+        parent=None
+    ).annotate(
+        child_count=Count('children')
+    ).select_related('character')
+
+    # Apply search filter if provided
+    if search_query:
+        assets_query = assets_query.filter(
+            type_id__in=ItemType.objects.filter(
+                name__icontains=search_query
+            ).values_list('id', flat=True)
+        )
+
+    # Get the assets
+    assets = list(assets_query)
+
+    # Bulk-fetch ItemTypes
+    type_ids = set(asset.type_id for asset in assets)
+    item_types = {}
+    if type_ids:
+        item_types = {
+            item.id: item
+            for item in ItemType.objects.filter(id__in=type_ids)
+        }
+
+    # Build response
+    assets_data = []
+    for asset in assets:
+        type_obj = item_types.get(asset.type_id)
+        type_name = type_obj.name if type_obj else f"Type {asset.type_id}"
+
+        assets_data.append({
+            'item_id': asset.item_id,
+            'type_id': asset.type_id,
+            'type_name': type_name,
+            'quantity': asset.quantity,
+            'location_flag': asset.location_flag,
+            'is_singleton': asset.is_singleton,
+            'is_blueprint_copy': asset.is_blueprint_copy,
+            'has_children': asset.child_count > 0,
+            'child_count': asset.child_count,
+            'character_id': asset.character_id,
+            'character_name': asset.character.character_name,
+        })
+
+    return JsonResponse({
+        'success': True,
+        'assets': assets_data,
+        'total': len(assets_data),
+    })
 
 
 @login_required
