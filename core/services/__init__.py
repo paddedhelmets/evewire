@@ -606,9 +606,16 @@ def update_character_corporation_info(character) -> bool:
 # Sync functions for character data
 
 def sync_character_data(character) -> bool:
-    """Sync all character data from ESI."""
-    from core.models import SyncStatus
+    """Sync all character data from ESI.
+
+    Args:
+        character: Character object (will be refreshed from DB to avoid stale data)
+    """
+    from core.models import SyncStatus, Character
     from requests.exceptions import HTTPError
+
+    # Refresh character from database to avoid issues with serialized objects
+    character = Character.objects.get(id=character.id)
 
     try:
         character.last_sync_status = SyncStatus.IN_PROGRESS
