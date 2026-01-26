@@ -144,6 +144,13 @@ def api_asset_children(request, asset_id: int) -> JsonResponse:
     structure_ids = set(child.location_id for child in children
                        if child.location_type == 'structure' and child.location_id)
 
+    # Collect item location IDs (items inside containers/ships)
+    item_location_ids = set(child.location_id for child in children
+                           if child.location_type == 'item' and child.location_id)
+
+    # Build character IDs for fetching parent assets
+    character_ids = set(child.character_id for child in children)
+
     if location_ids:
         # Fetch stations (from SDE)
         try:
@@ -177,6 +184,17 @@ def api_asset_children(request, asset_id: int) -> JsonResponse:
             else:
                 structure_names[structure_id] = f"Structure {structure_id}"
 
+    # Fetch parent assets for item locations
+    item_location_names = {}
+    if item_location_ids and character_ids:
+        from core.character.models import CharacterAsset
+        parent_assets = CharacterAsset.objects.filter(
+            item_id__in=item_location_ids,
+            character_id__in=character_ids
+        )
+        for parent in parent_assets:
+            item_location_names[parent.item_id] = parent.type_name
+
     # Build response data
     children_data = []
     for child in children:
@@ -189,14 +207,17 @@ def api_asset_children(request, asset_id: int) -> JsonResponse:
 
         # Get location name (using pre-fetched data)
         location_name = None
-        if child.location_id in station_names:
-            location_name = station_names[child.location_id]
-        elif child.location_id in system_names:
-            location_name = system_names[child.location_id]
-        elif child.location_id in structure_names:
-            location_name = structure_names[child.location_id]
+        if child.location_type == 'station':
+            location_name = station_names.get(child.location_id, f"Station {child.location_id}")
+        elif child.location_type == 'solar_system':
+            location_name = system_names.get(child.location_id, f"System {child.location_id}")
+        elif child.location_type == 'structure':
+            location_name = structure_names.get(child.location_id, f"Structure {child.location_id}")
+        elif child.location_type == 'item':
+            # Resolve to parent container name
+            location_name = item_location_names.get(child.location_id, f"Container {child.location_id}")
         else:
-            location_name = f"Location {child.location_id} ({child.location_type})"
+            location_name = f"{child.location_type.title()} {child.location_id}"
 
         children_data.append({
             'item_id': child.item_id,

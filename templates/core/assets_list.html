@@ -363,15 +363,7 @@
         {% for location in location_groups %}
         <div class="location-section">
             <div class="location-header">
-                {% if location.location_type == 'station' %}
-                    Station {{ location.location_id }}
-                {% elif location.location_type == 'solar_system' %}
-                    System {{ location.location_id }}
-                {% elif location.location_type == 'structure' %}
-                    Structure {{ location.location_id }}
-                {% else %}
-                    Other Location {{ location.location_id }}
-                {% endif %}
+                {{ location.location_name }}
                 <span class="location-type">{{ location.location_type }}</span>
             </div>
 

@@ -108,6 +108,14 @@ def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
     structure_ids = set(asset.location_id for asset in root_assets
                         if asset.location_type == 'structure' and asset.location_id)
 
+    # Collect item location IDs (items inside containers/ships)
+    # These need to be resolved to their parent asset's type name
+    item_location_ids = set(asset.location_id for asset in root_assets
+                           if asset.location_type == 'item' and asset.location_id)
+
+    # Build character IDs for fetching parent assets
+    character_ids = set(asset.character_id for asset in root_assets)
+
     if location_ids:
         # Fetch stations (from SDE)
         try:
@@ -141,6 +149,19 @@ def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
                 # Could not fetch - use fallback
                 structure_names[structure_id] = f"Structure {structure_id}"
 
+    # Fetch parent assets for item locations
+    # When location_type='item', location_id is the parent asset's item_id
+    item_location_names = {}
+    if item_location_ids and character_ids:
+        from core.character.models import CharacterAsset
+        parent_assets = CharacterAsset.objects.filter(
+            item_id__in=item_location_ids,
+            character_id__in=character_ids
+        )
+        # Build lookup of item_id -> type_name
+        for parent in parent_assets:
+            item_location_names[parent.item_id] = parent.type_name
+
     # Group root assets by location for display
     location_groups = defaultdict(list)
 
@@ -154,14 +175,17 @@ def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
 
         # Determine and cache location name for this asset
         location_name = None
-        if asset.location_id in station_names:
-            location_name = station_names[asset.location_id]
-        elif asset.location_id in system_names:
-            location_name = system_names[asset.location_id]
-        elif asset.location_id in structure_names:
-            location_name = structure_names[asset.location_id]
+        if asset.location_type == 'station':
+            location_name = station_names.get(asset.location_id, f"Station {asset.location_id}")
+        elif asset.location_type == 'solar_system':
+            location_name = system_names.get(asset.location_id, f"System {asset.location_id}")
+        elif asset.location_type == 'structure':
+            location_name = structure_names.get(asset.location_id, f"Structure {asset.location_id}")
+        elif asset.location_type == 'item':
+            # Resolve to parent container name
+            location_name = item_location_names.get(asset.location_id, f"Container {asset.location_id}")
         else:
-            location_name = f"Location {asset.location_id} ({asset.location_type})"
+            location_name = f"{asset.location_type.title()} {asset.location_id}"
 
         asset._cached_location_name = location_name
 
@@ -186,14 +210,20 @@ def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
     )
 
     # Flatten to list of dicts for easier template unpacking
-    location_groups_flat = [
-        {
-            'location_id': key[0],
-            'location_type': key[1],
+    location_groups_flat = []
+    for key, value in sorted_locations:
+        location_id, location_type = key
+        # Get location name from first asset in group (they're all same location)
+        location_name = "Unknown"
+        if value:  # If there are assets at this location
+            location_name = value[0]._cached_location_name
+
+        location_groups_flat.append({
+            'location_id': location_id,
+            'location_type': location_type,
+            'location_name': location_name,
             'assets': value,
-        }
-        for key, value in sorted_locations
-    ]
+        })
 
     # Sort available locations for dropdown by name
     sorted_available_locations = sorted(

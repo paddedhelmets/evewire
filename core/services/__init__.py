@@ -1019,8 +1019,8 @@ def _sync_assets(character) -> None:
         location_id = item_data.get('location_id')
         location_type = item_data.get('location_type')
 
-        if location_type == 'other' and location_id in assets_by_id:
-            # This item is inside another item
+        if location_type == 'item' and location_id in assets_by_id:
+            # This item is inside another item (container, ship, etc.)
             try:
                 asset = CharacterAsset.objects.get(item_id=item_id)
                 parent = CharacterAsset.objects.get(item_id=location_id)

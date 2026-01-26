@@ -398,6 +398,14 @@ class CharacterAsset(MPTTModel):
                 return f"System {self.location_id}"
         elif self.location_type == 'structure':
             return f"Structure {self.location_id}"
+        elif self.location_type == 'item':
+            # location_id is the item_id of the parent container/ship
+            # Look up the parent asset to get its name
+            try:
+                parent = CharacterAsset.objects.get(item_id=self.location_id, character=self.character)
+                return parent.type_name
+            except CharacterAsset.DoesNotExist:
+                return f"Item {self.location_id}"
         else:
             return "Unknown location"
 
