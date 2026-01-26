@@ -540,7 +540,7 @@ async function toggleLocation(locationId, locationType, headerElement) {
  * Render asset rows from API data
  */
 function renderAssetRows(assets) {
-    const isAccountWide = {{ is_account_wide|yesno }};
+    const isAccountWide = {{ is_account_wide|yesno }} === 'Yes';
 
     return assets.map(asset => {
         const hasChildren = asset.has_children;
