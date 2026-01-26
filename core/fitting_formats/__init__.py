@@ -191,14 +191,16 @@ class FittingImporter:
         content: str,
         format_name: Optional[str] = None,
         auto_detect: bool = True,
+        owner=None,
     ):
         """
         Import a fitting from string content.
 
         Args:
             content: Fitting content (EFT, DNA, or XML)
-            format_name: Format ('eft', 'dna', 'xml'), or None to auto-detect
+            format_name: Format ('eft', 'dna', 'xml', 'md'), or None to auto-detect
             auto_detect: Whether to auto-detect format if not specified
+            owner: User who owns this fitting (None = global/shared fitting)
 
         Returns:
             Created Fitting model instance
@@ -219,15 +221,16 @@ class FittingImporter:
         data = parser.parse(content)
 
         # Convert FittingData to Fitting model
-        return FittingImporter._create_fitting(data)
+        return FittingImporter._create_fitting(data, owner=owner)
 
     @staticmethod
-    def _create_fitting(data: FittingData):
+    def _create_fitting(data: FittingData, owner=None):
         """
         Create Fitting model from FittingData.
 
         Args:
             data: FittingData instance
+            owner: User who owns this fitting (None = global/shared fitting)
 
         Returns:
             Created Fitting model with all related objects
@@ -248,6 +251,7 @@ class FittingImporter:
                 name=data.name,
                 description=data.description,
                 ship_type_id=data.ship_type_id,
+                owner=owner,
                 tags=data.metadata.get('tags', {}),
                 cluster_id=data.metadata.get('cluster_id'),
                 fit_count=data.metadata.get('fit_count'),

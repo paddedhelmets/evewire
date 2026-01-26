@@ -122,6 +122,7 @@ urlpatterns = [
     # Fittings
     path('fittings/', views.fittings_list, name='fittings_list'),
     path('fittings/<int:fitting_id>/', views.fitting_detail, name='fitting_detail'),
+    path('fittings/<int:fitting_id>/ignore-toggle/', views.fitting_ignore_toggle, name='fitting_ignore_toggle'),
     path('fittings/matches/', views.fitting_matches, name='fitting_matches'),
     path('character/<int:character_id>/fittings/matches/', views.fitting_matches, name='character_fitting_matches'),
     path('fittings/import/', views.fitting_import, name='fitting_import'),

@@ -22,7 +22,7 @@ logger = logging.getLogger('evewire')
 def fittings_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
     """View all fittings with filtering."""
     from core.models import Character
-    from core.doctrines.models import Fitting
+    from core.doctrines.models import Fitting, FittingIgnore
     from core.eve.models import ItemType
 
     # Get character
@@ -40,25 +40,38 @@ def fittings_list(request: HttpRequest, character_id: int = None) -> HttpRespons
     ship_type_filter = request.GET.get('ship_type', '')
     search_query = request.GET.get('search', '')
     tag_filter = request.GET.get('tag', '')
+    show_hidden = request.GET.get('show_hidden') == '1'
 
     # Build base queryset
-    fittings_qs = Fitting.objects.active()
+    if show_hidden:
+        # Show only ignored global fittings
+        ignored_ids = FittingIgnore.objects.filter(
+            user=request.user
+        ).values_list('fitting_id', flat=True)
+        fittings_qs = Fitting.objects.filter(
+            id__in=ignored_ids,
+            is_active=True
+        )
+    else:
+        # Show user's fittings + global fittings (not ignored)
+        fittings_qs = Fitting.objects.for_user(request.user).active()
 
     # Apply ship type filter
     if ship_type_filter:
         fittings_qs = fittings_qs.filter(ship_type_id=ship_type_filter)
 
-    # Apply tag filter (JSON field query)
+    # Apply search filter (must do this before tag filter since tag filter creates a list)
+    if search_query:
+        fittings_qs = fittings_qs.filter(name__icontains=search_query)
+
+    # Apply tag filter (JSON field query) - must do last as it creates a list
     if tag_filter:
         # Filter by JSON tags field - check if tag exists in the tags dict
         fittings_qs = [f for f in fittings_qs if tag_filter in f.tags]
 
-    # Apply search filter
-    if search_query:
-        fittings_qs = fittings_qs.filter(name__icontains=search_query)
-
-    # Prefetch related data
-    fittings_qs = fittings_qs.select_related()
+    # Prefetch related data (skip if already a list from tag filter)
+    if not tag_filter:
+        fittings_qs = fittings_qs.select_related()
 
     # Get all ship types for filter dropdown (category 6 = Ships in EVE SDE)
     from core.eve.models import ItemGroup
@@ -70,14 +83,51 @@ def fittings_list(request: HttpRequest, character_id: int = None) -> HttpRespons
     for fitting in Fitting.objects.active():
         all_tags.update(fitting.tags.keys())
 
+    # Get all user's characters for match display
+    all_characters = list(request.user.characters.all()) if request.user.is_authenticated else []
+
+    # Build fittings_with_matches list
+    from core.doctrines.models import FittingMatch, FittingIgnore
+    fittings_with_matches = []
+
+    # Get IDs of fittings ignored by this user
+    ignored_ids = set(
+        FittingIgnore.objects.filter(
+            user=request.user
+        ).values_list('fitting_id', flat=True)
+    ) if request.user.is_authenticated else set()
+
+    for fitting in fittings_qs:
+        # Get match counts for this fitting across all user's characters
+        matches = FittingMatch.objects.filter(
+            fitting=fitting,
+            character__in=all_characters,
+            is_match=True
+        ) if all_characters else []
+
+        match_count = matches.count()
+        matches_by_character = {}
+        for match in matches:
+            matches_by_character[match.character_id] = matches_by_character.get(match.character_id, 0) + 1
+
+        fittings_with_matches.append({
+            'fitting': fitting,
+            'match_count': match_count,
+            'matches_by_character': matches_by_character,
+            'is_global': fitting.owner is None,  # Global fittings can be ignored
+            'is_ignored': fitting.id in ignored_ids,
+        })
+
     return render(request, 'core/fittings_list.html', {
         'character': character,
-        'fittings': fittings_qs,
+        'fittings_with_matches': fittings_with_matches,
         'ship_types': ship_types,
         'ship_type_filter': ship_type_filter,
         'search_query': search_query,
         'tag_filter': tag_filter,
         'all_tags': sorted(all_tags),
+        'all_characters': all_characters,
+        'show_hidden': show_hidden,
     })
 
 
@@ -116,6 +166,36 @@ def fitting_detail(request: HttpRequest, fitting_id: int) -> HttpResponse:
 
 
 @login_required
+@require_http_methods(['POST'])
+def fitting_ignore_toggle(request: HttpRequest, fitting_id: int) -> HttpResponse:
+    """Toggle ignore status for a global fitting."""
+    from core.doctrines.models import Fitting, FittingIgnore
+    from django.http import JsonResponse
+
+    try:
+        fitting = Fitting.objects.get(id=fitting_id)
+    except Fitting.DoesNotExist:
+        return JsonResponse({'error': 'Fitting not found'}, status=404)
+
+    # Can only ignore global fittings
+    if fitting.owner is not None:
+        return JsonResponse({'error': 'Can only ignore global fittings, not user-owned ones'}, status=400)
+
+    # Toggle ignore status
+    ignore, created = FittingIgnore.objects.get_or_create(
+        user=request.user,
+        fitting=fitting,
+    )
+
+    if not created:
+        # Already exists, so remove it (unignore)
+        ignore.delete()
+        return JsonResponse({'status': 'unignored', 'message': f'Unignored {fitting.name}'})
+
+    return JsonResponse({'status': 'ignored', 'message': f'Ignored {fitting.name}'})
+
+
+@login_required
 def fitting_matches(request: HttpRequest, character_id: int = None) -> HttpResponse:
     """View asset matching results - show which ships match which fittings."""
     from core.models import Character
@@ -151,8 +231,8 @@ def fitting_matches(request: HttpRequest, character_id: int = None) -> HttpRespo
     matches = []
     
     for ship in fitted_ships:
-        # Find matching fittings for this ship type
-        ship_fittings = Fitting.objects.active().filter(ship_type_id=ship.ship_type_id)
+        # Find matching fittings for this ship type (user's fittings + global fittings)
+        ship_fittings = Fitting.objects.for_user(request.user).active().filter(ship_type_id=ship.ship_type_id)
         
         for fitting in ship_fittings:
             match_result = matcher._match_ship_to_fitting(ship, fitting)
@@ -323,6 +403,7 @@ def fitting_import(request: HttpRequest) -> HttpResponse:
             content,
             format_name=format_name if not auto_detect else None,
             auto_detect=auto_detect,
+            owner=request.user,
         )
 
         return render(request, 'core/fitting_import.html', {
@@ -481,6 +562,7 @@ def fitting_bulk_import(request: HttpRequest) -> HttpResponse:
                     fitting_content,
                     format_name='eft',
                     auto_detect=False,
+                    owner=request.user,
                 )
                 imported.append(fitting)
             except FittingFormatError as e:
@@ -500,6 +582,7 @@ def fitting_bulk_import(request: HttpRequest) -> HttpResponse:
                     content,
                     format_name='xml',
                     auto_detect=False,
+                    owner=request.user,
                 )
                 imported.append(fitting)
             else:
@@ -510,6 +593,7 @@ def fitting_bulk_import(request: HttpRequest) -> HttpResponse:
                             f'<fittings>{fitting_xml}</fittings>',
                             format_name='xml',
                             auto_detect=False,
+                            owner=request.user,
                         )
                         imported.append(fitting)
                     except FittingFormatError as e:
@@ -525,6 +609,7 @@ def fitting_bulk_import(request: HttpRequest) -> HttpResponse:
                 content,
                 format_name=format_name if not auto_detect else None,
                 auto_detect=auto_detect,
+                owner=request.user,
             )
             imported.append(fitting)
         except FittingFormatError as e:

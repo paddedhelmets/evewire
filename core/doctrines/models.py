@@ -21,6 +21,28 @@ class FittingManager(models.Manager):
         """Get active fittings."""
         return self.get_queryset().filter(is_active=True)
 
+    def for_user(self, user):
+        """
+        Get fittings visible to a user.
+
+        Returns:
+            User's own fittings (owner=user) + global fittings (owner=None)
+            that the user hasn't ignored.
+        """
+        from django.db.models import Q, Subquery, Exists
+
+        # Get IDs of fittings ignored by this user
+        ignored_ids = FittingIgnore.objects.filter(
+            user=user
+        ).values_list('fitting_id', flat=True)
+
+        # User's own fittings + global fittings, excluding ignored
+        return self.get_queryset().filter(
+            Q(owner=user) | Q(owner__isnull=True)
+        ).exclude(
+            id__in=ignored_ids
+        )
+
 
 class Fitting(models.Model):
     """
@@ -28,10 +50,24 @@ class Fitting(models.Model):
 
     Represents a canonical fitting extracted from zkillboard clustering,
     or a manually defined ship fitting.
+
+    Ownership model:
+    - owner=None: Global fitting available to all users (e.g., career_research imports)
+    - owner=<user>: Private fitting only visible to that user
     """
 
     name = models.CharField(max_length=255, db_index=True)
     description = models.TextField(blank=True)
+
+    # Owner: null = global/shared, set = user-private
+    owner = models.ForeignKey(
+        'core.User',
+        on_delete=models.CASCADE,
+        related_name='own_fittings',
+        null=True,
+        blank=True,
+        help_text="User who owns this fitting (null = global/shared fitting)",
+    )
 
     # Ship hull
     ship_type_id = models.IntegerField(db_index=True)  # FK to ItemType
@@ -468,3 +504,38 @@ class FittingService(models.Model):
             return ItemType.objects.get(id=self.service_type_id).name
         except ItemType.DoesNotExist:
             return f"Service {self.service_type_id}"
+
+
+class FittingIgnore(models.Model):
+    """
+    User's ignored global fittings.
+
+    Allows users to hide global/shared fittings they don't want to see
+    without deleting them (since they don't own them).
+    """
+
+    user = models.ForeignKey(
+        'core.User',
+        on_delete=models.CASCADE,
+        related_name='ignored_fittings',
+    )
+
+    fitting = models.ForeignKey(
+        Fitting,
+        on_delete=models.CASCADE,
+        related_name='ignored_by',
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = _('fitting ignore')
+        verbose_name_plural = _('fitting ignores')
+        db_table = 'core_fittingignore'
+        unique_together = [['user', 'fitting']]
+        indexes = [
+            models.Index(fields=['user', 'fitting']),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user.username}: {self.fitting.name}"

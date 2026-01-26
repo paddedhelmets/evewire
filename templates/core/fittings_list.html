@@ -134,6 +134,53 @@
         background: var(--bg-secondary);
         color: var(--text-secondary);
     }
+
+    /* Ignore button */
+    .ignore-btn {
+        padding: 0.2rem 0.5rem;
+        font-size: 0.75rem;
+        border: 1px solid var(--border-color);
+        background: var(--bg-primary);
+        color: var(--text-secondary);
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+
+    .ignore-btn:hover {
+        background: var(--bg-secondary);
+    }
+
+    .ignore-btn[data-is-ignored="true"] {
+        background: #fff3e0;
+        color: #e65100;
+        border-color: #ff9800;
+    }
+
+    [data-theme="dark"] .ignore-btn[data-is-ignored="true"] {
+        background: #3e2723;
+        color: #ffab91;
+        border-color: #ff5722;
+    }
+
+    /* Hidden fittings banner */
+    .hidden-banner {
+        background: #fff3e0;
+        border-color: #ff9800;
+    }
+
+    [data-theme="dark"] .hidden-banner {
+        background: #3e2723;
+        border-color: #ff5722;
+    }
+
+    [data-theme="dark"] .hidden-banner h3 {
+        color: #ffab91;
+    }
+
+    [data-theme="dark"] .hidden-banner p {
+        color: #ffccbc;
+    }
 </style>
 {% endblock %}
 
@@ -173,8 +220,23 @@
         <input type="text" name="search" placeholder="Search fittings..." value="{{ search_query }}" style="padding: 0.5rem;">
         <button type="submit" class="btn">Filter</button>
         <a href="{% url 'core:fittings_list' %}" style="margin-left: 0.5rem;">Clear</a>
+
+        <!-- Hidden toggle -->
+        <div style="margin-left: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                <input type="checkbox" name="show_hidden" value="1" {% if show_hidden %}checked{% endif %} id="show-hidden-toggle" style="cursor: pointer;">
+                <span style="font-size: 0.9rem;">Show hidden fittings</span>
+            </label>
+        </div>
     </form>
 </div>
+
+{% if show_hidden %}
+<div class="card hidden-banner" style="border-style: solid;">
+    <h3 style="margin: 0 0 0.5rem 0;">Hidden Fittings ({{ fittings_with_matches|length }})</h3>
+    <p style="margin: 0; font-size: 0.9rem;">These are global fittings you've chosen to hide. Use "Unignore" to restore them to your main list.</p>
+</div>
+{% endif %}
 
 {% if ship_type_filter or search_query or tag_filter %}
 <div class="card">
@@ -184,7 +246,7 @@
 
 <div class="fittings-grid">
     {% for item in fittings_with_matches %}
-    <div class="fitting-card">
+    <div class="fitting-card" data-fitting-id="{{ item.fitting.id }}">
         <div class="fitting-header">
             <div>
                 <div class="fitting-name">
@@ -192,8 +254,19 @@
                 </div>
                 <div class="fitting-ship">{{ item.fitting.ship_type_name }}</div>
             </div>
-            <div class="fitting-status {% if item.fitting.is_active %}active{% else %}inactive{% endif %}">
-                {% if item.fitting.is_active %}Active{% else %}Inactive{% endif %}
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <div class="fitting-status {% if item.fitting.is_active %}active{% else %}inactive{% endif %}">
+                    {% if item.fitting.is_active %}Active{% else %}Inactive{% endif %}
+                </div>
+                {% if item.is_global %}
+                <button class="ignore-btn btn-sm" data-fitting-id="{{ item.fitting.id }}" data-is-ignored="{{ item.is_ignored|yesno:'true,false' }}">
+                    {% if item.is_ignored %}
+                    <span class="ignore-text">Unignore</span>
+                    {% else %}
+                    <span class="ignore-text">Ignore</span>
+                    {% endif %}
+                </button>
+                {% endif %}
             </div>
         </div>
 
@@ -228,4 +301,57 @@
     <p style="color: var(--text-secondary);">No fittings match your filter.</p>
 </div>
 {% endif %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-submit form when show-hidden toggle changes
+    const showHiddenToggle = document.getElementById('show-hidden-toggle');
+    if (showHiddenToggle) {
+        showHiddenToggle.addEventListener('change', function() {
+            this.closest('form').submit();
+        });
+    }
+
+    // Handle ignore button clicks
+    const ignoreButtons = document.querySelectorAll('.ignore-btn');
+
+    ignoreButtons.forEach(button => {
+        button.addEventListener('click', async function(e) {
+            e.preventDefault();
+            const fittingId = this.dataset.fittingId;
+            const isIgnored = this.dataset.isIgnored === 'true';
+            const card = this.closest('.fitting-card');
+            const url = `/fittings/${fittingId}/ignore-toggle/`;
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '',
+                        'Content-Type': 'application/json',
+                    },
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+
+                    // When in hidden view, unignoring removes the card from the list
+                    // When in normal view, ignoring removes the card from the list
+                    // In both cases, we can reload the page to show the updated list
+                    if (data.status === 'ignored' || data.status === 'unignored') {
+                        // Reload the page to show updated list
+                        window.location.reload();
+                    }
+                } else {
+                    const error = await response.json();
+                    alert(error.error || 'Failed to toggle ignore status');
+                }
+            } catch (error) {
+                console.error('Error toggling ignore:', error);
+                alert('Failed to toggle ignore status');
+            }
+        });
+    });
+});
+</script>
 {% endblock %}
