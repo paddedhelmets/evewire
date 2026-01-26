@@ -24,3 +24,4 @@ gunicorn>=21.0,<24.0
 
 # Redis (optional broker for django-q2, but needed to avoid import errors)
 redis>=5.0,<6.0
+markdown>=3.0

@@ -3,6 +3,7 @@ Custom template filters for evewire.
 """
 
 from django import template
+from django.utils.safestring import mark_safe
 
 register = template.Library()
 
@@ -214,3 +215,13 @@ def list_filter(value):
 
 # Also register as 'list' for template compatibility
 list_filter = register.filter('list', list_filter)
+
+
+@register.filter
+def markdown(value):
+    """Render markdown text to HTML."""
+    try:
+        import markdown as md
+        return mark_safe(md.markdown(str(value), extensions=['extra', 'codehilite', 'nl2br']))
+    except Exception:
+        return value
