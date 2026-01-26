@@ -200,8 +200,18 @@
     }
 
     .asset-table td {
-        padding: 0.5rem 0.8rem;
+        padding: 0.25rem 0.8rem;
         border-bottom: 1px solid var(--table-border);
+    }
+
+    /* Container rows get more vertical padding to distinguish them */
+    .asset-row[data-has-children="true"] td {
+        padding: 0.6rem 0.8rem;
+    }
+
+    /* Container rows are clickable */
+    .asset-row.container-row:hover {
+        background: var(--bg-secondary);
     }
 
     .asset-table tr:hover {
@@ -566,8 +576,8 @@ function renderAssetRows(assets) {
         const hasCharacterData = asset.character_name && asset.character_id;
         const showPilot = isAccountWide || hasCharacterData;
         const pilotColumn = showPilot && hasCharacterData ? `
-            <td>
-                <a href="/characters/${asset.character_id}/" style="font-size: 0.85rem; color: var(--link-color);">
+            <td onclick="event.stopPropagation()">
+                <a href="/characters/${asset.character_id}/" style="font-size: 0.85rem; color: var(--link-color); position: relative; z-index: 10;">
                     ${asset.character_name}
                 </a>
             </td>
@@ -589,11 +599,12 @@ function renderAssetRows(assets) {
         const colspan = showPilot ? 5 : 4;
 
         return `
-            <tr class="asset-row"
+            <tr class="asset-row${hasChildren ? ' container-row' : ''}"
                 data-asset-id="${asset.item_id}"
                 data-has-children="${hasChildren}"
                 data-child-count="${asset.child_count}"
-                data-children-loaded="false">
+                data-children-loaded="false"
+                ${hasChildren ? `onclick="lazyLoadChildren(event, this)" style="cursor: pointer;"` : ''}>
                 <td>
                     <div class="asset-item-name">
                         ${expandIcon}
@@ -619,9 +630,21 @@ function renderAssetRows(assets) {
 
 /**
  * Lazy-load children via AJAX when expanding a container
+ * @param {Event} event - The click event
+ * @param {HTMLElement} element - Either the expand icon button or the row (tr)
  */
-async function lazyLoadChildren(event, button) {
+async function lazyLoadChildren(event, element) {
     event.stopPropagation();
+
+    // If element is a row, find the expand icon within it
+    const button = element.classList.contains('asset-expand')
+        ? element
+        : element.querySelector('.asset-expand');
+
+    if (!button) {
+        console.error('Expand button not found');
+        return;
+    }
 
     const assetId = button.getAttribute('data-asset-id');
     const childrenContainer = document.getElementById(`asset-children-${assetId}`);

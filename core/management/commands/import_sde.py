@@ -2,11 +2,10 @@
 Management command to import EVE SDE (Static Data Export).
 
 Uses Fuzzwork Enterprises pre-built SQLite database - the simplest approach.
-Downloads the SDE database and copies required tables into the shared SDE database.
+Downloads the SDE database and copies required tables into the main database.
 
-The shared SDE database location is configured via:
-- settings.EVESDE_PATH (default: ~/data/evewire/eve_sde.sqlite3)
-- DB_NAME environment variable (overrides the default path)
+SDE tables use the core_ prefix (e.g., core_itemtype) to avoid naming conflicts
+with Django application tables.
 
 NOTE: Models use db_column to map to SDE column names, so we can copy
 tables directly without any column name transformations.

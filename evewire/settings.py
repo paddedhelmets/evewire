@@ -66,9 +66,8 @@ WSGI_APPLICATION = 'evewire.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
-# EVE SDE path - shared location outside worktree (reference data only)
-EVESDE_PATH = Path('~/data/evewire/eve_sde.sqlite3').expanduser()
-# Django app database - separate from SDE to prevent data loss during SDE imports
+# Single database for both app data and SDE reference data
+# SDE tables use core_ prefix (e.g., core_itemtype) to avoid conflicts
 DATABASE_PATH = Path('~/data/evewire/evewire_app.sqlite3').expanduser()
 
 DATABASES = {
@@ -79,11 +78,6 @@ DATABASES = {
         'PASSWORD': config('DB_PASSWORD', default=''),
         'HOST': config('DB_HOST', default=''),
         'PORT': config('DB_PORT', default=''),
-    },
-    'sde': {
-        # SDE reference database (read-only access for EVE static data)
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': str(EVESDE_PATH),
     }
 }
 # Default auto-increment for SQLite

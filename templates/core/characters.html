@@ -4,15 +4,13 @@
 {% block title %}Characters - evewire{% endblock %}
 
 {% block content %}
-<h1>My Characters</h1>
-
-<div style="margin-bottom: 1rem;">
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+    <h1 style="margin: 0;">My Characters</h1>
     <a href="{% url 'core:add_character' %}" class="btn">+ Add Character</a>
 </div>
 
 {% if characters %}
     <div class="card">
-        <h2>Linked Characters ({{ characters.count }})</h2>
         <table style="width: 100%; border-collapse: collapse;">
             <thead>
                 <tr style="border-bottom: 2px solid var(--border-color);">
@@ -81,7 +79,7 @@
         </table>
     </div>
 
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin-top: 1.5rem;">
+    <div class="char-card-grid" style="margin-top: 1.5rem;">
         {% for char_data in characters_data %}
         {% with char=char_data.character corporation_ticker=char_data.corporation_ticker training=char_data.training %}
             {% include "core/character_card.html" %}
@@ -100,6 +98,13 @@
 {% endblock %}
 
 {% block extra_head %}
+<style>
+.char-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+}
+</style>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Log all sync form submissions

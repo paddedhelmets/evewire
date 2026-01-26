@@ -7,12 +7,12 @@
             <!-- Left column: Name & Wallet -->
             <div class="char-card-left">
                 <div class="char-name">
-                    <strong>{{ char.character_name }}</strong>
+                    {{ char.character_name }}
                     {% if corporation_ticker %}
                     <span style="color: var(--text-secondary); font-size: 0.9em;">[{{ corporation_ticker }}]</span>
                     {% endif %}
                 </div>
-                <div class="char-wallet isk">{{ char.wallet_balance|floatformat:0|default:"—" }} ISK</div>
+                <div class="char-wallet isk">{{ char.wallet_balance|floatformat:0|commas|default:"—" }} ISK</div>
             </div>
 
             <!-- Right column: Location & SP -->
@@ -67,15 +67,15 @@
 }
 
 .char-name {
-    font-size: 1.1rem;
-    font-weight: 600;
+    font-size: 0.95rem;
+    font-weight: 400;
     margin-bottom: 0.25rem;
 }
 
 .char-wallet,
 .char-sp {
     font-size: 0.95rem;
-    font-weight: 500;
+    font-weight: 400;
 }
 
 .char-location {
@@ -84,7 +84,7 @@
     margin-bottom: 0.25rem;
 }
 
-.isk { color: #f9a825; }
+.isk { color: #2e7d32; }
 .sp { color: #1976d2; }
 
 /* Training progress bar */
@@ -123,5 +123,9 @@
 
 [data-theme="dark"] .progress-bar-container .progress {
     background: linear-gradient(90deg, #42a5f5, #64b5f6);
+}
+
+[data-theme="dark"] .isk {
+    color: #66bb6a;
 }
 </style>

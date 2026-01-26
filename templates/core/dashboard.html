@@ -7,18 +7,8 @@
 <style>
     .char-card-grid {
         display: grid;
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
         gap: 1rem;
-    }
-
-    @media (max-width: 1400px) {
-        .char-card-grid { grid-template-columns: repeat(3, 1fr); }
-    }
-    @media (max-width: 1100px) {
-        .char-card-grid { grid-template-columns: repeat(2, 1fr); }
-    }
-    @media (max-width: 650px) {
-        .char-card-grid { grid-template-columns: 1fr; }
     }
 
     .char-card {
