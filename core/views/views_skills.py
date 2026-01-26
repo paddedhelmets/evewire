@@ -387,21 +387,40 @@ def skill_plan_add_skill(request: HttpRequest, plan_id: int) -> HttpResponse:
 
 @login_required
 def skill_search(request: HttpRequest) -> JsonResponse:
-    """Search for skills by name (autocomplete)."""
-    from core.eve.models import ItemType
+    """Search for skills by name (autocomplete).
+
+    Only returns actual skills (category 16), not all item types.
+    Results include group name for better organization.
+    """
+    from core.eve.models import ItemType, ItemGroup
 
     query = request.GET.get('q', '').strip()
     if not query or len(query) < 2:
         return JsonResponse({'results': []})
 
-    # Search ItemType by name, limited to skills (published skills)
+    # Search ItemType by name, limited to skills (category 16 = Skills)
+    # Join with ItemGroup to filter by category
     skills = ItemType.objects.filter(
         name__icontains=query,
-        published=True
-    ).values('id', 'name')[:20]
+        published=True,
+        group__category_id=16,  # Skills category
+        group__published=True
+    ).values('id', 'name', 'group_id')[:30]
+
+    # Get group names for the skills
+    group_ids = list(set(s['group_id'] for s in skills if s['group_id']))
+    groups = {}
+    if group_ids:
+        for group in ItemGroup.objects.filter(id__in=group_ids):
+            groups[group.id] = group.name
 
     results = [
-        {'id': str(s['id']), 'name': s['name'], 'text': f"{s['name']} (ID: {s['id']})"}
+        {
+            'id': str(s['id']),
+            'name': s['name'],
+            'text': f"{s['name']}",
+            'group': groups.get(s['group_id'], 'Unknown'),
+        }
         for s in skills
     ]
 

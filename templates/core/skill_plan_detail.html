@@ -201,7 +201,7 @@
                         data.results.forEach(skill => {
                             const option = document.createElement('option');
                             option.value = skill.id;
-                            option.textContent = skill.text;
+                            option.textContent = skill.text + ' [' + skill.group + ']';
                             datalist.appendChild(option);
                         });
                     })
