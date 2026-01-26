@@ -1,124 +1,188 @@
 {% extends "base.html" %}
 {% load evewire %}
 
-{% block title %}Wallet Journal - {{ character.name }} - evewire{% endblock %}
+{% block title %}Wallet Journal - evewire{% endblock %}
 
 {% block content %}
-<h1>Wallet Journal - {{ character.name }}</h1>
+<style>
+.balance-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+.balance-card {
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    padding: 1.5rem;
+    box-shadow: var(--card-shadow);
+    border-left: 4px solid var(--btn-primary);
+}
+.balance-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.balance-card.positive {
+    border-left-color: var(--alert-success-text);
+}
+.balance-card.negative {
+    border-left-color: var(--alert-error-text);
+}
+.balance-card-title {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+.balance-card-value {
+    font-size: 1.8rem;
+    font-weight: bold;
+    margin-bottom: 0.25rem;
+}
+.balance-card-sub {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+.balance-card-net {
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border-color);
+}
+.balance-card-net.positive {
+    color: var(--alert-success-text);
+}
+.balance-card-net.negative {
+    color: var(--alert-error-text);
+}
+</style>
 
-<div style="margin-bottom: 1rem;">
-    <a href="{% url 'core:dashboard' %}">Dashboard</a>
-    <span style="margin: 0 0.5rem;">&rarr;</span>
-    <a href="{% url 'core:wallet_journal' %}">Journal</a>
-</div>
+<div style="max-width: 1400px; margin: 0 auto;">
+    <h1 style="margin-bottom: 1.5rem;">Wallet Journal</h1>
 
-<div class="card">
-    <h2>Filters</h2>
-    <form method="get" style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end;">
-        <div>
-            <label for="ref_type" style="display: block; margin-bottom: 0.25rem;">Transaction Type:</label>
-            <select name="ref_type" id="ref_type" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
-                <option value="">All Types</option>
-                {% for type in ref_types %}
+    <!-- Per-Pilot Balance Cards -->
+    <div class="balance-cards">
+        {% for stat in pilot_stats %}
+        <div class="balance-card {% if stat.net_30d > 0 %}positive{% elif stat.net_30d < 0 %}negative{% endif %}">
+            <div class="balance-card-title">{{ stat.character.character_name }}</div>
+            <div class="balance-card-value">{{ stat.balance|isk_format }}</div>
+            <div class="balance-card-sub">Current Balance</div>
+            <div class="balance-card-sub">
+                In: {{ stat.recent_income|isk_format }} | Out: {{ stat.recent_expense|isk_format }}
+            </div>
+            <div class="balance-card-net {% if stat.net_30d >= 0 %}positive{% else %}negative{% endif %}">
+                Net 30d: {% if stat.net_30d > 0 %}+{% endif %}{{ stat.net_30d|isk_format }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Filters -->
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <h2>Filters</h2>
+        <form method="get" style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end;">
+            <div>
+                <label for="character" style="display: block; margin-bottom: 0.25rem; font-size: 0.9rem;">Pilot:</label>
+                <select name="character" id="character" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
+                    <option value="">All Pilots</option>
+                    {% for char in characters %}
+                    <option value="{{ char.id }}" {% if character_filter == char.id|stringformat:"s" %}selected{% endif %}>{{ char.character_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="ref_type" style="display: block; margin-bottom: 0.25rem; font-size: 0.9rem;">Transaction Type:</label>
+                <select name="ref_type" id="ref_type" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
+                    <option value="">All Types</option>
+                    {% for type in ref_types %}
                     <option value="{{ type }}" {% if type == ref_type_filter %}selected{% endif %}>{{ type }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="date_from" style="display: block; margin-bottom: 0.25rem; font-size: 0.9rem;">From:</label>
+                <input type="date" name="date_from" id="date_from" value="{{ date_from }}" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
+            </div>
+            <div>
+                <label for="date_to" style="display: block; margin-bottom: 0.25rem; font-size: 0.9rem;">To:</label>
+                <input type="date" name="date_to" id="date_to" value="{{ date_to }}" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
+            </div>
+            <button type="submit" class="btn">Apply Filters</button>
+            {% if character_filter or ref_type_filter or date_from or date_to %}
+            <a href="{% url 'core:wallet_journal' %}" class="btn" style="background: var(--text-secondary);">Clear</a>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- Journal Entries Table -->
+    {% if entries %}
+    <div class="card">
+        <h2 style="margin-bottom: 1rem;">Journal Entries ({{ entries.paginator.count }} total)</h2>
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 2px solid var(--border-color);">
+                    <th style="padding: 0.75rem; text-align: left;">Date</th>
+                    <th style="padding: 0.75rem; text-align: left;">Pilot</th>
+                    <th style="padding: 0.75rem; text-align: left;">Type</th>
+                    <th style="padding: 0.75rem; text-align: left;">Description</th>
+                    <th style="padding: 0.75rem; text-align: right;">Amount</th>
+                    <th style="padding: 0.75rem; text-align: right;">Balance</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in entries %}
+                <tr style="border-bottom: 1px solid var(--table-border);">
+                    <td style="padding: 0.75rem; font-size: 0.9rem;">{{ entry.date|date:"M d H:i" }}</td>
+                    <td style="padding: 0.75rem;">{{ entry.character.character_name }}</td>
+                    <td style="padding: 0.75rem;">
+                        <a href="?ref_type={{ entry.ref_type }}{% if character_filter %}&character={{ character_filter }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}" style="font-size: 0.9rem;">{{ entry.ref_type }}</a>
+                    </td>
+                    <td style="padding: 0.75rem; max-width: 400px;">
+                        {% if entry.reason %}
+                            <span style="font-size: 0.9rem;">{{ entry.reason|truncatewords:20 }}</span>
+                        {% elif entry.description %}
+                            <span style="font-size: 0.9rem;">{{ entry.description|truncatewords:20 }}</span>
+                        {% else %}
+                            <span style="color: var(--text-secondary);">&mdash;</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 0.75rem; text-align: right; {% if entry.amount > 0 %}color: var(--alert-success-text);{% else %}color: var(--alert-error-text);{% endif %}">
+                        {% if entry.amount > 0 %}+{% endif %}{{ entry.amount|isk_format }}
+                    </td>
+                    <td style="padding: 0.75rem; text-align: right;">{{ entry.balance|isk_format }}</td>
+                </tr>
                 {% endfor %}
-            </select>
+            </tbody>
+        </table>
+
+        <!-- Pagination -->
+        {% if entries.has_other_pages %}
+        <div style="margin-top: 1.5rem; display: flex; justify-content: center; gap: 0.5rem; align-items: center;">
+            {% if entries.has_previous %}
+            <a href="?page={{ entries.previous_page_number }}{% if character_filter %}&character={{ character_filter }}{% endif %}{% if ref_type_filter %}&ref_type={{ ref_type_filter }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}" class="btn">&laquo; Previous</a>
+            {% endif %}
+
+            <span style="font-size: 0.9rem;">
+                Page {{ entries.number }} of {{ entries.paginator.num_pages }}
+            </span>
+
+            {% if entries.has_next %}
+            <a href="?page={{ entries.next_page_number }}{% if character_filter %}&character={{ character_filter }}{% endif %}{% if ref_type_filter %}&ref_type={{ ref_type_filter }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}" class="btn">Next &raquo;</a>
+            {% endif %}
         </div>
-        <div>
-            <label for="date_from" style="display: block; margin-bottom: 0.25rem;">From:</label>
-            <input type="date" name="date_from" id="date_from" value="{{ date_from }}" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
-        </div>
-        <div>
-            <label for="date_to" style="display: block; margin-bottom: 0.25rem;">To:</label>
-            <input type="date" name="date_to" id="date_to" value="{{ date_to }}" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
-        </div>
-        <button type="submit" class="btn">Apply Filters</button>
-        <a href="{% url 'core:wallet_journal' %}" class="btn" style="background: var(--text-secondary);">Clear</a>
-    </form>
-</div>
-
-<div class="card">
-    <h2>Current Balance</h2>
-    <p style="font-size: 1.5rem; font-weight: bold;">
-        {% if current_balance %}
-            {{ current_balance|isk_format }}
-        {% else %}
-            N/A
-        {% endif %}
-    </p>
-</div>
-
-{% if entries %}
-<div class="card">
-    <h2>Journal Entries</h2>
-    <table style="width: 100%; border-collapse: collapse;">
-        <thead>
-            <tr style="border-bottom: 2px solid var(--border-color);">
-                <th style="padding: 0.75rem; text-align: left;">Date</th>
-                <th style="padding: 0.75rem; text-align: left;">Type</th>
-                <th style="padding: 0.75rem; text-align: right;">Amount</th>
-                <th style="padding: 0.75rem; text-align: right;">Balance</th>
-                <th style="padding: 0.75rem; text-align: left;">Description</th>
-                <th style="padding: 0.75rem; text-align: left;">Party</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for entry in entries %}
-            <tr style="border-bottom: 1px solid var(--table-border);">
-                <td style="padding: 0.75rem;">{{ entry.date|date:"Y-m-d H:i" }}</td>
-                <td style="padding: 0.75rem;">
-                    <a href="?ref_type={{ entry.ref_type }}" style="font-size: 0.9rem;">{{ entry.ref_type }}</a>
-                </td>
-                <td style="padding: 0.75rem; text-align: right; font-weight: bold; color: {% if entry.amount > 0 %}var(--alert-success-text){% else %}var(--alert-error-text){% endif %};">
-                    {{ entry.amount|isk_format }}
-                </td>
-                <td style="padding: 0.75rem; text-align: right;">{{ entry.balance|isk_format }}</td>
-                <td style="padding: 0.75rem; max-width: 300px;">
-                    {% if entry.reason %}
-                        {{ entry.reason|truncatewords:20 }}
-                    {% elif entry.description %}
-                        {{ entry.description|truncatewords:20 }}
-                    {% else %}
-                        &mdash;
-                    {% endif %}
-                </td>
-                <td style="padding: 0.75rem;">
-                    {% if entry.first_party_id %}
-                        {{ entry.first_party_id }}
-                    {% else %}
-                        &mdash;
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-
-    {% if entries.has_other_pages %}
-    <div style="margin-top: 1.5rem; display: flex; justify-content: center; gap: 0.5rem; align-items: center;">
-        {% if entries.has_previous %}
-            <a href="?page={{ entries.previous_page_number }}{% if ref_type_filter %}&ref_type={{ ref_type_filter }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}" class="btn">&laquo; Previous</a>
-        {% endif %}
-
-        <span>
-            Page {{ entries.number }} of {{ entries.paginator.num_pages }}
-        </span>
-
-        {% if entries.has_next %}
-            <a href="?page={{ entries.next_page_number }}{% if ref_type_filter %}&ref_type={{ ref_type_filter }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}" class="btn">Next &raquo;</a>
         {% endif %}
     </div>
+    {% else %}
+    <div class="card">
+        <p style="color: var(--text-secondary);">No journal entries found for the selected filters.</p>
+    </div>
     {% endif %}
-</div>
-{% else %}
-<div class="card">
-    <p>No journal entries found.</p>
-</div>
-{% endif %}
 
-<div style="margin-bottom: 1rem;">
-    <a href="{% url 'core:wallet_transactions' %}" class="btn">View Transactions</a>
-    <a href="{% url 'core:wallet_balance' %}" class="btn" style="margin-left: 0.5rem;">Balance History</a>
-    <a href="{% url 'core:wallet_summary' %}" class="btn" style="margin-left: 0.5rem;">Income/Expense Summary</a>
+    <!-- Navigation -->
+    <div style="margin-top: 1.5rem;">
+        <a href="{% url 'core:wallet_transactions' %}" class="btn">Transactions</a>
+        <a href="{% url 'core:wallet_balance' %}" class="btn" style="margin-left: 0.5rem;">Balance History</a>
+        <a href="{% url 'core:wallet_summary' %}" class="btn" style="margin-left: 0.5rem;">Income/Expense Summary</a>
+    </div>
 </div>
 {% endblock %}

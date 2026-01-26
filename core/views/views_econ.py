@@ -19,34 +19,28 @@ logger = logging.getLogger('evewire')
 
 @login_required
 def wallet_journal(request: HttpRequest, character_id: int = None) -> HttpResponse:
-    """View wallet journal entries with pagination and filtering."""
+    """Multi-pilot wallet journal view with per-pilot balance cards and filtered journal table."""
     from core.models import Character
     from core.character.models import WalletJournalEntry
     from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+    from django.db.models import Sum, Q
     from datetime import datetime, timedelta
 
-    # Get character - either specified or user's character
-    if character_id:
-        try:
-            character = Character.objects.get(id=character_id, user=request.user)
-        except Character.DoesNotExist:
-            return render(request, 'core/error.html', {
-                'message': 'Character not found',
-            }, status=404)
-    else:
-        character = get_users_character(request.user)
-        if not character:
-            return render(request, 'core/error.html', {
-                'message': 'Character not found',
-            }, status=404)
+    # Get all characters for this user
+    characters = request.user.characters.all()
 
     # Get filter parameters
     ref_type_filter = request.GET.get('ref_type', '')
     date_from = request.GET.get('date_from', '')
     date_to = request.GET.get('date_to', '')
+    character_filter = request.GET.get('character')
 
-    # Build queryset
-    entries_qs = WalletJournalEntry.objects.filter(character=character)
+    # Build queryset across all pilots
+    entries_qs = WalletJournalEntry.objects.filter(character__user=request.user)
+
+    # Apply character filter if selected
+    if character_filter:
+        entries_qs = entries_qs.filter(character_id=character_filter)
 
     # Apply ref_type filter
     if ref_type_filter:
@@ -63,22 +57,17 @@ def wallet_journal(request: HttpRequest, character_id: int = None) -> HttpRespon
     if date_to:
         try:
             date_to_dt = datetime.strptime(date_to, '%Y-%m-%d')
-            # Include the entire end date
             date_to_dt = date_to_dt + timedelta(days=1)
             entries_qs = entries_qs.filter(date__lt=date_to_dt)
         except ValueError:
             pass
 
-    # Get distinct ref_types for filter dropdown
-    all_ref_types = WalletJournalEntry.objects.filter(
-        character=character
-    ).values_list('ref_type', flat=True).distinct().order_by('ref_type')
+    # Order by date (newest first) with character for display
+    entries_qs = entries_qs.select_related('character').order_by('-date')
 
     # Pagination
+    paginator = Paginator(entries_qs, 50)
     page = request.GET.get('page', 1)
-    per_page = 50
-    paginator = Paginator(entries_qs, per_page)
-
     try:
         entries = paginator.page(page)
     except PageNotAnInteger:
@@ -86,21 +75,52 @@ def wallet_journal(request: HttpRequest, character_id: int = None) -> HttpRespon
     except EmptyPage:
         entries = paginator.page(paginator.num_pages)
 
-    # Get current balance from latest entry
-    current_balance = entries_qs.order_by('-date').first()
-    if current_balance:
-        current_balance = current_balance.balance
-    else:
-        current_balance = character.wallet_balance
+    # Build per-pilot balance stats
+    pilot_stats = []
+    for char in characters:
+        # Get current wallet balance from latest entry or character model
+        latest_entry = WalletJournalEntry.objects.filter(
+            character=char
+        ).order_by('-date').first()
+
+        current_balance = float(latest_entry.balance) if latest_entry else float(char.wallet_balance or 0)
+
+        # Get recent income/expense for context (last 30 days)
+        thirty_days_ago = timezone.now() - timedelta(days=30)
+        recent_income = WalletJournalEntry.objects.filter(
+            character=char,
+            date__gte=thirty_days_ago,
+            amount__gt=0
+        ).aggregate(total=Sum('amount'))['total'] or 0
+
+        recent_expense = abs(WalletJournalEntry.objects.filter(
+            character=char,
+            date__gte=thirty_days_ago,
+            amount__lt=0
+        ).aggregate(total=Sum('amount'))['total'] or 0)
+
+        pilot_stats.append({
+            'character': char,
+            'balance': current_balance,
+            'recent_income': float(recent_income),
+            'recent_expense': float(recent_expense),
+            'net_30d': float(recent_income) - float(recent_expense),
+        })
+
+    # Get distinct ref_types for filter dropdown (across all user's entries)
+    all_ref_types = WalletJournalEntry.objects.filter(
+        character__user=request.user
+    ).values_list('ref_type', flat=True).distinct().order_by('ref_type')
 
     return render(request, 'core/wallet_journal.html', {
-        'character': character,
         'entries': entries,
         'ref_types': all_ref_types,
         'ref_type_filter': ref_type_filter,
         'date_from': date_from,
         'date_to': date_to,
-        'current_balance': current_balance,
+        'character_filter': character_filter,
+        'characters': characters,
+        'pilot_stats': pilot_stats,
     })
 
 
