@@ -11,6 +11,7 @@ from django.views.decorators.http import require_http_methods
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.urls import reverse
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 from core.views import get_users_character
 
@@ -71,25 +72,121 @@ def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
         parent=None
     )
 
-    # Apply location filter if specified (only for true structure types)
+    # Apply location filter if specified
     if location_filter:
         try:
             location_id = int(location_filter)
-            # Only filter by location if it's a true structure type
-            assets_query = assets_query.filter(
-                location_id=location_id,
-                location_type__in=['station', 'solar_system', 'structure']
-            )
+            # Check if this is a structure
+            from core.eve.models import Structure
+            is_structure = Structure.objects.filter(structure_id=location_id).exists()
+
+            if is_structure:
+                # For structures, include both direct structure assets AND items in the structure
+                assets_query = assets_query.filter(
+                    Q(location_id=location_id, location_type__in=['station', 'solar_system', 'structure'])
+                    | Q(location_id=location_id, location_type='item')
+                )
+            else:
+                # For stations/systems, use normal filter
+                assets_query = assets_query.filter(
+                    location_id=location_id,
+                    location_type__in=['station', 'solar_system', 'structure']
+                )
         except (ValueError, TypeError):
             pass
 
+    # Get ALL locations for the dropdown filter (before applying location filter)
+    # This ensures the dropdown shows all options, not just filtered ones
+    all_assets_query = CharacterAsset.objects.filter(
+        character__in=characters,
+        parent=None
+    )
+
+    # Group ALL assets by location for the dropdown
+    all_location_groups = defaultdict(lambda: {'count': 0})
+
+    # Get all structure IDs from database to check against
+    from core.eve.models import Structure
+    all_structure_ids = set(Structure.objects.filter(
+        structure_id__isnull=False
+    ).values_list('structure_id', flat=True))
+
+    for asset in all_assets_query:
+        if asset.location_type in ['station', 'solar_system', 'structure']:
+            key = (asset.location_id, asset.location_type)
+            all_location_groups[key]['count'] += 1
+        elif asset.location_type == 'item' and asset.location_id in all_structure_ids:
+            key = (asset.location_id, 'structure')
+            all_location_groups[key]['count'] += 1
+
+    # Fetch names for all locations
+    all_location_ids = set(loc_id for (loc_id, loc_type) in all_location_groups.keys() if loc_id)
+    all_station_names = {}
+    all_system_names = {}
+    all_structure_names = {}
+
+    if all_location_ids:
+        try:
+            all_station_names = {
+                s.id: s.name
+                for s in Station.objects.filter(id__in=all_location_ids)
+            }
+        except Exception:
+            pass
+
+        try:
+            all_system_names = {
+                s.id: s.name
+                for s in SolarSystem.objects.filter(id__in=all_location_ids)
+            }
+        except Exception:
+            pass
+
+    all_structure_ids_for_names = set(loc_id for (loc_id, loc_type) in all_location_groups.keys()
+                                       if loc_type == 'structure' and loc_id)
+    if all_structure_ids_for_names:
+        from core.esi_client import ensure_structure_data
+        for structure_id in all_structure_ids_for_names:
+            structure = ensure_structure_data(structure_id, user=request.user)
+            if structure:
+                all_structure_names[structure_id] = structure.name
+            else:
+                all_structure_names[structure_id] = f"Structure {structure_id}"
+
+    # Build available locations for filter dropdown
+    available_locations = []
+    for (loc_id, loc_type), data in sorted(all_location_groups.items()):
+        if loc_type == 'station':
+            location_name = all_station_names.get(loc_id, f"Station {loc_id}")
+        elif loc_type == 'solar_system':
+            location_name = all_system_names.get(loc_id, f"System {loc_id}")
+        elif loc_type == 'structure':
+            location_name = all_structure_names.get(loc_id, f"Structure {loc_id}")
+        else:
+            location_name = f"{loc_type.title()} {loc_id}"
+
+        available_locations.append({
+            'id': loc_id,
+            'name': location_name,
+            'type': loc_type,
+        })
+
+    # Sort available locations by name
+    available_locations.sort(key=lambda x: x['name'])
+
+    # Now process FILTERED assets for the main display
     # Group assets by location to get unique locations
     location_groups = defaultdict(lambda: {'count': 0})
 
     for asset in assets_query:
-        # Only count assets at true structure locations
+        # Handle direct structure/station/system locations
         if asset.location_type in ['station', 'solar_system', 'structure']:
             key = (asset.location_id, asset.location_type)
+            location_groups[key]['count'] += 1
+        # Handle items that are actually in structures (ESI returns location_type='item'
+        # for docked ships, with location_id pointing to the structure)
+        elif asset.location_type == 'item' and asset.location_id in all_structure_ids:
+            key = (asset.location_id, 'structure')
             location_groups[key]['count'] += 1
 
     # Fetch location names
@@ -150,15 +247,6 @@ def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
 
     # Sort by location name
     locations.sort(key=lambda x: x['location_name'])
-
-    # Build available locations for filter dropdown (only true structures)
-    available_locations = []
-    for loc in locations:
-        available_locations.append({
-            'id': loc['location_id'],
-            'name': loc['location_name'],
-            'type': loc['location_type'],
-        })
 
     return render(request, 'core/assets_list.html', {
         'character': character,

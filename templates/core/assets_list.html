@@ -278,6 +278,19 @@
         color: #66b3ff;
     }
 
+    .fitted-badge {
+        font-size: 0.7rem;
+        padding: 0.1rem 0.4rem;
+        border-radius: 3px;
+        background: #d4edda;
+        color: #155724;
+    }
+
+    [data-theme="dark"] .fitted-badge {
+        background: #1e4a2a;
+        color: #6bff6b;
+    }
+
     .child-count-badge {
         font-size: 0.7rem;
         padding: 0.1rem 0.4rem;
@@ -428,9 +441,9 @@
                             {% if is_account_wide %}
                             <th style="width: 10%;">Pilot</th>
                             {% endif %}
-                            <th style="width: 10%;">Flag</th>
+                            <th style="width: 10%; text-align: right;">Flag</th>
                             <th style="width: 10%; text-align: right;">Quantity</th>
-                            <th style="width: 15%;">Singleton</th>
+                            <th style="width: 15%; text-align: right;">Singleton</th>
                         </tr>
                     </thead>
                     <tbody id="assets-tbody-{{ location.location_id }}-{{ location.location_type }}">
@@ -540,7 +553,7 @@ async function toggleLocation(locationId, locationType, headerElement) {
  * Render asset rows from API data
  */
 function renderAssetRows(assets) {
-    const isAccountWide = {{ is_account_wide|yesno }} === 'Yes';
+    const isAccountWide = '{{ is_account_wide|yesno }}' === 'Yes';
 
     return assets.map(asset => {
         const hasChildren = asset.has_children;
@@ -548,20 +561,32 @@ function renderAssetRows(assets) {
             ? `<span class="asset-expand" data-asset-id="${asset.item_id}" onclick="lazyLoadChildren(event, this)">&#9654;</span>`
             : '<span style="width: 16px; display: inline-block;"></span>';
         const childCountBadge = hasChildren ? `<span class="child-count-badge">(${asset.child_count})</span>` : '';
-        const pilotColumn = isAccountWide ? `
+
+        // Show pilot column if account-wide OR if we have character data
+        const hasCharacterData = asset.character_name && asset.character_id;
+        const showPilot = isAccountWide || hasCharacterData;
+        const pilotColumn = showPilot && hasCharacterData ? `
             <td>
                 <a href="/characters/${asset.character_id}/" style="font-size: 0.85rem; color: var(--link-color);">
                     ${asset.character_name}
                 </a>
             </td>
         ` : '';
+
         const singletonIndicator = asset.is_singleton
             ? '<span style="color: #0066cc;">&#10003;</span>'
             : '<span style="color: var(--text-secondary);">&mdash;</span>';
         const blueprintBadge = asset.is_blueprint_copy
             ? '<span class="blueprint-badge blueprint-bpc">BPC</span>' : '';
-        const singletonBadge = asset.is_singleton
-            ? '<span class="singleton-badge">Assembled</span>' : '';
+
+        // Check if fitted (in a slot)
+        const isFitted = asset.location_flag && /^(Hi|Med|Lo|Rig|Sub)Slot\d+$/.test(asset.location_flag);
+        const fittedBadge = isFitted
+            ? '<span class="fitted-badge">Fitted</span>'
+            : (asset.is_singleton ? '<span class="singleton-badge">Assembled</span>' : '');
+
+        // Calculate colspan based on whether we show pilot column
+        const colspan = showPilot ? 5 : 4;
 
         return `
             <tr class="asset-row"
@@ -575,15 +600,19 @@ function renderAssetRows(assets) {
                         ${childCountBadge}
                         <span class="asset-name">${asset.type_name}</span>
                         ${blueprintBadge}
-                        ${singletonBadge}
+                        ${fittedBadge}
                     </div>
                 </td>
                 ${pilotColumn}
-                <td style="color: var(--text-secondary); font-size: 0.85rem;">${asset.location_flag || '&mdash;'}</td>
+                <td style="color: var(--text-secondary); font-size: 0.85rem; text-align: right;">${asset.location_flag || '&mdash;'}</td>
                 <td style="text-align: right;">${asset.quantity}</td>
-                <td>${singletonIndicator}</td>
+                <td style="text-align: right;">${singletonIndicator}</td>
             </tr>
-            <tbody class="asset-children-container" id="asset-children-${asset.item_id}" style="display: none;"></tbody>
+            <tr class="asset-children-row" style="display: none;">
+                <td colspan="${colspan}" style="padding: 0; border: none;">
+                    <div class="asset-children-container" id="asset-children-${asset.item_id}" style="display: none;"></div>
+                </td>
+            </tr>
         `;
     }).join('');
 }
@@ -596,13 +625,19 @@ async function lazyLoadChildren(event, button) {
 
     const assetId = button.getAttribute('data-asset-id');
     const childrenContainer = document.getElementById(`asset-children-${assetId}`);
+    const childrenRow = childrenContainer ? childrenContainer.closest('tr.asset-children-row') : null;
     const isExpanded = button.classList.contains('expanded');
+
+    if (!childrenRow || !childrenContainer) {
+        console.error('Children container not found for asset', assetId);
+        return;
+    }
 
     if (isExpanded) {
         // Collapse
         button.classList.remove('expanded');
         button.innerHTML = '&#9654;';
-        childrenContainer.style.display = 'none';
+        childrenRow.style.display = 'none';
         return;
     }
 
@@ -610,12 +645,16 @@ async function lazyLoadChildren(event, button) {
     if (loadedChildren.has(assetId)) {
         button.classList.add('expanded');
         button.innerHTML = '&#9660;';
-        childrenContainer.style.display = 'table-row-group';
+        childrenRow.style.display = 'table-row';
+        childrenContainer.style.display = 'block';
         return;
     }
 
     // Show loading
     button.innerHTML = '<span class="loading-spinner"></span>';
+
+    // Get nesting level from parent container (default 0 for top-level)
+    const nestingLevel = parseInt(childrenContainer.getAttribute('data-nesting-level') || '0');
 
     try {
         let url = `/api/assets/${assetId}/children/`;
@@ -642,15 +681,37 @@ async function lazyLoadChildren(event, button) {
             throw new Error(data.error || 'Failed to load children');
         }
 
-        if (data.children.length > 0) {
-            childrenContainer.innerHTML = renderChildRows(data.children);
-            childrenContainer.style.display = 'table-row-group';
-            loadedChildren.add(assetId);
-            button.classList.add('expanded');
-            button.innerHTML = '&#9660;';
+        if (data.is_ship_container) {
+            // Ship container - render grouped sections
+            if (data.sections && data.sections.length > 0) {
+                childrenContainer.innerHTML = renderShipSections(data.sections, nestingLevel);
+                childrenRow.style.display = 'table-row';
+                childrenContainer.style.display = 'block';
+                loadedChildren.add(assetId);
+                button.classList.add('expanded');
+                button.innerHTML = '&#9660;';
+            } else {
+                button.innerHTML = '&#9654;';
+                loadedChildren.add(assetId);
+            }
         } else {
-            button.innerHTML = '&#9654;';
-            loadedChildren.add(assetId);
+            // Regular container - render flat list
+            if (data.children && data.children.length > 0) {
+                const childTable = `
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tbody>${renderChildRows(data.children, nestingLevel)}</tbody>
+                    </table>
+                `;
+                childrenContainer.innerHTML = childTable;
+                childrenRow.style.display = 'table-row';
+                childrenContainer.style.display = 'block';
+                loadedChildren.add(assetId);
+                button.classList.add('expanded');
+                button.innerHTML = '&#9660;';
+            } else {
+                button.innerHTML = '&#9654;';
+                loadedChildren.add(assetId);
+            }
         }
 
     } catch (error) {
@@ -663,7 +724,7 @@ async function lazyLoadChildren(event, button) {
 /**
  * Render child asset rows from API data
  */
-function renderChildRows(children) {
+function renderChildRows(children, nestingLevel = 0) {
     return children.map(child => {
         const hasChildren = child.has_children;
         const expandIcon = hasChildren
@@ -693,11 +754,86 @@ function renderChildRows(children) {
                         ${singletonBadge}
                     </div>
                 </td>
-                <td style="color: var(--text-secondary); font-size: 0.85rem;">${child.location_flag || '&mdash;'}</td>
+                <td style="color: var(--text-secondary); font-size: 0.85rem; text-align: right;">${child.location_flag || '&mdash;'}</td>
                 <td style="text-align: right;">${child.quantity}</td>
-                <td>${singletonIndicator}</td>
+                <td style="text-align: right;">${singletonIndicator}</td>
             </tr>
-            <tbody class="asset-children-container" id="asset-children-${child.item_id}" style="display: none;"></tbody>
+            <tr class="asset-children-row" style="display: none;">
+                <td colspan="4" style="padding: 0; border: none;">
+                    <div class="asset-children-container" id="asset-children-${child.item_id}" data-nesting-level="${nestingLevel}" style="display: none;"></div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+/**
+ * Render ship container contents grouped by category
+ */
+function renderShipSections(sections, nestingLevel = 0) {
+    const indent = nestingLevel * 1.5; // 1.5rem per nesting level
+
+    return sections.map(section => {
+        const items = section.items.map(item => {
+            const hasChildren = item.has_children;
+            const expandIcon = hasChildren
+                ? `<span class="asset-expand" data-asset-id="${item.item_id}" onclick="lazyLoadChildren(event, this)">&#9654;</span>`
+                : '<span style="width: 16px; display: inline-block;"></span>';
+            const childCountBadge = hasChildren ? `<span class="child-count-badge">(${item.child_count})</span>` : '';
+            const singletonIndicator = item.is_singleton
+                ? '<span style="color: #0066cc;">&#10003;</span>'
+                : '<span style="color: var(--text-secondary);">&mdash;</span>';
+
+            // Check if fitted (in a slot)
+            const isFitted = /^(Hi|Med|Lo|Rig|Sub)Slot\d+$/.test(item.location_flag || '');
+            const fittedBadge = isFitted
+                ? '<span class="fitted-badge">Fitted</span>'
+                : (item.is_singleton ? '<span class="singleton-badge">Assembled</span>' : '');
+
+            return `
+                <tr class="asset-row"
+                    data-asset-id="${item.item_id}"
+                    data-has-children="${hasChildren}"
+                    data-child-count="${item.child_count}"
+                    data-children-loaded="false">
+                    <td>
+                        <div class="asset-item-name asset-indent">
+                            ${expandIcon}
+                            ${childCountBadge}
+                            <span class="asset-name">${item.type_name}</span>
+                            ${fittedBadge}
+                        </div>
+                    </td>
+                    <td style="color: var(--text-secondary); font-size: 0.85rem; text-align: right;">${item.location_flag || '&mdash;'}</td>
+                    <td style="text-align: right;">${item.quantity}</td>
+                    <td style="text-align: right;">${singletonIndicator}</td>
+                </tr>
+                <tr class="asset-children-row" style="display: none;">
+                    <td colspan="4" style="padding: 0; border: none;">
+                        <div class="asset-children-container" id="asset-children-${item.item_id}" data-nesting-level="${nestingLevel + 1}" style="display: none;"></div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        return `
+            <div class="ship-section" style="margin-bottom: 1rem; ${indent > 0 ? `margin-left: ${indent}rem; border-left: 2px solid var(--border-color);` : ''}">
+                <div class="ship-section-header" style="
+                    background: var(--bg-secondary);
+                    padding: 0.5rem 1rem;
+                    font-weight: 600;
+                    border-bottom: 1px solid var(--border-color);
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                ">
+                    <span>${section.title}</span>
+                    <span style="font-size: 0.85rem; color: var(--text-secondary);">${section.count} items</span>
+                </div>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tbody>${items}</tbody>
+                </table>
+            </div>
         `;
     }).join('');
 }

@@ -163,6 +163,45 @@ class SkillQueueItem(models.Model):
 
         return min(100.0, max(0.0, (elapsed_seconds / total_seconds) * 100))
 
+    @property
+    def time_remaining(self):
+        """Get remaining time as formatted string (e.g., '12h45m')."""
+        from django.utils import timezone
+
+        if not self.finish_date:
+            return "Not training"
+
+        remaining = self.finish_date - timezone.now()
+
+        if remaining.total_seconds() <= 0:
+            return "0m"
+
+        total_seconds = int(remaining.total_seconds())
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+
+        if hours > 0:
+            return f"{hours}h{minutes}m"
+        else:
+            return f"{minutes}m"
+
+    @property
+    def sp_per_hour(self) -> int:
+        """Calculate SP per hour training rate."""
+        from django.utils import timezone
+
+        if not self.finish_date or not self.training_start_time:
+            return 0
+
+        total_sp = self.level_end_sp - self.level_start_sp
+        total_seconds = (self.finish_date - self.training_start_time).total_seconds()
+
+        if total_seconds <= 0:
+            return 0
+
+        sp_per_second = total_sp / total_seconds
+        return int(sp_per_second * 3600)
+
 
 class CharacterAttributes(models.Model):
     """

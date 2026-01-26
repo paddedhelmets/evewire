@@ -367,9 +367,14 @@ class Structure(models.Model):
         Check if cached data is stale.
 
         - Errors are stale after 1 hour (retry quickly)
+        - Inaccessible structures (403, no docking access) are never retried
         - Normal data is stale after 7 days
         """
         from django.utils import timezone
+
+        # Inaccessible structures are permanent - never retry
+        if self.last_sync_status == 'inaccessible':
+            return False
 
         if self.last_sync_status == 'error':
             return (timezone.now() - self.last_updated).total_seconds() > 3600

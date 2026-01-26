@@ -41,7 +41,7 @@ def fetch_structure_info(structure_id: int, character_token: str = None) -> Opti
         - position: Dict with x, y, z coordinates
         - type_id: Item type ID of the structure
 
-        Returns None if fetch fails.
+        Returns None if fetch fails. Check logs for specific error (403 = no access, 404 = destroyed, etc).
     """
     url = f"{ESI_BASE_URL}/universe/structures/{structure_id}/"
 
@@ -64,12 +64,12 @@ def fetch_structure_info(structure_id: int, character_token: str = None) -> Opti
         if response.status_code == 200:
             data = response.json()
             logger.info(f'Fetched structure {structure_id}: {data.get("name")}')
-            return data
+            return {'data': data, 'status': 200}
 
         elif response.status_code == 403:
-            # Forbidden - character doesn't have access
+            # Forbidden - character doesn't have access (no docking rights, hostile, etc.)
             logger.warning(f'Access denied to structure {structure_id} (403)')
-            return None
+            return {'status': 403, 'error': 'Forbidden'}  # Indicate 403 specifically
 
         elif response.status_code == 404:
             # Not found - structure may have been destroyed

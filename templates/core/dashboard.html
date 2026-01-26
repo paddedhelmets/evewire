@@ -232,53 +232,9 @@
 <!-- Character Card Grid -->
 <div class="char-card-grid">
     {% for char_data in characters %}
-    <div class="char-card">
-        <div class="char-header">
-            <div>
-                <h3><a href="{% url 'core:character_detail' char_data.character.id %}" style="color: inherit; text-decoration: none;">{{ char_data.character.name }}</a></h3>
-                <p class="corp-name">{{ char_data.character.corporation_name|default:"N/A" }}</p>
-            </div>
-            <a href="{% url 'core:character_detail' char_data.character.id %}" class="char-link">Details →</a>
-        </div>
-
-        <div class="char-stats">
-            <div class="char-stat">
-                <span class="char-stat-label">ISK</span>
-                <span class="char-stat-value isk">{{ char_data.isk_balance|floatformat:0|default:"—" }}</span>
-            </div>
-            <div class="char-stat">
-                <span class="char-stat-label">SP</span>
-                <span class="char-stat-value sp">{{ char_data.total_sp|commas|default:"—" }}</span>
-            </div>
-        </div>
-
-        {% if char_data.current_training %}
-        <div class="char-training">
-            <span class="skill-name">{{ char_data.current_training.skill_name }}</span>
-            <span class="skill-target">L{{ char_data.current_training.target_level }} (Rank {{ char_data.current_training.rank }})</span>
-            <span class="skill-rate">@ {{ char_data.current_training.sp_per_hour|commas }} SP/hr</span>
-            <div class="progress-bar-container">
-                <div class="progress" style="width: {{ char_data.current_training.progress_percent }}%"></div>
-            </div>
-            <span class="time-remaining">{{ char_data.current_training.time_remaining }}</span>
-        </div>
-        {% else %}
-        <div class="char-training">
-            <span class="skill-name" style="color: var(--text-secondary);">Not training</span>
-        </div>
-        {% endif %}
-
-        <div class="char-alerts">
-            {% if char_data.queue_status == 'empty' %}
-            <span class="alert alert-empty">Queue Empty!</span>
-            {% elif char_data.queue_status == 'not_full' %}
-            <span class="alert alert-warning">{{ char_data.queue_count }}/50</span>
-            {% endif %}
-            {% if char_data.implants_warning %}
-            <span class="alert alert-warning">Check Implants</span>
-            {% endif %}
-        </div>
-    </div>
+    {% with char=char_data.character corporation_ticker=char_data.corporation_ticker training=char_data.training %}
+        {% include "core/character_card.html" %}
+    {% endwith %}
     {% endfor %}
 </div>
 

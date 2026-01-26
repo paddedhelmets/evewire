@@ -329,16 +329,28 @@ def dashboard(request: HttpRequest) -> HttpResponse:
     science_utilization = (total_active_science / total_science_slots * 100) if total_science_slots > 0 else 0
     reaction_utilization = (total_active_reactions / total_reaction_slots * 100) if total_reaction_slots > 0 else 0
 
-    # Build character data with skill queue info
+    # Build character data with skill queue info and corporation ticker
+    from core.eve.models import Corporation
+
     characters_data = []
     for char in characters:
         skill_queue = list(char.skill_queue.all())
         current_skill = skill_queue[0] if skill_queue else None
         queue_count = len(skill_queue)
 
+        # Fetch corporation ticker
+        corp_ticker = None
+        if char.corporation_id:
+            try:
+                corp = Corporation.objects.get(id=char.corporation_id)
+                corp_ticker = corp.ticker
+            except Corporation.DoesNotExist:
+                pass
+
         characters_data.append({
             'character': char,
-            'current_skill': current_skill,
+            'corporation_ticker': corp_ticker,
+            'training': current_skill,
             'queue_count': queue_count,
             'orders_count': char.market_orders.count(),
         })

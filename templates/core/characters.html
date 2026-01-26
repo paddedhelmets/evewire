@@ -6,15 +6,6 @@
 {% block content %}
 <h1>My Characters</h1>
 
-<div class="card" style="margin-bottom: 1rem; padding: 1rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
-    <h3 style="margin-top: 0;">📢 New Feature: Structure Names</h3>
-    <p style="margin-bottom: 0;">
-        We've added support for displaying player structure names (Citadels, Engineering Complexes, etc.)!
-        <strong>Click "Re-auth" on each character</strong> to grant the new scope needed to fetch structure names from ESI.
-        This is a one-time action - your existing tokens will continue to work for all other features.
-    </p>
-</div>
-
 <div style="margin-bottom: 1rem;">
     <a href="{% url 'core:add_character' %}" class="btn">+ Add Character</a>
 </div>
@@ -91,31 +82,10 @@
     </div>
 
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin-top: 1.5rem;">
-        {% for character in characters %}
-        <div class="card">
-            <h3>{{ character.character_name }}</h3>
-            <p style="color: var(--text-secondary); font-size: 0.9rem;">
-                {{ character.corporation_name|default:"No Corporation" }}
-                {% if character.alliance_name %}<br>{{ character.alliance_name }}{% endif %}
-            </p>
-
-            <div style="margin-top: 1rem;">
-                <strong>Quick Stats</strong>
-                <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
-                    {% if character.wallet_balance is not None %}
-                        <li>Wallet: {{ character.wallet_balance|commas|floatformat:2 }} ISK</li>
-                    {% endif %}
-                    {% if character.total_sp is not None %}
-                        <li>Total SP: {{ character.total_sp|commas }}</li>
-                    {% endif %}
-                    <li>Active Orders: {{ character.market_orders.count }}</li>
-                </ul>
-            </div>
-
-            <div style="margin-top: 1rem;">
-                <a href="{% url 'core:character_detail' character.id %}" class="btn" style="width: 100%; text-align: center;">View Details</a>
-            </div>
-        </div>
+        {% for char_data in characters_data %}
+        {% with char=char_data.character corporation_ticker=char_data.corporation_ticker training=char_data.training %}
+            {% include "core/character_card.html" %}
+        {% endwith %}
         {% endfor %}
     </div>
 {% else %}

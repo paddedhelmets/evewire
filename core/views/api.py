@@ -257,12 +257,38 @@ def api_location_assets(request, location_id: int, location_type: str) -> JsonRe
         characters = Character.objects.filter(user=request.user)
 
     # Query root-level assets at this location
-    assets_query = CharacterAsset.objects.filter(
-        character__in=characters,
-        location_id=location_id,
-        location_type=location_type,
-        parent=None
-    ).annotate(
+    # For structures, also include items with location_type='item' (docked ships)
+    if location_type == 'structure':
+        from core.eve.models import Structure
+        # Verify this is actually a structure
+        is_structure = Structure.objects.filter(structure_id=location_id).exists()
+        if is_structure:
+            # Include both direct structure assets AND items in the structure
+            assets_query = CharacterAsset.objects.filter(
+                character__in=characters,
+                parent=None
+            ).filter(
+                Q(location_id=location_id, location_type='structure') |
+                Q(location_id=location_id, location_type='item')
+            )
+        else:
+            # Not a structure, use normal filter
+            assets_query = CharacterAsset.objects.filter(
+                character__in=characters,
+                location_id=location_id,
+                location_type=location_type,
+                parent=None
+            )
+    else:
+        # For stations/systems, use normal filter
+        assets_query = CharacterAsset.objects.filter(
+            character__in=characters,
+            location_id=location_id,
+            location_type=location_type,
+            parent=None
+        )
+
+    assets_query = assets_query.annotate(
         child_count=Count('children')
     ).select_related('character')
 
@@ -492,9 +518,63 @@ def api_asset_children(request, asset_id: int) -> JsonResponse:
         for parent in parent_assets:
             item_location_names[parent.item_id] = parent.type_name
 
+    # Check if parent is a ship (category 6) for specialized grouping
+    from core.eve.models import ItemType
+    parent_type = ItemType.objects.filter(id=parent_asset.type_id).first()
+    is_ship_parent = parent_type and parent_type.category_id == 6
+
+    # Flag categorization for ship contents
+    FITTING_SLOTS = {
+        'HiSlot0', 'HiSlot1', 'HiSlot2', 'HiSlot3', 'HiSlot4', 'HiSlot5', 'HiSlot6', 'HiSlot7',
+        'MedSlot0', 'MedSlot1', 'MedSlot2', 'MedSlot3', 'MedSlot4', 'MedSlot5', 'MedSlot6', 'MedSlot7',
+        'LoSlot0', 'LoSlot1', 'LoSlot2', 'LoSlot3', 'LoSlot4', 'LoSlot5', 'LoSlot6', 'LoSlot7',
+        'RigSlot0', 'RigSlot1', 'RigSlot2', 'RigSlot3',
+        'SubSlot0', 'SubSlot1', 'SubSlot2', 'SubSlot3', 'SubSlot4',
+    }
+    FLAG_CATEGORIES = {
+        'fitting': FITTING_SLOTS,
+        'ship_hangar': {'ShipHangar'},
+        'drone_bay': {'DroneBay'},
+        'fleet_hangar': {'FleetHangar'},
+        'fuel_bay': {'SpecializedFuelBay'},
+        'fighter_bay': {'FighterBay', 'FighterTube0', 'FighterTube1', 'FighterTube2', 'FighterTube3', 'FighterTube4', 'FighterTube5'},
+        'cargo': {'Cargo'},
+    }
+
+    def categorize_flag(flag):
+        """Categorize a flag into a group. Returns (category, sort_key)."""
+        if not flag or flag == 'HiddenModifiers':
+            return None, None
+        if flag in FLAG_CATEGORIES['fitting']:
+            return 'fitting', flag  # Sort by slot name for proper order
+        for category, flags in FLAG_CATEGORIES.items():
+            if category == 'fitting':
+                continue
+            if flag in flags:
+                return category, flag
+        return 'other', flag
+
+    def slot_order_key(flag):
+        """Sort key for fitting slots - Hi first, then Med, then Lo, then Rig, then Sub."""
+        if flag.startswith('HiSlot'):
+            return (0, int(flag[6:]))
+        elif flag.startswith('MedSlot'):
+            return (1, int(flag[7:]))
+        elif flag.startswith('LoSlot'):
+            return (2, int(flag[6:]))
+        elif flag.startswith('RigSlot'):
+            return (3, int(flag[7:]))
+        elif flag.startswith('SubSlot'):
+            return (4, int(flag[6:]))
+        return (999, 0)
+
     # Build response data
-    children_data = []
+    # Filter out HiddenModifiers and build child data
+    filtered_children = []
     for child in children:
+        if child.location_flag == 'HiddenModifiers':
+            continue
+
         # Get type name (using pre-fetched data)
         type_name = item_types.get(child.type_id)
         if type_name:
@@ -516,7 +596,7 @@ def api_asset_children(request, asset_id: int) -> JsonResponse:
         else:
             location_name = f"{child.location_type.title()} {child.location_id}"
 
-        children_data.append({
+        child_data = {
             'item_id': child.item_id,
             'type_id': child.type_id,
             'type_name': type_name,
@@ -530,18 +610,89 @@ def api_asset_children(request, asset_id: int) -> JsonResponse:
             'character_id': child.character_id,
             'character_name': child.character.character_name,
             'level': child.level,  # MPTT level for indentation
-        })
+        }
+        filtered_children.append(child_data)
 
-    response_data = {
-        'success': True,
-        'children': children_data,
-        'total': total,
-        'page': page,
-        'per_page': per_page,
-        'has_next': page_obj.has_next(),
-        'has_previous': page_obj.has_previous(),
-        'num_pages': paginator.num_pages,
-    }
+    # Update total after filtering
+    total = len(filtered_children)
+
+    # For ship containers, return grouped data
+    if is_ship_parent:
+        # Group children by flag category
+        grouped = {}
+        category_order = {
+            'fitting': 0,
+            'ship_hangar': 1,
+            'drone_bay': 2,
+            'fleet_hangar': 3,
+            'fuel_bay': 4,
+            'fighter_bay': 5,
+            'cargo': 6,
+            'other': 999,
+        }
+
+        category_titles = {
+            'fitting': 'Fitting',
+            'ship_hangar': 'Ship Hangar',
+            'drone_bay': 'Drone Bay',
+            'fleet_hangar': 'Fleet Hangar',
+            'fuel_bay': 'Specialized Fuel Bay',
+            'fighter_bay': 'Fighter Bay',
+            'cargo': 'Cargo',
+            'other': 'Other',
+        }
+
+        for child in filtered_children:
+            category, sort_key = categorize_flag(child.get('location_flag', ''))
+            if not category:
+                continue
+
+            if category not in grouped:
+                grouped[category] = []
+            grouped[category].append((sort_key, child))
+
+        # Sort within categories and build response
+        sections = []
+        for category in sorted(grouped.keys(), key=lambda c: category_order.get(c, 999)):
+            items_with_keys = grouped[category]
+            # Sort items within category
+            if category == 'fitting':
+                items_with_keys.sort(key=lambda x: slot_order_key(x[0]))
+            else:
+                items_with_keys.sort(key=lambda x: x[0])
+
+            items = [item for _, item in items_with_keys]
+            sections.append({
+                'category': category,
+                'title': category_titles.get(category, category.title()),
+                'count': len(items),
+                'items': items,
+            })
+
+        response_data = {
+            'success': True,
+            'is_ship_container': True,
+            'sections': sections,
+            'total': total,
+            'page': page,
+            'per_page': per_page,
+            'has_next': page_obj.has_next(),
+            'has_previous': page_obj.has_previous(),
+            'num_pages': paginator.num_pages,
+        }
+    else:
+        # Non-ship container, return flat list
+        response_data = {
+            'success': True,
+            'is_ship_container': False,
+            'children': filtered_children,
+            'total': total,
+            'page': page,
+            'per_page': per_page,
+            'has_next': page_obj.has_next(),
+            'has_previous': page_obj.has_previous(),
+            'num_pages': paginator.num_pages,
+        }
 
     # Cache for 2-5 minutes
     cache.set(cache_key, response_data, timeout=180)  # 3 minutes

@@ -28,46 +28,75 @@ def refresh_structure(structure_id: int) -> bool:
     from core.eve.models import Structure
     from core.esi_client import fetch_structure_info
 
-    logger.info(f'Refreshing structure {structure_id}')
+    logger.info(f'Refreshing/creating structure {structure_id}')
 
     try:
-        # Get existing structure
+        # Get existing structure, or create a placeholder
         try:
             structure = Structure.objects.get(structure_id=structure_id)
+            # Skip refresh if already marked inaccessible (403 = no docking access)
+            if structure.last_sync_status == 'inaccessible':
+                logger.debug(f'Structure {structure_id} is marked inaccessible, skipping refresh')
+                return True
+            is_new = False
         except Structure.DoesNotExist:
-            logger.warning(f'Structure {structure_id} no longer exists in DB, skipping refresh')
-            return False
+            # Create placeholder structure - will try to fetch details below
+            structure = Structure.objects.create(
+                structure_id=structure_id,
+                name=f'Unknown Structure {structure_id}',
+                owner_id=0,  # Will update when we fetch from ESI
+                solar_system_id=0,
+                type_id=0,
+                last_sync_status='pending',
+            )
+            is_new = True
+            logger.info(f'Created placeholder for new structure {structure_id}')
 
         # Try to find a character with access to this structure
         # Characters in the same corporation or with docking rights
         from core.models import Character
 
-        potential_characters = Character.objects.filter(
-            corporation_id=structure.owner_id
-        )
+        # For existing structures, try characters in the owning corp
+        # For new structures, try ALL characters (one might have docking rights)
+        if is_new or structure.owner_id == 0:
+            potential_characters = Character.objects.filter(
+                assets_synced_at__isnull=False  # Has synced recently
+            )
+        else:
+            potential_characters = Character.objects.filter(
+                corporation_id=structure.owner_id
+            )
 
         data = None
+        all_403 = True  # Track if all attempts returned 403
+
         for character in potential_characters:
-            # Get access token
+            # Get access token for this character
             from core.services import TokenManager
             try:
-                token = TokenManager.get_access_token(character)
+                token = TokenManager.get_access_token_for_character(character)
                 if token:
-                    data = fetch_structure_info(structure_id, character_token=token)
-                    if data:
-                        break
+                    result = fetch_structure_info(structure_id, character_token=token)
+                    if result:
+                        if result.get('status') == 200:
+                            # Success - got structure data
+                            data = result['data']
+                            break
+                        elif result.get('status') == 403:
+                            # 403 - no access, but track that we got a response
+                            continue  # Try next character
+                        else:
+                            # Some other status
+                            all_403 = False
             except Exception as e:
                 logger.debug(f'Token failed for {character.character_name}: {e}')
                 continue
-
-        if not data:
-            # Try without token (unlikely to work for structures)
-            data = fetch_structure_info(structure_id)
 
         if data:
             # Update structure
             structure.name = data['name']
             structure.solar_system_id = data['solar_system_id']
+            structure.owner_id = data.get('owner_id', structure.owner_id)
             structure.position_x = data.get('position', {}).get('x')
             structure.position_y = data.get('position', {}).get('y')
             structure.position_z = data.get('position', {}).get('z')
@@ -79,6 +108,15 @@ def refresh_structure(structure_id: int) -> bool:
 
             logger.info(f'Refreshed structure {structure_id}: {structure.name}')
             return True
+        elif all_403:
+            # All characters returned 403 - structure exists but no docking access
+            structure.last_updated = timezone.now()
+            structure.last_sync_status = 'inaccessible'
+            structure.last_sync_error = 'No docking access (403 Forbidden)'
+            structure.save()
+
+            logger.info(f'Marked structure {structure_id} as inaccessible (no docking access)')
+            return True  # Return True because this is expected/permanent
         else:
             # Mark as error but don't delete
             structure.last_updated = timezone.now()

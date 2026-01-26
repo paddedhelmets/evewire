@@ -1,0 +1,127 @@
+{% load evewire %}
+{% url 'core:character_detail' char.id as char_url %}
+
+<div class="char-card">
+    <a href="{{ char_url }}" style="text-decoration: none; color: inherit;">
+        <div class="char-card-main">
+            <!-- Left column: Name & Wallet -->
+            <div class="char-card-left">
+                <div class="char-name">
+                    <strong>{{ char.character_name }}</strong>
+                    {% if corporation_ticker %}
+                    <span style="color: var(--text-secondary); font-size: 0.9em;">[{{ corporation_ticker }}]</span>
+                    {% endif %}
+                </div>
+                <div class="char-wallet isk">{{ char.wallet_balance|floatformat:0|default:"—" }} ISK</div>
+            </div>
+
+            <!-- Right column: Location & SP -->
+            <div class="char-card-right">
+                <div class="char-location">Character Location <span style="color: var(--text-secondary); font-size: 0.8em;">[NYI]</span></div>
+                <div class="char-sp sp">{{ char.total_sp|commas|default:"—" }} SP</div>
+            </div>
+        </div>
+    </a>
+
+    <!-- Training progress bar (if actively training) -->
+    {% if training %}
+    <div class="char-training">
+        <div class="progress-bar-container">
+            <div class="progress" style="width: {{ training.progress_percent }}%"></div>
+        </div>
+        <div class="training-details">
+            <span class="time-remaining">{{ training.time_remaining }} remaining</span>
+            <span class="sp-per-hour">@ {{ training.sp_per_hour|commas|default:"—" }} SP/hr</span>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.char-card {
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    padding: 1rem;
+    box-shadow: var(--card-shadow);
+    border: 1px solid var(--border-color);
+    transition: box-shadow 0.2s, transform 0.2s;
+}
+
+.char-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    transform: translateY(-2px);
+}
+
+.char-card-main {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.char-card-left {
+    text-align: left;
+}
+
+.char-card-right {
+    text-align: right;
+}
+
+.char-name {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+.char-wallet,
+.char-sp {
+    font-size: 0.95rem;
+    font-weight: 500;
+}
+
+.char-location {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.25rem;
+}
+
+.isk { color: #f9a825; }
+.sp { color: #1976d2; }
+
+/* Training progress bar */
+.char-training {
+    margin-top: 1rem;
+}
+
+.progress-bar-container {
+    background: var(--border-color);
+    height: 6px;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+}
+
+.progress-bar-container .progress {
+    background: linear-gradient(90deg, #1976d2, #42a5f5);
+    height: 100%;
+    transition: width 0.3s ease;
+}
+
+.training-details {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.time-remaining {
+    text-align: left;
+}
+
+.sp-per-hour {
+    text-align: right;
+}
+
+[data-theme="dark"] .progress-bar-container .progress {
+    background: linear-gradient(90deg, #42a5f5, #64b5f6);
+}
+</style>

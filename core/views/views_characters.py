@@ -22,11 +22,34 @@ logger = logging.getLogger(__name__)
 def characters_list(request: HttpRequest) -> HttpResponse:
     """View showing all linked characters for the current user."""
     from core.models import Character
+    from core.eve.models import Corporation
 
     characters = request.user.characters.all()
 
+    # Build character data with corporation ticker and training info
+    characters_data = []
+    for char in characters:
+        skill_queue = list(char.skill_queue.all())
+        current_skill = skill_queue[0] if skill_queue else None
+
+        # Fetch corporation ticker
+        corp_ticker = None
+        if char.corporation_id:
+            try:
+                corp = Corporation.objects.get(id=char.corporation_id)
+                corp_ticker = corp.ticker
+            except Corporation.DoesNotExist:
+                pass
+
+        characters_data.append({
+            'character': char,
+            'corporation_ticker': corp_ticker,
+            'training': current_skill,
+        })
+
     return render(request, 'core/characters.html', {
         'characters': characters,
+        'characters_data': characters_data,
     })
 
 

@@ -282,9 +282,9 @@ class ESIClient:
         return cls.get(f'/characters/{character.id}/wallet/', character)
 
     @classmethod
-    def get_assets(cls, character) -> ESIResponse:
+    def get_assets(cls, character, page: int = 1) -> ESIResponse:
         """Get character assets."""
-        return cls.get(f'/characters/{character.id}/assets/', character)
+        return cls.get(f'/characters/{character.id}/assets/', character, page=page)
 
     @classmethod
     def get_orders(cls, character, page: int = 1) -> ESIResponse:
@@ -993,8 +993,26 @@ def _sync_assets(character) -> None:
     """Sync character assets from ESI."""
     from core.character.models import CharacterAsset
 
-    response = ESIClient.get_assets(character)
-    assets_data = response.data
+    # Fetch all pages of assets
+    all_assets_data = []
+    page = 1
+
+    while True:
+        response = ESIClient.get_assets(character, page=page)
+        assets_data = response.data
+
+        if not assets_data:
+            break
+
+        all_assets_data.extend(assets_data)
+
+        # ESI returns empty array when no more pages
+        if len(assets_data) < 1000:
+            break
+
+        page += 1
+
+    logger.info(f'Fetched {len(all_assets_data)} assets across {page} pages for character {character.id}')
 
     # Delete old assets
     CharacterAsset.objects.filter(character=character).delete()
@@ -1002,10 +1020,10 @@ def _sync_assets(character) -> None:
     # Build asset tree
     # ESI returns flat list with parent relationship via is_singleton/item_id
     # We need to build the MPTT tree
-    assets_by_id = {item['item_id']: item for item in assets_data}
+    assets_by_id = {item['item_id']: item for item in all_assets_data}
 
     # First pass: create all assets without parent
-    for item_data in assets_data:
+    for item_data in all_assets_data:
         CharacterAsset.objects.create(
             character=character,
             item_id=item_data['item_id'],
@@ -1019,7 +1037,7 @@ def _sync_assets(character) -> None:
         )
 
     # Second pass: set parent relationships
-    for item_data in assets_data:
+    for item_data in all_assets_data:
         item_id = item_data['item_id']
         # Check if this item has a location_id that points to another item
         # (items inside containers/ships have location_id = parent item_id)
@@ -1036,8 +1054,71 @@ def _sync_assets(character) -> None:
             except CharacterAsset.DoesNotExist:
                 pass
 
+    # Queue structure refresh jobs for any unknown structure location_ids
+    # This handles citadels/structures that are corp-owned but contain character assets
+    _queue_structure_refreshes(character, assets_by_id)
+
     character.assets_synced_at = timezone.now()
     character.save(update_fields=['assets_synced_at'])
+
+
+def _queue_structure_refreshes(character, assets_by_id: dict) -> None:
+    """
+    Queue structure refresh tasks for unknown structure location_ids.
+
+    When assets have location_type='structure' or location_type='item' with
+    a location_id that's not in our asset list, those IDs likely point to
+    player-owned structures (citadels, starbases, etc.) that are corp-owned
+    but contain character assets.
+
+    This function queues background tasks to fetch and create those structures.
+    """
+    from core.character.models import CharacterAsset
+    from core.eve.models import Structure, Station
+    from django_q.tasks import async_task
+
+    # Collect all unique location_ids from assets that might be structures
+    potential_structure_ids = set()
+
+    for item_data in assets_by_id.values():
+        location_id = item_data.get('location_id')
+        location_type = item_data.get('location_type')
+
+        if not location_id:
+            continue
+
+        # location_type='structure' is definitely a structure
+        if location_type == 'structure':
+            potential_structure_ids.add(location_id)
+        # location_type='item' with location_id not in assets_by_id might be a structure
+        elif location_type == 'item' and location_id not in assets_by_id:
+            potential_structure_ids.add(location_id)
+
+    if not potential_structure_ids:
+        return
+
+    # Filter out IDs we already have as structures or stations
+    existing_structure_ids = set(Structure.objects.filter(
+        structure_id__in=potential_structure_ids
+    ).values_list('structure_id', flat=True))
+
+    existing_station_ids = set(Station.objects.filter(
+        id__in=potential_structure_ids
+    ).values_list('id', flat=True))
+
+    # Also filter out structures already marked as inaccessible (no docking access)
+    inaccessible_structure_ids = set(Structure.objects.filter(
+        structure_id__in=potential_structure_ids,
+        last_sync_status='inaccessible'
+    ).values_list('structure_id', flat=True))
+
+    # IDs that need to be fetched
+    new_structure_ids = potential_structure_ids - existing_structure_ids - existing_station_ids - inaccessible_structure_ids
+
+    if new_structure_ids:
+        logger.info(f'Queueing {len(new_structure_ids)} structure refresh tasks for character {character.id}')
+        for structure_id in new_structure_ids:
+            async_task('core.eve.tasks.refresh_structure', structure_id)
 
 
 def _sync_orders(character) -> None:
