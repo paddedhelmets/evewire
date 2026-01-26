@@ -51,6 +51,24 @@
 .markdown-content a {
     color: var(--link-color);
 }
+.markdown-content table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-bottom: 1rem;
+}
+.markdown-content th,
+.markdown-content td {
+    border: 1px solid var(--border-color);
+    padding: 0.5rem;
+    text-align: left;
+}
+.markdown-content th {
+    background: var(--bg-secondary);
+    font-weight: 600;
+}
+.markdown-content tr:nth-child(even) {
+    background: var(--bg-secondary);
+}
 </style>
 {% endblock %}
 

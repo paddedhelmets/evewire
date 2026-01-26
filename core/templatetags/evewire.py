@@ -222,6 +222,6 @@ def markdown(value):
     """Render markdown text to HTML."""
     try:
         import markdown as md
-        return mark_safe(md.markdown(str(value), extensions=['extra', 'codehilite', 'nl2br']))
+        return mark_safe(md.markdown(str(value), extensions=['extra', 'codehilite', 'nl2br', 'tables']))
     except Exception:
         return value
