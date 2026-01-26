@@ -10,16 +10,16 @@ from django.utils.translation import gettext_lazy as _
 from typing import List, Dict, Optional
 
 
-class FittingManager(models.Manager):
-    """Manager for Fitting queries."""
+class FittingQuerySet(models.QuerySet):
+    """Custom QuerySet for Fitting model."""
 
     def for_ship_type(self, ship_type_id: int):
         """Get fittings for a specific ship type."""
-        return self.get_queryset().filter(ship_type_id=ship_type_id)
+        return self.filter(ship_type_id=ship_type_id)
 
     def active(self):
         """Get active fittings."""
-        return self.get_queryset().filter(is_active=True)
+        return self.filter(is_active=True)
 
     def for_user(self, user):
         """
@@ -29,7 +29,7 @@ class FittingManager(models.Manager):
             User's own fittings (owner=user) + global fittings (owner=None)
             that the user hasn't ignored.
         """
-        from django.db.models import Q, Subquery, Exists
+        from django.db.models import Q
 
         # Get IDs of fittings ignored by this user
         ignored_ids = FittingIgnore.objects.filter(
@@ -37,11 +37,36 @@ class FittingManager(models.Manager):
         ).values_list('fitting_id', flat=True)
 
         # User's own fittings + global fittings, excluding ignored
-        return self.get_queryset().filter(
+        return self.filter(
             Q(owner=user) | Q(owner__isnull=True)
         ).exclude(
             id__in=ignored_ids
         )
+
+
+class FittingManager(models.Manager):
+    """Manager for Fitting queries."""
+
+    def get_queryset(self):
+        return FittingQuerySet(model=self.model, using=self._db)
+
+    def for_ship_type(self, ship_type_id: int):
+        """Get fittings for a specific ship type."""
+        return self.get_queryset().for_ship_type(ship_type_id)
+
+    def active(self):
+        """Get active fittings."""
+        return self.get_queryset().active()
+
+    def for_user(self, user):
+        """
+        Get fittings visible to a user.
+
+        Returns:
+            User's own fittings (owner=user) + global fittings (owner=None)
+            that the user hasn't ignored.
+        """
+        return self.get_queryset().for_user(user)
 
 
 class Fitting(models.Model):
