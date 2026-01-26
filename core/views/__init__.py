@@ -559,6 +559,8 @@ def sync_character(request: HttpRequest, character_id: int) -> HttpResponse:
     from django.contrib import messages
     from django_q.tasks import async_task
 
+    logger.info(f'=== SYNC CHARACTER VIEW CALLED === character_id={character_id}, user={request.user}, method={request.method}')
+
     try:
         character = Character.objects.get(id=character_id, user=request.user)
     except Character.DoesNotExist:

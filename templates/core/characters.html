@@ -128,3 +128,40 @@
     </div>
 {% endif %}
 {% endblock %}
+
+{% block extra_head %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Log all sync form submissions
+    document.querySelectorAll('form[action*="/sync/"]').forEach(function(form) {
+        console.log('Found sync form:', form.action);
+        console.log('Form method:', form.method);
+
+        // Log button clicks
+        const button = form.querySelector('button[type="submit"]');
+        if (button) {
+            console.log('Found submit button:', button.textContent);
+            button.addEventListener('click', function(e) {
+                console.log('Sync button clicked!', form.action);
+                console.log('Button disabled:', button.disabled);
+                console.log('Form action:', form.action);
+                console.log('Event:', e);
+            });
+        }
+
+        // Log form submissions
+        form.addEventListener('submit', function(e) {
+            console.log('Sync form submitting!', form.action);
+            console.log('Form method:', form.method);
+            console.log('Form action:', form.action);
+            console.log('Event:', e);
+        });
+
+        // Log any errors
+        form.addEventListener('error', function(e) {
+            console.error('Form error:', e);
+        });
+    });
+});
+</script>
+{% endblock %}
