@@ -306,9 +306,9 @@ def dashboard(request: HttpRequest) -> HttpResponse:
         total=Sum('total_sp')
     )['total'] or 0
 
-    # Count active skill queues across all characters
+    # Count characters with active skill queues (training in progress)
     active_skill_queues = sum(
-        char.skill_queue.count() for char in characters
+        1 for char in characters if char.skill_queue.filter(finish_date__gt=timezone.now()).exists()
     )
 
     # Count total active market orders
@@ -334,9 +334,9 @@ def dashboard(request: HttpRequest) -> HttpResponse:
 
     characters_data = []
     for char in characters:
-        skill_queue = list(char.skill_queue.all())
-        current_skill = skill_queue[0] if skill_queue else None
-        queue_count = len(skill_queue)
+        # Get first skill in queue (actively training or next up)
+        current_skill = char.skill_queue.order_by('queue_position').first()
+        queue_count = char.skill_queue.count()
 
         # Fetch corporation ticker
         corp_ticker = None

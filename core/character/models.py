@@ -135,6 +135,14 @@ class SkillQueueItem(models.Model):
             return f"Skill {self.skill_id}"
 
     @property
+    def level_roman(self) -> str:
+        """Get the target level as Roman numeral."""
+        roman_numerals = ['I', 'II', 'III', 'IV', 'V']
+        if 1 <= self.finish_level <= 5:
+            return roman_numerals[self.finish_level - 1]
+        return str(self.finish_level)
+
+    @property
     def is_completed(self) -> bool:
         """Check if this skill has finished training."""
         if not self.finish_date:
@@ -187,20 +195,62 @@ class SkillQueueItem(models.Model):
 
     @property
     def sp_per_hour(self) -> int:
-        """Calculate SP per hour training rate."""
-        from django.utils import timezone
+        """
+        Calculate SP per hour training rate from character attributes.
 
-        if not self.finish_date or not self.training_start_time:
+        Formula: (primary_attribute + 0.5 * secondary_attribute) SP per minute
+        Converts to SP/hour for display.
+        """
+        from core.eve.models import TypeAttribute
+
+        # Attribute IDs for skill primary/secondary attributes (from SDE)
+        PRIMARY_ATTR_ID = 180
+        SECONDARY_ATTR_ID = 181
+
+        # Character attribute IDs (these match the values in TypeAttribute for skills)
+        CHARISMA_ATTR_ID = 164
+        INTELLIGENCE_ATTR_ID = 165
+        MEMORY_ATTR_ID = 166
+        PERCEPTION_ATTR_ID = 167
+        WILLPOWER_ATTR_ID = 168
+
+        try:
+            # Get the character's attributes
+            attrs = self.character.attributes
+        except CharacterAttributes.DoesNotExist:
             return 0
 
-        total_sp = self.level_end_sp - self.level_start_sp
-        total_seconds = (self.finish_date - self.training_start_time).total_seconds()
+        # Get primary and secondary attribute IDs for this skill
+        primary_attr = TypeAttribute.objects.filter(
+            type_id=self.skill_id,
+            attribute_id=PRIMARY_ATTR_ID
+        ).values_list('value_float', flat=True).first()
 
-        if total_seconds <= 0:
+        secondary_attr = TypeAttribute.objects.filter(
+            type_id=self.skill_id,
+            attribute_id=SECONDARY_ATTR_ID
+        ).values_list('value_float', flat=True).first()
+
+        if not primary_attr or not secondary_attr:
             return 0
 
-        sp_per_second = total_sp / total_seconds
-        return int(sp_per_second * 3600)
+        # Map attribute ID to character attribute value
+        attr_map = {
+            CHARISMA_ATTR_ID: attrs.charisma,
+            INTELLIGENCE_ATTR_ID: attrs.intelligence,
+            MEMORY_ATTR_ID: attrs.memory,
+            PERCEPTION_ATTR_ID: attrs.perception,
+            WILLPOWER_ATTR_ID: attrs.willpower,
+        }
+
+        primary_value = attr_map.get(primary_attr, 0)
+        secondary_value = attr_map.get(secondary_attr, 0)
+
+        # SP per minute = primary + 0.5 * secondary
+        sp_per_minute = primary_value + (0.5 * secondary_value)
+
+        # Convert to SP per hour
+        return int(sp_per_minute * 60)
 
 
 class CharacterAttributes(models.Model):

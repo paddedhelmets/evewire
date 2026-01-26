@@ -642,19 +642,21 @@ def sync_character_data(character) -> bool:
         _sync_skill_queue(character)
         _sync_attributes(character)
         _sync_implants(character)
-        _sync_location(character)
-        _sync_wallet(character)
-        _sync_assets(character)
-        _sync_orders(character)
-        _sync_orders_history(character)
-        _sync_industry_jobs(character)
 
         # Location might fail with 401 if scope not granted - handle gracefully
+        try:
+            _sync_location(character)
         except HTTPError as e:
             if e.response is not None and e.response.status_code == 401:
                 logger.warning(f'Location not available for character {character.id} (missing scope)')
             else:
                 raise
+
+        _sync_wallet(character)
+        _sync_assets(character)
+        _sync_orders(character)
+        _sync_orders_history(character)
+        _sync_industry_jobs(character)
 
         # Contracts might fail with 401 if scope not granted - handle gracefully
         try:

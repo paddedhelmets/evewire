@@ -26,6 +26,10 @@
     <!-- Training progress bar (if actively training) -->
     {% if training %}
     <div class="char-training">
+        <div class="training-skill-name">
+            {{ training.skill_name }} {{ training.level_roman }}
+            <span class="rank-badge">{{ training.finish_level }}</span>
+        </div>
         <div class="progress-bar-container">
             <div class="progress" style="width: {{ training.progress_percent }}%"></div>
         </div>
@@ -90,6 +94,29 @@
 /* Training progress bar */
 .char-training {
     margin-top: 1rem;
+}
+
+.training-skill-name {
+    font-size: 0.85rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.rank-badge {
+    display: inline-block;
+    min-width: 20px;
+    height: 20px;
+    line-height: 20px;
+    text-align: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    background: var(--link-color);
+    color: white;
+    border-radius: 4px;
+    padding: 0 4px;
 }
 
 .progress-bar-container {
