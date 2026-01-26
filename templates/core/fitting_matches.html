@@ -23,7 +23,7 @@
 <div class="card">
     <h2>Summary</h2>
     <p><strong>Fitted Ships Found:</strong> {{ fitted_ships_count }}</p>
-    <p><strong>Matches Found:</strong> {{ matches.count }}</p>
+    <p><strong>Matches Found:</strong> {{ matches|length }}</p>
 </div>
 
 {% if matches %}

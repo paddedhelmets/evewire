@@ -96,10 +96,14 @@ class AssetFitExtractor:
         """
         ships = []
 
-        # Get all ship-type assets
+        # Get all ship-type assets (category 6 = Ships, filter through ItemGroup)
+        from core.eve.models import ItemGroup
+        ship_group_ids = ItemGroup.objects.filter(category_id=6, published=True).values_list('id', flat=True)
+        ship_type_ids = ItemType.objects.filter(group_id__in=ship_group_ids, published=True).values_list('id', flat=True)
+
         ship_assets = CharacterAsset.objects.filter(
             character=character,
-            type_id__in=ItemType.objects.filter(category_id=6).values_list('id', flat=True)
+            type_id__in=ship_type_ids
         )
 
         for ship_asset in ship_assets:
