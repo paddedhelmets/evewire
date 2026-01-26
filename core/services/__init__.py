@@ -570,8 +570,9 @@ def update_character_corporation_info(character) -> bool:
     Update character's corporation and alliance names from ESI.
 
     Fetches public corporation and alliance information to populate the
-    corporation_name and alliance_name fields. Called during authentication
-    and sync to keep names current.
+    corporation_name and alliance_name fields. Also updates the Corporation
+    model with ticker data. Called during authentication and sync to keep
+    names current.
 
     Args:
         character: Character instance with corporation_id set
@@ -588,7 +589,19 @@ def update_character_corporation_info(character) -> bool:
         corp_data = corp_response.data
 
         corporation_name = corp_data.get('name', '')
+        corporation_ticker = corp_data.get('ticker', '')
         alliance_id = corp_data.get('alliance_id')
+
+        # Update or create Corporation record with ticker
+        from core.eve.models import Corporation
+        Corporation.objects.update_or_create(
+            id=character.corporation_id,
+            defaults={
+                'name': corporation_name,
+                'ticker': corporation_ticker,
+                'is_npc': False,
+            }
+        )
 
         # Fetch alliance info if applicable
         alliance_name = ''
@@ -597,6 +610,16 @@ def update_character_corporation_info(character) -> bool:
                 alliance_response = ESIClient.get_alliance_info(alliance_id)
                 alliance_data = alliance_response.data
                 alliance_name = alliance_data.get('name', '')
+
+                # Update Alliance record too
+                from core.eve.models import Alliance
+                Alliance.objects.update_or_create(
+                    id=alliance_id,
+                    defaults={
+                        'name': alliance_name,
+                        'ticker': alliance_data.get('ticker', ''),
+                    }
+                )
             except Exception as e:
                 logger.warning(f'Failed to fetch alliance {alliance_id} info: {e}')
 
