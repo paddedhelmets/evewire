@@ -1234,7 +1234,15 @@ class SkillPlan(models.Model):
                 continue
             key = (entry.skill_id, entry.level)
 
-            # Get prerequisites for this skill level
+            # Add implicit level prerequisite: level N-1 -> level N (same skill)
+            # Drones 1 -> Drones 2 -> Drones 3 -> Drones 4 -> Drones 5
+            if entry.level > 1:
+                prev_level_key = (entry.skill_id, entry.level - 1)
+                if prev_level_key in entry_map:
+                    graph[prev_level_key].append(key)
+                    in_degree[key] += 1
+
+            # Get prerequisites for this skill level (from SDE)
             prereqs = get_prerequisites_for_skill_level(entry.skill_id, entry.level)
 
             for prereq_skill_id, prereq_level in prereqs:
