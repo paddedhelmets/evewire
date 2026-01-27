@@ -22,63 +22,29 @@ logger = logging.getLogger(__name__)
 def skill_plan_list(request: HttpRequest) -> HttpResponse:
     """List all skill plans for the current user plus reference plans."""
     from core.character.models import SkillPlan
-    from core.skill_plans import calculate_training_time
+    from django.db.models import Prefetch, Count
 
-    # Get user's character for progress calculation
-    character = get_users_character(request.user)
-
-    # Add progress and training time to each plan
-    def enrich_plans(plans):
-        enriched = []
-        for plan in plans:
-            entry_count = plan.entries.count()
-            progress = None
-            total_training_seconds = 0
-
-            if character:
-                progress = plan.get_progress_for_character(character)
-                # Calculate total training time for incomplete skills
-                character_skills = {s.skill_id: s for s in character.skills.all()}
-                for entry in plan.entries.all():
-                    target_level = entry.level or entry.recommended_level
-                    if target_level:
-                        skill = character_skills.get(entry.skill_id)
-                        current_level = skill.skill_level if skill else 0
-                        if current_level < target_level:
-                            try:
-                                training_time = calculate_training_time(character, entry.skill_id, target_level)
-                                total_training_seconds += training_time['total_seconds']
-                            except Exception:
-                                pass
-
-            enriched.append({
-                'plan': plan,
-                'entry_count': entry_count,
-                'progress': progress,
-                'total_training_seconds': total_training_seconds,
-            })
-        return enriched
-
-    user_plans = enrich_plans(SkillPlan.objects.filter(
+    # Prefetch entries to avoid N+1 queries
+    user_plans = SkillPlan.objects.filter(
         owner=request.user, parent__isnull=True, is_reference=False
-    ))
-    reference_plans = enrich_plans(SkillPlan.objects.filter(
+    ).prefetch_related('entries').annotate(entry_count=Count('entries'))
+
+    reference_plans = SkillPlan.objects.filter(
         parent__isnull=True, is_reference=True
-    ))
+    ).prefetch_related('entries').annotate(entry_count=Count('entries'))
 
     return render(request, 'core/skill_plan_list.html', {
         'user_plans': user_plans,
         'reference_plans': reference_plans,
-        'character': character,
     })
 
 
 @login_required
 def skill_plan_detail(request: HttpRequest, plan_id: int) -> HttpResponse:
-    """Show a single skill plan with progress for the user's character."""
+    """Show a single skill plan with progress for all user's characters."""
     from core.character.models import SkillPlan
     from core.models import Character
-    from core.skill_plans import calculate_training_time, check_prerequisites_met, get_trainable_status
+    from core.skill_plans import calculate_training_time
 
     try:
         plan = SkillPlan.objects.get(id=plan_id)
@@ -87,136 +53,46 @@ def skill_plan_detail(request: HttpRequest, plan_id: int) -> HttpResponse:
             'message': 'Skill plan not found',
         }, status=404)
 
-    # Get user's character
-    character = get_users_character(request.user)
+    # Get all user's characters
+    characters = Character.objects.filter(user=request.user).order_by('name')
 
-    # Get filter parameters
-    show_filter = request.GET.get('show', 'all')  # 'all', 'trainable', 'blocked'
+    # Calculate progress for each character
+    pilot_progress = []
+    for char in characters:
+        progress = plan.get_progress_for_character(char)
+        percent_complete = 0
+        if progress.total_entries > 0:
+            percent_complete = (progress.completed / progress.total_entries) * 100
 
-    # Get progress if character exists
-    progress = None
-    character_skills = {}
-    if character:
-        progress = plan.get_progress_for_character(character)
-        character_skills = {s.skill_id: s for s in character.skills.all()}
+        # Calculate remaining training time
+        character_skills = {s.skill_id: s for s in char.skills.all()}
+        total_training_seconds = 0
 
-    # Get entries with character skill status and training times
-    entries = []
-    total_training_seconds = 0
-
-    for entry in plan.entries.all():
-        skill = character_skills.get(entry.skill_id)
-        status = 'unknown'
-        current_level = 0
-        training_time = None
-
-        # Determine target level (required level, or recommended if no required)
-        target_level = entry.level or entry.recommended_level
-
-        if skill:
-            current_level = skill.skill_level
-            if entry.level and current_level >= entry.level:
-                status = 'completed'
-            elif entry.recommended_level and current_level >= entry.recommended_level:
-                status = 'recommended'
-            elif current_level > 0:
-                status = 'in_progress'
-            else:
-                status = 'not_started'
-        elif entry.level:
-            status = 'not_started'
-
-        # Calculate training time if character exists and skill is not complete
-        if character and target_level and status != 'completed':
-            try:
-                training_time = calculate_training_time(character, entry.skill_id, target_level)
-                total_training_seconds += training_time['total_seconds']
-            except Exception:
-                # Training time calculation may fail if SDE data missing
-                training_time = None
-
-        # Check prerequisites for required skills
-        prereq_info = None
-        trainable_status = None
-        if character and entry.level:
-            try:
-                prereq_info = check_prerequisites_met(character, entry.skill_id, entry.level, character_skills)
-                trainable_status = get_trainable_status(character, entry.skill_id, entry.level, character_skills)
-            except Exception:
-                # Prerequisite check may fail if SDE data missing
-                pass
-
-        entry_data = {
-            'entry': entry,
-            'current_level': current_level,
-            'status': status,
-            'training_time': training_time,
-            'target_level': target_level,
-            'prereq_info': prereq_info,
-            'trainable_status': trainable_status,
-        }
-
-        # Apply filter
-        if show_filter == 'all':
-            entries.append(entry_data)
-        elif show_filter == 'trainable' and trainable_status == 'trainable':
-            entries.append(entry_data)
-        elif show_filter == 'blocked' and trainable_status == 'blocked':
-            entries.append(entry_data)
-
-    # Get linked fittings with skill progress
-    from core.doctrines.models import Fitting
-    linked_fittings = []
-    for fitting in plan.fittings.all():
-        # Calculate skill requirements for this fitting
-        fitting_progress = {
-            'fitting': fitting,
-            'required_skills': [],
-            'completed': 0,
-            'total': 0,
-            'percent': 0,
-        }
-
-        if character:
-            # Get all skill requirements from fitting modules
-            from career_research.fit_resolver.resolver import FitResolver
-            resolver = FitResolver()
-
-            # Build fit dict from fitting model
-            fit_data = {
-                'ship': fitting.ship_type_id,
-                'highs': [e.module_type_id for e in fitting.entries.filter(slot_type='high')],
-                'meds': [e.module_type_id for e in fitting.entries.filter(slot_type='med')],
-                'lows': [e.module_type_id for e in fitting.entries.filter(slot_type='low')],
-                'rigs': [e.module_type_id for e in fitting.entries.filter(slot_type='rig')],
-                'subsystems': [e.module_type_id for e in fitting.entries.filter(slot_type='subsystem')],
-            }
-
-            requirements = resolver.resolve_fit_dict(fit_data)
-
-            for req in requirements:
-                skill = character_skills.get(req.skill_id)
+        for entry in plan.entries.all():
+            target_level = entry.level or entry.recommended_level
+            if target_level:
+                skill = character_skills.get(entry.skill_id)
                 current_level = skill.skill_level if skill else 0
-                status = 'completed' if current_level >= req.level else 'incomplete'
+                if current_level < target_level:
+                    try:
+                        training_time = calculate_training_time(char, entry.skill_id, target_level)
+                        total_training_seconds += training_time['total_seconds']
+                    except Exception:
+                        pass
 
-                fitting_progress['required_skills'].append({
-                    'skill_id': req.skill_id,
-                    'skill_name': req.skill_name,
-                    'required_level': req.level,
-                    'current_level': current_level,
-                    'status': status,
-                })
+        pilot_progress.append({
+            'character': char,
+            'progress': progress,
+            'percent_complete': percent_complete,
+            'total_training_seconds': total_training_seconds,
+        })
 
-                if current_level >= req.level:
-                    fitting_progress['completed'] += 1
-                fitting_progress['total'] += 1
+    # Sort by percent complete descending
+    pilot_progress.sort(key=lambda x: x['percent_complete'], reverse=True)
 
-            if fitting_progress['total'] > 0:
-                fitting_progress['percent'] = int(
-                    (fitting_progress['completed'] / fitting_progress['total']) * 100
-                )
-
-        linked_fittings.append(fitting_progress)
+    # Count completed pilots
+    completed_pilots = sum(1 for p in pilot_progress if p['progress'].completed >= p['progress'].total_entries)
+    total_pilots = len(pilot_progress)
 
     # Get all skills organized by group for the Add Skill dropdown
     from core.eve.models import ItemType, ItemGroup
@@ -249,12 +125,10 @@ def skill_plan_detail(request: HttpRequest, plan_id: int) -> HttpResponse:
 
     return render(request, 'core/skill_plan_detail.html', {
         'plan': plan,
-        'entries': entries,
-        'progress': progress,
-        'character': character,
-        'total_training_seconds': total_training_seconds,
-        'show_filter': show_filter,
-        'linked_fittings': linked_fittings,
+        'entries': plan.entries.all().order_by('display_order'),
+        'pilot_progress': pilot_progress,
+        'completed_pilots': completed_pilots,
+        'total_pilots': total_pilots,
         'skills_by_group': skills_by_group_dict,
     })
 
@@ -473,6 +347,116 @@ def skill_plan_remove_skill(request: HttpRequest, plan_id: int, entry_id: int) -
 
     entry.delete()
     messages.success(request, 'Skill removed from plan.')
+    return redirect('core:skill_plan_detail', plan_id=plan.id)
+
+
+@login_required
+@require_http_methods(['POST'])
+def skill_plan_import_skills(request: HttpRequest, plan_id: int) -> HttpResponse:
+    """Import skills from clipboard text to a skill plan.
+
+    Format: One skill per line: SKILL_NAME LEVEL
+    Level can be 1-5 or I-V (Roman numerals optional).
+    Example: "Amarr Battleship V" or "Amarr Battleship 5"
+    """
+    from core.character.models import SkillPlan, SkillPlanEntry
+    from core.eve.models import ItemType
+    from django.contrib import messages
+    import re
+
+    try:
+        plan = SkillPlan.objects.get(id=plan_id, owner=request.user)
+    except SkillPlan.DoesNotExist:
+        messages.error(request, 'Skill plan not found.')
+        return redirect('core:skill_plan_list')
+
+    skills_text = request.POST.get('skills', '')
+    if not skills_text.strip():
+        messages.error(request, 'No skills to import.')
+        return redirect('core:skill_plan_detail', plan_id=plan.id)
+
+    # Roman numeral mapping
+    roman_to_int = {'i': 1, 'ii': 2, 'iii': 3, 'iv': 4, 'v': 5}
+
+    # Parse skills: each line is "SKILL_NAME LEVEL"
+    lines = skills_text.strip().split('\n')
+    added_count = 0
+    skipped_count = 0
+    not_found = []
+
+    # Get current skills in plan
+    existing_skill_ids = set(
+        SkillPlanEntry.objects.filter(skill_plan=plan).values_list('skill_id', flat=True)
+    )
+
+    # Get max display order
+    max_order = SkillPlanEntry.objects.filter(
+        skill_plan=plan
+    ).aggregate(max_order=models.Max('display_order'))['max_order'] or 0
+
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+
+        # Split by last space to separate skill name from level
+        # This handles skill names with spaces like "Amarr Battleship"
+        parts = line.rsplit(' ', 1)
+        if len(parts) != 2:
+            skipped_count += 1
+            continue
+
+        skill_name, level_str = parts
+        level_str = level_str.strip().lower()
+
+        # Parse level: 1-5 or I-V (roman)
+        if level_str.isdigit() and 1 <= int(level_str) <= 5:
+            level = int(level_str)
+        elif level_str in roman_to_int:
+            level = roman_to_int[level_str]
+        else:
+            skipped_count += 1
+            continue
+
+        # Find skill by name (case-insensitive, exact match preferred)
+        skill = ItemType.objects.filter(name__iexact=skill_name, published=True).first()
+        if not skill:
+            # Try partial match
+            skill = ItemType.objects.filter(name__icontains=skill_name, published=True).first()
+
+        if not skill:
+            not_found.append(skill_name)
+            continue
+
+        # Skip if already in plan
+        if skill.id in existing_skill_ids:
+            skipped_count += 1
+            continue
+
+        # Add to plan
+        SkillPlanEntry.objects.create(
+            skill_plan=plan,
+            skill=skill,
+            level=level,
+            display_order=max_order + added_count + 1,
+        )
+        existing_skill_ids.add(skill.id)
+        added_count += 1
+
+    # Build result message
+    if added_count > 0:
+        msg = f'Added {added_count} skill(s) to plan.'
+        if skipped_count > 0:
+            msg += f' Skipped {skipped_count} invalid line(s).'
+        if not_found:
+            msg += f' {len(not_found)} skill(s) not found.'
+        messages.success(request, msg)
+    else:
+        if not_found:
+            messages.error(request, f'No skills added. Skills not found: {", ".join(not_found[:5])}{"..." if len(not_found) > 5 else ""}')
+        else:
+            messages.error(request, 'No valid skills found to import.')
+
     return redirect('core:skill_plan_detail', plan_id=plan.id)
 
 

@@ -48,6 +48,7 @@ urlpatterns = [
     path('plans/<int:plan_id>/delete/', views.skill_plan_delete, name='skill_plan_delete'),
     path('plans/<int:plan_id>/add-skill/', views.skill_plan_add_skill, name='skill_plan_add_skill'),
     path('plans/<int:plan_id>/remove-skill/<int:entry_id>/', views.skill_plan_remove_skill, name='skill_plan_remove_skill'),
+    path('plans/<int:plan_id>/import-skills/', views.skill_plan_import_skills, name='skill_plan_import_skills'),
     path('plans/<int:plan_id>/export/', views.skill_plan_export, name='skill_plan_export'),
     path('skills/search/', views.skill_search, name='skill_search'),
 

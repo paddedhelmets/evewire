@@ -20,295 +20,109 @@
 </div>
 {% endif %}
 
-{% if progress %}
+<!-- Multi-pilot progress summary -->
 <div class="card" style="margin-bottom: 1rem;">
-    <h2>Progress</h2>
-    <div style="display: flex; gap: 2rem; margin-bottom: 1rem;">
-        <div>
-            <strong>{{ progress.percent_complete|floatformat:1 }}%</strong> Complete
-        </div>
-        <div>
-            <strong>{{ progress.completed }}</strong> / {{ progress.total_entries }} Required
-        </div>
-        <div>
-            <strong>{{ progress.in_progress }}</strong> In Progress
-        </div>
-        <div>
-            <strong>{{ progress.not_started }}</strong> Not Started
-        </div>
-        {% if total_training_seconds %}
-        <div>
-            <strong>{{ total_training_seconds|format_duration }}</strong> Total Time
-        </div>
-        {% endif %}
-    </div>
-    <div style="background: #eee; height: 20px; border-radius: 4px; overflow: hidden;">
-        <div style="background: #080; height: 100%; width: {{ progress.percent_complete }}%;"></div>
-    </div>
-</div>
-{% endif %}
-
-<div class="card">
-    <h2>Skills</h2>
-    {% if character %}
-    <div style="margin-bottom: 1rem; display: flex; gap: 1rem; align-items: center;">
-        <span>Show:</span>
-        <a href="{% url 'core:skill_plan_detail' plan.id %}?show=all" style="{% if show_filter == 'all' %}font-weight: bold; color: #000;{% endif %}">All</a>
-        <a href="{% url 'core:skill_plan_detail' plan.id %}?show=trainable" style="{% if show_filter == 'trainable' %}font-weight: bold; color: #000;{% endif %}">Trainable</a>
-        <a href="{% url 'core:skill_plan_detail' plan.id %}?show=blocked" style="{% if show_filter == 'blocked' %}font-weight: bold; color: #000;{% endif %}">Blocked</a>
-    </div>
-    {% endif %}
-    {% if entries %}
+    <h2 style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;" onclick="var el = document.getElementById('pilot-details'); el.style.display = el.style.display === 'none' ? 'block' : 'none';">
+        <span>
+            {{ entries|length }} skills
+            {% if total_pilots > 0 %}
+            | {{ completed_pilots }}/{{ total_pilots }} pilots completed
+            {% endif %}
+        </span>
+        <span style="font-size: 0.9rem; color: #666;">▼ Click to expand</span>
+    </h2>
+    <div id="pilot-details" style="margin-top: 1rem; display: none;">
         <table style="width: 100%; border-collapse: collapse;">
             <thead>
                 <tr style="border-bottom: 2px solid #ddd;">
-                    <th style="padding: 0.5rem; text-align: left;">Skill</th>
-                    <th style="padding: 0.5rem; text-align: center;">Required</th>
-                    <th style="padding: 0.5rem; text-align: center;">Recommended</th>
-                    <th style="padding: 0.5rem; text-align: center;">Current</th>
-                    <th style="padding: 0.5rem; text-align: left;">Prerequisites</th>
-                    <th style="padding: 0.5rem; text-align: left;">Status</th>
-                    <th style="padding: 0.5rem; text-align: left;">Training Time</th>
-                    <th style="padding: 0.5rem; text-align: left;">Actions</th>
+                    <th style="padding: 0.5rem; text-align: left;">Pilot</th>
+                    <th style="padding: 0.5rem; text-align: center;">Skills Complete</th>
+                    <th style="padding: 0.5rem; text-align: center;">%</th>
+                    <th style="padding: 0.5rem; text-align: left;">Est. Remaining</th>
                 </tr>
             </thead>
             <tbody>
-                {% for item in entries %}
-                <tr style="border-bottom: 1px solid #eee; {% if item.status == 'completed' %}background: #e6f7e6;{% elif item.trainable_status == 'blocked' %}background: #fff3f3;{% endif %}"
-                    {% if item.prereq_info %}data-prereqs="{{ item.entry.skill_id }}"{% endif %}>
+                {% for pilot in pilot_progress %}
+                <tr style="border-bottom: 1px solid #eee;">
                     <td style="padding: 0.5rem;">
-                        <strong>{{ item.entry.skill_name }}</strong>
-                        {% if item.trainable_status == 'blocked' %}
-                            <span style="color: #c00; font-size: 0.8rem; margin-left: 0.5rem;">🔒 Blocked</span>
-                        {% elif item.trainable_status == 'trainable' %}
-                            <span style="color: #080; font-size: 0.8rem; margin-left: 0.5rem;">✓ Ready</span>
-                        {% endif %}
+                        <a href="{% url 'core:character_overview' pilot.character.id %}" style="text-decoration: none; color: inherit;">
+                            {{ pilot.character.name }}
+                        </a>
                     </td>
                     <td style="padding: 0.5rem; text-align: center;">
-                        {% if item.entry.level %}L{{ item.entry.level }}{% else %}&mdash;{% endif %}
+                        {{ pilot.progress.completed }}/{{ pilot.progress.total_entries }}
                     </td>
-                    <td style="padding: 0.5rem; text-align: center;">
-                        {% if item.entry.recommended_level %}L{{ item.entry.recommended_level }}{% else %}&mdash;{% endif %}
-                    </td>
-                    <td style="padding: 0.5rem; text-align: center;">
-                        L{{ item.current_level }}
-                    </td>
-                    <td style="padding: 0.5rem;">
-                        {% if item.prereq_info %}
-                            {% if item.prereq_info.all_met %}
-                                <span style="color: #080;">✓ All met</span>
-                            {% else %}
-                                <span style="color: #c00;"
-                                      onmouseover="showPrereqs({{ item.entry.skill_id }}, event)"
-                                      onmouseout="hidePrereqs()"
-                                      style="cursor: help;">
-                                    {{ item.prereq_info.met_count }}/{{ item.prereq_info.total }} met
-                                </span>
-                                <span style="font-size: 0.8rem; color: #999;">(hover)</span>
-                            {% endif %}
-                        {% else %}
-                            <span style="color: #999;">&mdash;</span>
-                        {% endif %}
-                    </td>
-                    <td style="padding: 0.5rem;">
-                        {% if item.status == 'completed' %}
-                            <span style="color: #080; font-weight: bold;">✓ Complete</span>
-                        {% elif item.status == 'recommended' %}
-                            <span style="color: #060; font-weight: bold;">✓ Recommended Met</span>
-                        {% elif item.status == 'in_progress' %}
-                            <span style="color: #c60;">In Progress</span>
-                        {% elif item.status == 'not_started' %}
-                            <span style="color: #666;">Not Started</span>
-                        {% else %}
-                            <span style="color: #999;">Unknown</span>
-                        {% endif %}
+                    <td style="padding: 0.5rem; text-align: center; width: 150px;">
+                        <div style="background: #eee; height: 8px; border-radius: 4px; overflow: hidden; margin: 0 auto;">
+                            <div style="background: {% if pilot.percent_complete == 100 %}#080{% elif pilot.percent_complete >= 50 %}#cc0{% else %}#c00{% endif %}; height: 100%; width: {{ pilot.percent_complete }}%;"></div>
+                        </div>
+                        <span style="font-size: 0.85rem; color: #666;">{{ pilot.percent_complete|floatformat:0 }}%</span>
                     </td>
                     <td style="padding: 0.5rem; font-size: 0.9rem;">
-                        {% if item.status == 'completed' %}
+                        {% if pilot.percent_complete == 100 %}
                             <span style="color: #080;">Complete</span>
-                        {% elif item.training_time %}
-                            {% if item.training_time.total_seconds > 0 %}
-                                {{ item.training_time.total_seconds|format_duration }}
-                            {% else %}
-                                <span style="color: #999;">Ready</span>
-                            {% endif %}
+                        {% elif pilot.total_training_seconds %}
+                            {{ pilot.total_training_seconds|format_duration }}
                         {% else %}
                             <span style="color: #999;">&mdash;</span>
                         {% endif %}
                     </td>
-                    <td style="padding: 0.5rem;">
-                        <form method="post" action="{% url 'core:skill_plan_remove_skill' plan.id item.entry.id %}" style="display: inline;" onsubmit="return confirm('Remove this skill from the plan?');">
-                            {% csrf_token %}
-                            <button type="submit" style="background: none; border: none; color: #c00; cursor: pointer; text-decoration: underline;">Remove</button>
-                        </form>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4" style="padding: 1rem; text-align: center; color: #666;">
+                        No characters found. Add characters to see progress.
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
-    {% else %}
-        <p style="color: #666;">No skills in this plan yet.</p>
-    {% endif %}
-
-    <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #ddd;">
-        <h3>Add Skill</h3>
-        <form method="post" action="{% url 'core:skill_plan_add_skill' plan.id %}" style="display: flex; gap: 0.5rem; align-items: flex-start; flex-wrap: wrap;">
-            {% csrf_token %}
-            <select name="skill_id" required style="padding: 0.5rem; min-width: 300px; max-width: 500px;" size="8">
-                {% for group_name, skills in skills_by_group.items %}
-                <optgroup label="{{ group_name }}">
-                    {% for skill in skills %}
-                    <option value="{{ skill.id }}">{{ skill.name }}</option>
-                    {% endfor %}
-                </optgroup>
-                {% endfor %}
-            </select>
-            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-                <div>
-                    <label style="display: block; font-size: 0.85rem; margin-bottom: 0.25rem;">Required Level:</label>
-                    <select name="level" style="padding: 0.5rem; min-width: 120px;">
-                        <option value="">—</option>
-                        <option value="1">1</option>
-                        <option value="2">2</option>
-                        <option value="3">3</option>
-                        <option value="4">4</option>
-                        <option value="5">5</option>
-                    </select>
-                </div>
-                <div>
-                    <label style="display: block; font-size: 0.85rem; margin-bottom: 0.25rem;">Recommended Level:</label>
-                    <select name="recommended_level" style="padding: 0.5rem; min-width: 120px;">
-                        <option value="">—</option>
-                        <option value="1">1</option>
-                        <option value="2">2</option>
-                        <option value="3">3</option>
-                        <option value="4">4</option>
-                        <option value="5">5</option>
-                    </select>
-                </div>
-                <button type="submit" class="btn">Add Skill</button>
-            </div>
-        </form>
-        <p style="color: #666; font-size: 0.9rem; margin-top: 0.5rem;">
-            Select a skill from the list above. Skills are organized by group.
-        </p>
     </div>
-    <script>
-
-    // Prerequisite tooltip data and functions
-    const prereqData = {
-        {% for item in entries %}
-            {% if item.prereq_info and not item.prereq_info.all_met %}
-            '{{ item.entry.skill_id }}': {
-                skillName: '{{ item.entry.skill_name }}',
-                unmet: [
-                    {% for prereq in item.prereq_info.unmet %}
-                    {
-                        skillName: '{{ prereq.skill_name }}',
-                        requiredLevel: {{ prereq.required_level }},
-                        currentLevel: {{ prereq.current_level }},
-                        type: '{{ prereq.type }}',
-                        depth: {{ prereq.depth }}
-                    }{% if not forloop.last %},{% endif %}
-                    {% endfor %}
-                ]
-            }{% if not forloop.last %},{% endif %}
-            {% endif %}
-        {% endfor %}
-    };
-
-    const prereqTooltip = document.createElement('div');
-    prereqTooltip.style.position = 'absolute';
-    prereqTooltip.style.background = '#fff';
-    prereqTooltip.style.border = '1px solid #ccc';
-    prereqTooltip.style.borderRadius = '4px';
-    prereqTooltip.style.padding = '0.75rem';
-    prereqTooltip.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-    prereqTooltip.style.zIndex = '1000';
-    prereqTooltip.style.maxWidth = '350px';
-    prereqTooltip.style.display = 'none';
-    document.body.appendChild(prereqTooltip);
-
-    function showPrereqs(skillId, event) {
-        const data = prereqData[skillId];
-        if (!data || data.unmet.length === 0) return;
-
-        let html = `<strong style="color: #c00;">Unmet Prerequisites for ${data.skillName}:</strong><ul style="margin: 0.5rem 0 0 1.5rem; padding: 0;">`;
-        for (const prereq of data.unmet) {
-            const indent = ' '.repeat(prereq.depth);
-            const icon = prereq.type === 'direct' ? '🔴' : '↳';
-            html += `<li style="margin-bottom: 0.25rem;">${indent}${icon} ${prereq.skillName} L${prereq.requiredLevel} (have L${prereq.currentLevel})</li>`;
-        }
-        html += '</ul>';
-
-        prereqTooltip.innerHTML = html;
-        prereqTooltip.style.display = 'block';
-
-        // Position tooltip
-        const rect = event.target.getBoundingClientRect();
-        prereqTooltip.style.top = (rect.bottom + window.scrollY + 8) + 'px';
-        prereqTooltip.style.left = Math.max(8, Math.min(rect.left + window.scrollX, window.innerWidth - 360)) + 'px';
-    }
-
-    function hidePrereqs() {
-        prereqTooltip.style.display = 'none';
-    }
-    </script>
 </div>
 
-{% if linked_fittings %}
-<div class="card" style="margin-top: 1rem;">
-    <h2>Linked Fittings</h2>
-    <p style="color: #666; margin-bottom: 1rem;">Fittings that use skills from this plan.</p>
-    {% if linked_fittings %}
-        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 1rem;">
-            {% for fitting_item in linked_fittings %}
-            <div style="border: 1px solid #ddd; border-radius: 4px; padding: 1rem;">
-                <h3 style="margin: 0 0 0.5rem 0;">
-                    {{ fitting_item.fitting.ship_type_name }}
-                </h3>
-                <p style="margin: 0 0 0.5rem 0; font-weight: bold;">
-                    {{ fitting_item.fitting.name }}
-                </p>
-                {% if fitting_item.fitting.description %}
-                <p style="color: #666; font-size: 0.9rem; margin: 0 0 0.5rem 0;">
-                    {{ fitting_item.fitting.description|truncatewords:20 }}
-                </p>
-                {% endif %}
-                {% if character %}
-                <div style="margin-top: 0.5rem;">
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem; font-size: 0.9rem;">
-                        <span>{{ fitting_item.percent }}% Trained</span>
-                        <span>{{ fitting_item.completed }}/{{ fitting_item.total }} skills</span>
-                    </div>
-                    <div style="background: #eee; height: 8px; border-radius: 4px; overflow: hidden;">
-                        <div style="background: {% if fitting_item.percent == 100 %}#080{% elif fitting_item.percent >= 50 %}#cc0{% else %}#c00{% endif %}; height: 100%; width: {{ fitting_item.percent }}%;"></div>
-                    </div>
-                    {% if fitting_item.required_skills %}
-                    <details style="margin-top: 0.5rem;">
-                        <summary style="cursor: pointer; font-size: 0.9rem;">View required skills</summary>
-                        <div style="margin-top: 0.5rem; max-height: 200px; overflow-y: auto; font-size: 0.85rem;">
-                            {% for skill in fitting_item.required_skills %}
-                            <div style="display: flex; justify-content: space-between; padding: 0.25rem 0; border-bottom: 1px solid #eee;">
-                                <span>{{ skill.skill_name }}</span>
-                                <span style="color: {% if skill.status == 'completed' %}#080{% else %}#c00{% endif %};">
-                                    L{{ skill.current_level }}/L{{ skill.required_level }}
-                                </span>
-                            </div>
-                            {% endfor %}
-                        </div>
-                    </details>
-                    {% endif %}
-                </div>
-                {% else %}
-                <p style="color: #999; font-size: 0.9rem;">Add a character to see skill requirements</p>
-                {% endif %}
-            </div>
-            {% endfor %}
-        </div>
-    {% else %}
-        <p style="color: #666;">No fittings linked to this plan yet.</p>
-    {% endif %}
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start;">
+    <!-- Left column: Current skills -->
+    <div class="card">
+        <h2>Current Skills ({{ entries|length }})</h2>
+        {% if entries %}
+            <ul style="list-style: none; padding: 0; margin: 0;">
+                {% for entry in entries %}
+                <li style="padding: 0.5rem; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
+                    <span>
+                        <strong>{{ entry.skill.name }}</strong>
+                        {% if entry.level %} → L{{ entry.level }}{% endif %}
+                    </span>
+                    <form method="post" action="{% url 'core:skill_plan_remove_skill' plan.id entry.id %}" style="display: inline;" onsubmit="return confirm('Remove this skill from the plan?');">
+                        {% csrf_token %}
+                        <button type="submit" style="background: none; border: none; color: #c00; cursor: pointer; text-decoration: underline; font-size: 0.85rem;">Remove</button>
+                    </form>
+                </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p style="color: #666;">No skills in this plan yet.</p>
+        {% endif %}
+    </div>
+
+    <!-- Right column: Import textarea -->
+    <div class="card">
+        <h2>Import Skills</h2>
+        <p style="color: #666; font-size: 0.9rem; margin-bottom: 0.5rem;">
+            Paste skills from clipboard to add to this plan. Imported skills will be added to existing skills.
+        </p>
+        <form method="post" action="{% url 'core:skill_plan_import_skills' plan.id %}">
+            {% csrf_token %}
+            <textarea name="skills" rows="15" style="width: 100%; padding: 0.5rem; font-family: monospace; font-size: 0.9rem;" placeholder="Amarr Destroyer 1
+Amarr Battleship V
+Gallente Cruiser 3
+..."></textarea>
+            <p style="color: #666; font-size: 0.85rem; margin-top: 0.5rem;">
+                <strong>Format:</strong> One skill per line: <code>SKILL_NAME LEVEL</code><br>
+                Level can be 1-5 or I-V (Roman numerals optional).<br>
+                Example: <code>Amarr Battleship V</code> or <code>Amarr Battleship 5</code>
+            </p>
+            <button type="submit" class="btn">Import Skills</button>
+        </form>
+    </div>
 </div>
-{% endif %}
 {% endblock %}
