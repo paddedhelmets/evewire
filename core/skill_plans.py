@@ -644,15 +644,15 @@ def extract_fitting_skills(fitting) -> Set[tuple[int, int]]:
         item_type_ids.append(fitting.ship_type_id)
 
     # Add all modules from slots
-    if hasattr(fitting, 'slots') and fitting.slots:
+    try:
+        slots = fitting.get_slots()
         for slot_name in ['high_slots', 'med_slots', 'low_slots', 'rig_slots', 'subsystem_slots']:
-            slots = getattr(fitting.slots, slot_name, [])
-            if slots:
-                # slots is stored as JSON list of module IDs
-                import json
-                if isinstance(slots, str):
-                    slots = json.loads(slots)
-                item_type_ids.extend([mid for mid in slots if mid])
+            slot_items = slots.get(slot_name, [])
+            if slot_items:
+                item_type_ids.extend([mid for mid in slot_items if mid])
+    except Exception:
+        # If get_slots() fails, skip module processing
+        pass
 
     # Get prerequisite skills for each item
     for item_type_id in item_type_ids:
