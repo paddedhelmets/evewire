@@ -61,8 +61,8 @@ def skill_plan_detail(request: HttpRequest, plan_id: int) -> HttpResponse:
     for char in characters:
         progress = plan.get_progress_for_character(char)
         percent_complete = 0
-        if progress.total_entries > 0:
-            percent_complete = (progress.completed / progress.total_entries) * 100
+        if progress['total_entries'] > 0:
+            percent_complete = (progress['completed'] / progress['total_entries']) * 100
 
         # Calculate remaining training time
         character_skills = {s.skill_id: s for s in char.skills.all()}
@@ -91,7 +91,7 @@ def skill_plan_detail(request: HttpRequest, plan_id: int) -> HttpResponse:
     pilot_progress.sort(key=lambda x: x['percent_complete'], reverse=True)
 
     # Count completed pilots
-    completed_pilots = sum(1 for p in pilot_progress if p['progress'].completed >= p['progress'].total_entries)
+    completed_pilots = sum(1 for p in pilot_progress if p['progress']['completed'] >= p['progress']['total_entries'])
     total_pilots = len(pilot_progress)
 
     # Get all skills organized by group for the Add Skill dropdown
