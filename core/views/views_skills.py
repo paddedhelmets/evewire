@@ -54,7 +54,7 @@ def skill_plan_detail(request: HttpRequest, plan_id: int) -> HttpResponse:
         }, status=404)
 
     # Get all user's characters
-    characters = Character.objects.filter(user=request.user).order_by('name')
+    characters = Character.objects.filter(user=request.user).order_by('character_name')
 
     # Calculate progress for each character
     pilot_progress = []
