@@ -1059,7 +1059,8 @@ class SkillPlan(models.Model):
 
         # Get all primary entries (user-added goals, not prerequisites)
         primary_entries = list(self.entries.filter(is_prerequisite=False))
-        existing_prereqs = set(self.entries.filter(is_prerequisite=True).values_list('skill_id', 'level'))
+        # Check all existing entries (both primary and prereq) to avoid duplicates
+        existing_entries = set(self.entries.values_list('skill_id', 'level'))
 
         # Map of skill attribute IDs to their corresponding level attribute IDs
         skill_attribute_map = {
@@ -1123,7 +1124,7 @@ class SkillPlan(models.Model):
         entries_to_create = []
 
         for skill_id, level in required_prereqs:
-            if (skill_id, level) not in existing_prereqs:
+            if (skill_id, level) not in existing_entries:
                 max_display_order += 1
                 entries_to_create.append(
                     SkillPlanEntry(
