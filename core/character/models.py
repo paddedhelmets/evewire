@@ -1214,34 +1214,40 @@ class SkillPlan(models.Model):
 
             return prereqs
 
-        # Build graph: entry_key -> list of (entry_key, is_prereq) edges
-        # where is_prereq=True means the edge is a prerequisite constraint
+        # Build entry_map first: (skill_id, level) -> entry
+        # Must be complete before building the graph
+        entry_map = {}
+        for entry in entries:
+            if entry.level:
+                key = (entry.skill_id, entry.level)
+                entry_map[key] = entry
+
+        # Build prerequisite graph: prereq_key -> list of dependent keys
         graph = defaultdict(list)
         in_degree = defaultdict(int)
-        entry_map = {}  # (skill_id, level) -> entry
 
+        # Build graph by checking each entry's prerequisites
         for entry in entries:
             if not entry.level:
                 continue
             key = (entry.skill_id, entry.level)
-            entry_map[key] = entry
 
             # Get prerequisites for this skill level
             prereqs = get_prerequisites_for_skill_level(entry.skill_id, entry.level)
 
             for prereq_skill_id, prereq_level in prereqs:
                 prereq_key = (prereq_skill_id, prereq_level)
+                # Only create edge if prerequisite is also in the plan
                 if prereq_key in entry_map:
                     graph[prereq_key].append(key)
                     in_degree[key] += 1
 
-        # Also track entries that have no prerequisites in the plan
+        # Track entries that have no prerequisites in the plan (start nodes)
         for entry in entries:
-            if not entry.level:
-                continue
-            key = (entry.skill_id, entry.level)
-            if key not in in_degree:
-                in_degree[key] = 0
+            if entry.level:
+                key = (entry.skill_id, entry.level)
+                if key not in in_degree:
+                    in_degree[key] = 0
 
         # Topological sort using Kahn's algorithm
         queue = deque([k for k in in_degree if in_degree[k] == 0])
