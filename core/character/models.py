@@ -1024,6 +1024,14 @@ class SkillPlanEntry(models.Model):
         except ItemType.DoesNotExist:
             return f"Skill {self.skill_id}"
 
+    @property
+    def level_roman(self) -> str:
+        """Get level as Roman numeral (I, II, III, IV, V)."""
+        roman_numerals = ['I', 'II', 'III', 'IV', 'V']
+        if self.level and 1 <= self.level <= 5:
+            return roman_numerals[self.level - 1]
+        return ''
+
     def clean(self):
         """Validate that recommended_level > level if both are set."""
         from django.core.exceptions import ValidationError
