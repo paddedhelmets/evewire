@@ -5,6 +5,7 @@ URL configuration for core app.
 from django.urls import path
 from core import views
 from core.views import api
+from core.sde import views as sde_views
 
 app_name = 'core'
 
@@ -132,6 +133,15 @@ urlpatterns = [
     path('shopping-lists/', views.shopping_lists_list, name='shopping_lists_list'),
     path('character/<int:character_id>/shopping-lists/', views.shopping_lists_list, name='character_shopping_lists_list'),
     path('shopping-lists/<int:list_id>/', views.shopping_list_detail, name='shopping_list_detail'),
+
+    # SDE Browser (read-only SDE exploration)
+    path('sde/', sde_views.sde_index, name='sde_index'),
+    path('sde/search', sde_views.sde_search, name='sde_search'),
+    path('sde/item/<int:type_id>/', sde_views.sde_item_detail, name='sde_item_detail'),
+    path('sde/category/<int:category_id>/', sde_views.sde_category_detail, name='sde_category_detail'),
+    path('sde/group/<int:group_id>/', sde_views.sde_group_detail, name='sde_group_detail'),
+    path('sde/system/<int:system_id>/', sde_views.sde_system_detail, name='sde_system_detail'),
+    path('sde/region/<int:region_id>/', sde_views.sde_region_detail, name='sde_region_detail'),
 
     # API endpoints
     path('api/assets/locations/', api.api_asset_locations, name='api_asset_locations'),

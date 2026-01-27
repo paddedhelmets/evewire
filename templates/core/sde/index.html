@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}SDE Browser - evewire{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>SDE Browser</h1>
+    <p>Explore EVE Online's Static Data Export</p>
+</div>
+
+<div class="card">
+    <h2>Statistics</h2>
+    <div style="display: flex; gap: 2rem;">
+        <div><strong>{{ stats.total_items }}</strong> Items</div>
+        <div><strong>{{ stats.total_ships }}</strong> Ships</div>
+        <div><strong>{{ stats.total_modules }}</strong> Modules</div>
+        <div><strong>{{ stats.total_systems }}</strong> Solar Systems</div>
+        <div><strong>{{ stats.total_regions }}</strong> Regions</div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Search</h2>
+    <form action="{% url 'core:sde_search' %}" method="get" style="display: flex; gap: 0.5rem;">
+        <input type="text" name="q" placeholder="Search items..." style="padding: 0.5rem; min-width: 300px;" required>
+        <button type="submit" class="btn">Search</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Top Categories</h2>
+    <ul>
+        {% for cat in top_categories %}
+        <li>
+            <a href="{% url 'core:sde_category_detail' cat.category_id %}">{{ cat.category_name }}</a>
+            ({{ cat.item_count }} items)
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endblock %}
