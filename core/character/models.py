@@ -889,11 +889,15 @@ class SkillPlan(models.Model):
 
         SP-based calculation: sums total SP required vs current SP in plan skills.
 
+        Each level entry is counted separately - importing "Amarr Battleship 1",
+        "Amarr Battleship 2", "Amarr Battleship 3" creates 3 entries, and the
+        SP required for all three levels is summed.
+
         Returns dict with:
-        - total_sp: total SP required for all skills in plan
-        - current_sp: current SP character has in plan skills
+        - total_sp: total SP required for all entries
+        - current_sp: current SP character has in those skills
         - percent_complete: percentage of SP trained
-        - total_entries: count of entries for reference
+        - total_entries: count of entries
         - completed: count of entries fully trained
         """
         import math
@@ -917,12 +921,26 @@ class SkillPlan(models.Model):
                 pass
             return 1  # Default to rank 1
 
-        # Helper to calculate SP needed for a level
+        # EVE skill point formula:
+        # SP to reach level L from 0: rank * 250 * sqrt(32) * (sqrt(32))^(L-1)
+        # where sqrt(32) = 5.656854...
+        SP_multiplier = 32 ** 0.5  # ~5.656854
+
         def sp_for_level(level: int, rank: int) -> int:
-            """SP needed to reach a specific level from 0."""
+            """Total SP needed to reach a specific level from 0."""
             if level == 0:
                 return 0
-            return int(math.pow(2, (2.5 * level) - 2) * 32 * rank)
+            # Formula: rank * 250 * (sqrt(32)^level - 1) / (sqrt(32) - 1)
+            # This gives cumulative SP from 0 to level
+            base = 250 * rank
+            geometric_sum = (SP_multiplier ** level - 1) / (SP_multiplier - 1)
+            return int(base * geometric_sum)
+
+        def sp_between_levels(from_level: int, to_level: int, rank: int) -> int:
+            """SP needed to go from one level to another."""
+            if to_level <= from_level:
+                return 0
+            return sp_for_level(to_level, rank) - sp_for_level(from_level, rank)
 
         total_sp = 0
         current_sp = 0
@@ -936,14 +954,15 @@ class SkillPlan(models.Model):
             total_entries += 1
             rank = get_skill_rank(entry.skill_id)
 
-            # SP needed for this skill's target level
-            target_sp = sp_for_level(entry.level, rank)
-            total_sp += target_sp
+            # SP needed for this specific level entry
+            entry_sp = sp_between_levels(0, entry.level, rank)
+            total_sp += entry_sp
 
             # Character's current SP in this skill
             skill = character_skills.get(entry.skill_id)
             if skill:
-                current_sp += min(skill.skillpoints_in_skill, target_sp)
+                # Count SP towards this level up to the required amount
+                current_sp += min(skill.skillpoints_in_skill, entry_sp)
                 if skill.skill_level >= entry.level:
                     completed += 1
 
@@ -990,7 +1009,7 @@ class SkillPlanEntry(models.Model):
         verbose_name = _('skill plan entry')
         verbose_name_plural = _('skill plan entries')
         ordering = ['skill_plan', 'display_order']
-        unique_together = [['skill_plan', 'skill_id']]
+        unique_together = [['skill_plan', 'skill_id', 'level']]
         db_table = 'core_skillplanentry'
 
     def __str__(self) -> str:

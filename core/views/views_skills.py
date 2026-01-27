@@ -357,7 +357,9 @@ def skill_plan_import_skills(request: HttpRequest, plan_id: int) -> HttpResponse
     Level can be 1-5 or I-V (Roman numerals optional).
     Example: "Amarr Battleship V" or "Amarr Battleship 5"
 
-    If a skill already exists in the plan, updates to the higher level.
+    Each level creates a separate entry - importing "Amarr Battleship 1",
+    "Amarr Battleship 2", "Amarr Battleship 3" creates 3 entries, one for each
+    level. Duplicate skill+level combinations are skipped.
     """
     from core.character.models import SkillPlan, SkillPlanEntry
     from core.eve.models import ItemType
@@ -381,20 +383,16 @@ def skill_plan_import_skills(request: HttpRequest, plan_id: int) -> HttpResponse
     # Parse skills: each line is "SKILL_NAME LEVEL"
     lines = skills_text.strip().split('\n')
     added_count = 0
-    updated_count = 0
     skipped_count = 0
     not_found = []
-
-    # Get existing entries for updating
-    existing_entries = {
-        e.skill_id: e
-        for e in SkillPlanEntry.objects.filter(skill_plan=plan)
-    }
 
     # Get max display order
     max_order = SkillPlanEntry.objects.filter(
         skill_plan=plan
     ).aggregate(max_order=models.Max('display_order'))['max_order'] or 0
+
+    # Track (skill_id, level) pairs to avoid duplicates in this batch
+    seen_pairs = set()
 
     for line in lines:
         line = line.strip()
@@ -430,37 +428,33 @@ def skill_plan_import_skills(request: HttpRequest, plan_id: int) -> HttpResponse
             not_found.append(skill_name)
             continue
 
-        # Check if skill already exists in plan
-        if skill.id in existing_entries:
-            existing_entry = existing_entries[skill.id]
-            # Update to higher level if needed
-            if existing_entry.level is None or level > existing_entry.level:
-                existing_entry.level = level
-                existing_entry.save()
-                updated_count += 1
-            else:
-                skipped_count += 1
-        else:
-            # Add new entry
-            SkillPlanEntry.objects.create(
-                skill_plan=plan,
-                skill_id=skill.id,
-                level=level,
-                display_order=max_order + added_count + 1,
-            )
-            existing_entries[skill.id] = skill.id  # Track for dedup in this batch
-            added_count += 1
+        # Check if this exact skill+level combination already exists
+        pair_key = (skill.id, level)
+        if pair_key in seen_pairs:
+            skipped_count += 1
+            continue
+
+        # Check database for existing entry
+        if SkillPlanEntry.objects.filter(skill_plan=plan, skill_id=skill.id, level=level).exists():
+            seen_pairs.add(pair_key)
+            skipped_count += 1
+            continue
+
+        # Add new entry
+        SkillPlanEntry.objects.create(
+            skill_plan=plan,
+            skill_id=skill.id,
+            level=level,
+            display_order=max_order + added_count + 1,
+        )
+        seen_pairs.add(pair_key)
+        added_count += 1
 
     # Build result message
-    if added_count > 0 or updated_count > 0:
-        parts = []
-        if added_count > 0:
-            parts.append(f'added {added_count}')
-        if updated_count > 0:
-            parts.append(f'updated {updated_count}')
-        msg = 'Skill plan ' + ' and '.join(parts) + '.'
+    if added_count > 0:
+        msg = f'Added {added_count} skill level(s) to plan.'
         if skipped_count > 0:
-            msg += f' Skipped {skipped_count} invalid line(s).'
+            msg += f' Skipped {skipped_count} duplicate or invalid line(s).'
         if not_found:
             msg += f' {len(not_found)} skill(s) not found.'
         messages.success(request, msg)
