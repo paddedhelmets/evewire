@@ -1,0 +1,307 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}Skill Plans for {{ fitting.name }} - evewire{% endblock %}
+
+{% block extra_head %}
+<style>
+/* 3-column skill plan layout (reused from skill_plan_detail.html) */
+.skill-plan-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1rem;
+    align-items: start;
+}
+
+.skill-list-item {
+    padding: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.skill-list-item.prerequisite {
+    background: rgba(0, 100, 200, 0.05);
+    opacity: 0.8;
+}
+
+.skill-list-item .skill-icon {
+    margin-right: 0.5rem;
+    font-size: 0.9rem;
+}
+
+.skill-list-item .skill-name {
+    font-weight: 500;
+}
+
+.skill-list-item.prerequisite .skill-name {
+    font-weight: 400;
+    color: var(--text-secondary);
+}
+
+.skill-list-item .skill-level {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-left: 0.5rem;
+}
+
+.pilot-row {
+    padding: 0.75rem 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.pilot-row .pilot-left {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    flex: 1;
+    min-width: 150px;
+}
+
+.pilot-row .pilot-name {
+    font-weight: 500;
+}
+
+.pilot-row .pilot-time {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.pilot-row .pilot-right {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 1;
+    justify-content: flex-end;
+    min-width: 200px;
+}
+
+.pilot-row .pilot-sp {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.progress-mini {
+    width: 100px;
+    height: 6px;
+    background: var(--border-color);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.progress-mini-fill {
+    height: 100%;
+    transition: width 0.3s ease;
+    background: linear-gradient(90deg, #1976d2, #42a5f5);
+}
+
+.progress-mini-fill.prereq-fill {
+    background: linear-gradient(90deg, #f57c00, #ffc107);
+}
+
+@media (max-width: 1200px) {
+    .skill-plan-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.toggle-prereqs {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    padding: 0.5rem;
+    background: var(--bg-secondary);
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+.toggle-prereqs input {
+    margin: 0;
+}
+
+.toggle-prereqs label {
+    cursor: pointer;
+    user-select: none;
+}
+
+.plan-overlap-item {
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+    background: var(--bg-secondary);
+}
+
+.plan-overlap-item .plan-name {
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+}
+
+.plan-overlap-item .plan-owner {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.plan-overlap-item .coverage-bar {
+    height: 8px;
+    background: var(--border-color);
+    border-radius: 4px;
+    margin: 0.5rem 0;
+    overflow: hidden;
+}
+
+.plan-overlap-item .coverage-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #1976d2, #42a5f5);
+    transition: width 0.3s ease;
+}
+
+.plan-overlap-item .coverage-text {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+    <div>
+        <h1>Skill Plans for {{ fitting.name }}</h1>
+        <p style="color: #666; margin-top: 0.25rem;">
+            {{ primary_skill_count }} primary skills • {{ total_skill_count }} total with prerequisites
+        </p>
+    </div>
+    <div style="display: flex; gap: 1rem;">
+        <form method="post" action="{% url 'core:fitting_adopt_plan' fitting.id %}">
+            {% csrf_token %}
+            <button type="submit" class="btn">Adopt as Skill Plan</button>
+        </form>
+        <a href="{% url 'core:fitting_detail' fitting.id %}">Back to Fitting</a>
+    </div>
+</div>
+
+<!-- 3-column layout -->
+<div class="skill-plan-grid">
+    <!-- Left column: Pilot progress -->
+    <div class="card">
+        <h2>Pilots ({{ pilot_progress|length }})</h2>
+        {% if pilot_progress %}
+            {% for pilot in pilot_progress %}
+            <div class="pilot-row">
+                <div class="pilot-left">
+                    <a href="{% url 'core:character_overview' pilot.character.id %}" style="text-decoration: none; color: inherit;">
+                        <span class="pilot-name">{{ pilot.character.character_name }}</span>
+                    </a>
+                    {% if pilot.progress.primary_percent_complete < 100 and pilot.progress.total_training_seconds %}
+                    <span class="pilot-time">({{ pilot.progress.total_training_seconds|format_duration }})</span>
+                    {% elif pilot.progress.primary_percent_complete == 100 %}
+                    <span class="pilot-time" style="color: #080;">✓</span>
+                    {% endif %}
+                </div>
+                <div class="pilot-right">
+                    <span class="pilot-sp">{{ pilot.progress.primary_sp_completed|commas }} / {{ pilot.progress.primary_sp_total|commas }} SP</span>
+                    <div class="progress-mini">
+                        <div class="progress-mini-fill" style="width: {{ pilot.progress.primary_percent_complete }}%; background: {% if pilot.progress.primary_percent_complete == 100 %}#080{% elif pilot.progress.primary_percent_complete >= 50 %}#cc0{% else %}#c00{% endif %};"></div>
+                    </div>
+                </div>
+            </div>
+            <!-- Prerequisite progress bar (only if incomplete) -->
+            {% if not pilot.progress.prereq_complete %}
+            <div class="pilot-row" style="background: rgba(0, 100, 200, 0.05);">
+                <div class="pilot-left">
+                    <span style="font-size: 0.85rem; color: #3a7ca5;">📦 Prerequisites</span>
+                </div>
+                <div class="pilot-right">
+                    <span class="pilot-sp" style="font-size: 0.8rem;">{{ pilot.progress.prereq_sp_completed|commas }} / {{ pilot.progress.prereq_sp_total|commas }} SP</span>
+                    <div class="progress-mini">
+                        <div class="progress-mini-fill prereq-fill" style="width: {{ pilot.progress.prereq_percent_complete }}%;"></div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            {% endfor %}
+        {% else %}
+            <p style="color: #666; font-size: 0.9rem;">No characters found. Add characters to see progress.</p>
+        {% endif %}
+    </div>
+
+    <!-- Middle column: Skill list -->
+    <div class="card">
+        <h2>Required Skills ({{ primary_skill_count }})</h2>
+        <div class="toggle-prereqs">
+            <input type="checkbox" id="hidePrereqs" onchange="togglePrerequisites()">
+            <label for="hidePrereqs">Hide prerequisites (📦)</label>
+        </div>
+        {% if skill_list %}
+            <ul id="skillList" style="list-style: none; padding: 0; margin: 0;">
+                {% for skill in skill_list %}
+                <li class="skill-list-item {% if skill.is_prerequisite %}prerequisite{% endif %}">
+                    <span>
+                        {% if skill.is_prerequisite %}
+                        <span class="skill-icon">📦</span>
+                        {% endif %}
+                        <span class="skill-name">{{ skill.skill_name }}</span>
+                        {% if skill.level %}
+                        <span class="skill-level">{{ skill.level_roman }}</span>
+                        {% endif %}
+                    </span>
+                </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p style="color: #666;">No skills found for this fitting.</p>
+        {% endif %}
+    </div>
+
+    <!-- Right column: Existing plan overlaps -->
+    <div class="card">
+        <h2>Existing Plans</h2>
+        <p style="color: #666; font-size: 0.9rem; margin-bottom: 1rem;">
+            Plans that cover this fitting's requirements:
+        </p>
+        {% if plan_overlaps %}
+            {% for overlap in plan_overlaps %}
+            <div class="plan-overlap-item">
+                <div class="plan-name">
+                    <a href="{% url 'core:skill_plan_detail' overlap.plan.id %}" style="text-decoration: none; color: inherit;">
+                        {{ overlap.plan.name }}
+                    </a>
+                </div>
+                <div class="plan-owner">
+                    {% if overlap.plan.owner %}
+                        {{ overlap.plan.owner.display_name }}
+                    {% else %}
+                        Global Plan
+                    {% endif %}
+                </div>
+                <div class="coverage-bar">
+                    <div class="coverage-fill" style="width: {{ overlap.coverage_percent }}%;"></div>
+                </div>
+                <div class="coverage-text">
+                    {{ overlap.coverage_percent|floatformat:0 }}% coverage ({{ overlap.covered_count }}/{{ overlap.total_count }} skills)
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <p style="color: #666;">No existing plans cover this fitting.</p>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function togglePrerequisites() {
+    const hidePrereqs = document.getElementById('hidePrereqs').checked;
+    const items = document.querySelectorAll('#skillList li.prerequisite');
+    items.forEach(item => {
+        item.style.display = hidePrereqs ? 'none' : 'flex';
+    });
+}
+</script>
+{% endblock %}

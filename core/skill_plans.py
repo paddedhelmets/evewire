@@ -606,5 +606,310 @@ def get_trainable_status(character, skill_id: int, target_level: int,
         return 'blocked'
 
 
+def extract_fitting_skills(fitting) -> Set[tuple[int, int]]:
+    """
+    Extract all required skills from a fitting.
+
+    Collects skills required by:
+    - The ship type itself
+    - All fitted modules (high/med/low/rig/subsystem slots)
+
+    Returns set of (skill_id, required_level) tuples.
+
+    Args:
+        fitting: Fitting object with slots attribute
+
+    Returns:
+        Set of (skill_id, level) tuples representing required skills
+    """
+    from core.eve.models import TypeAttribute
+
+    required_skills = set()
+
+    # Skill attribute map (same as in _get_prerequisites)
+    skill_attribute_map = {
+        182: 277,
+        183: 278,
+        184: 279,
+        1285: 1286,
+        1289: 1287,
+        1290: 1289,
+    }
+
+    # Collect all item type IDs from the fitting
+    item_type_ids = []
+
+    # Add ship type
+    if fitting.ship_type_id:
+        item_type_ids.append(fitting.ship_type_id)
+
+    # Add all modules from slots
+    if hasattr(fitting, 'slots') and fitting.slots:
+        for slot_name in ['high_slots', 'med_slots', 'low_slots', 'rig_slots', 'subsystem_slots']:
+            slots = getattr(fitting.slots, slot_name, [])
+            if slots:
+                # slots is stored as JSON list of module IDs
+                import json
+                if isinstance(slots, str):
+                    slots = json.loads(slots)
+                item_type_ids.extend([mid for mid in slots if mid])
+
+    # Get prerequisite skills for each item
+    for item_type_id in item_type_ids:
+        # Get all prerequisite attributes for this item
+        skill_attrs = TypeAttribute.objects.filter(
+            type_id=item_type_id,
+            attribute_id__in=skill_attribute_map.keys()
+        )
+
+        for skill_attr in skill_attrs:
+            prereq_skill_id = int(skill_attr.value_float) if skill_attr.value_float else None
+            if not prereq_skill_id:
+                continue
+
+            # Get required level
+            level_attr_id = skill_attribute_map.get(skill_attr.attribute_id)
+            if not level_attr_id:
+                continue
+
+            try:
+                level_obj = TypeAttribute.objects.get(
+                    type_id=item_type_id,
+                    attribute_id=level_attr_id
+                )
+                required_level = int(level_obj.value_float) if level_obj.value_float else 1
+            except TypeAttribute.DoesNotExist:
+                required_level = 1
+
+            required_skills.add((prereq_skill_id, required_level))
+
+    return required_skills
+
+
+def expand_prerequisites(primary_skills: Set[tuple[int, int]]) -> Set[tuple[int, int]]:
+    """
+    Expand primary skills with all prerequisites and intermediate levels.
+
+    Takes a set of (skill_id, level) primary skills and expands to include:
+    - All intermediate levels (1 through N-1) for each skill
+    - All prerequisite skills at their required levels
+    - All intermediate levels for prerequisite skills
+    - Recursive prerequisites
+
+    This is the in-memory equivalent of SkillPlan.ensure_prerequisites().
+
+    Args:
+        primary_skills: Set of (skill_id, level) tuples
+
+    Returns:
+        Set of (skill_id, level) tuples including all prereqs and intermediate levels
+    """
+    from collections import deque
+
+    # Use BFS to collect all prerequisites
+    all_skills = set()
+    queue = deque()
+
+    # Start with primary skills, adding intermediate levels
+    for skill_id, max_level in primary_skills:
+        # Add all levels 1 through max_level
+        for level in range(1, max_level + 1):
+            all_skills.add((skill_id, level))
+        # Enqueue for prerequisite discovery
+        queue.append((skill_id, max_level))
+
+    # BFS for prerequisites
+    while queue:
+        skill_id, target_level = queue.popleft()
+
+        # Get prerequisites for this skill
+        prereqs = SkillPlanExporter._get_prerequisites(skill_id)
+
+        for prereq_dict in prereqs:
+            prereq_skill_id = prereq_dict['skill_required']
+            required_level = prereq_dict['skill_level']
+
+            # Only include if prerequisite level <= our target level
+            if required_level <= target_level:
+                # Add all intermediate levels for this prerequisite
+                for level in range(1, required_level + 1):
+                    key = (prereq_skill_id, level)
+                    if key not in all_skills:
+                        all_skills.add(key)
+                        # Recursively find this prerequisite's prerequisites
+                        queue.append((prereq_skill_id, required_level))
+
+    return all_skills
+
+
+def order_skills_by_prerequisites(skills: Set[tuple[int, int]]) -> list[tuple[int, int]]:
+    """
+    Order skills by prerequisite dependencies using topological sort.
+
+    This is the in-memory equivalent of SkillPlan.reorder_by_prerequisites().
+
+    Args:
+        skills: Set of (skill_id, level) tuples
+
+    Returns:
+        List of (skill_id, level) tuples in training order
+    """
+    from collections import defaultdict, deque
+
+    if not skills:
+        return []
+
+    # Build entry map and graph
+    entry_map = {key: key for key in skills}
+    graph = defaultdict(list)
+    in_degree = defaultdict(int)
+
+    # Build graph with implicit level prerequisites
+    for skill_id, level in skills:
+        key = (skill_id, level)
+
+        # Add implicit level prerequisite: level N-1 -> level N
+        if level > 1:
+            prev_level_key = (skill_id, level - 1)
+            if prev_level_key in entry_map:
+                graph[prev_level_key].append(key)
+                in_degree[key] += 1
+
+        # Get SDE prerequisites
+        prereqs = SkillPlanExporter._get_prerequisites(skill_id)
+        for prereq_dict in prereqs:
+            prereq_skill_id = prereq_dict['skill_required']
+            prereq_level = prereq_dict['skill_level']
+
+            # Only include if prereq level <= our level
+            if prereq_level <= level:
+                prereq_key = (prereq_skill_id, prereq_level)
+                if prereq_key in entry_map:
+                    graph[prereq_key].append(key)
+                    in_degree[key] += 1
+
+    # Track entries with no prerequisites
+    for key in skills:
+        if key not in in_degree:
+            in_degree[key] = 0
+
+    # Topological sort (Kahn's algorithm)
+    queue = deque([k for k in in_degree if in_degree[k] == 0])
+    sorted_order = []
+
+    while queue:
+        key = queue.popleft()
+        sorted_order.append(key)
+
+        for dependent in graph[key]:
+            in_degree[dependent] -= 1
+            if in_degree[dependent] == 0:
+                queue.append(dependent)
+
+    # Add any remaining (cycles or orphans)
+    processed = set(sorted_order)
+    for key in skills:
+        if key not in processed:
+            sorted_order.append(key)
+
+    return sorted_order
+
+
+def calculate_fitting_plan_progress(character, all_skills: Set[tuple[int, int]]) -> dict:
+    """
+    Calculate character progress against a set of skills.
+
+    This is the in-memory equivalent of the skill plan progress calculation.
+    Returns progress metrics similar to SkillPlan.get_pilot_progress().
+
+    Args:
+        character: Character object
+        all_skills: Set of (skill_id, level) tuples to check against
+
+    Returns:
+        Dict with progress metrics:
+        - primary_sp_completed: SP completed for primary goals
+        - primary_sp_total: Total SP needed for primary goals
+        - primary_percent_complete: Percentage complete
+        - prereq_sp_completed: SP completed for prerequisites
+        - prereq_sp_total: Total SP needed for prerequisites
+        - prereq_percent_complete: Percentage complete
+        - prereq_complete: bool - whether all prereqs are met
+        - total_training_seconds: Estimated training time remaining
+    """
+    from core.character.models import CharacterSkill
+    from core.eve.models import TypeAttribute
+
+    # Get character's skills as a dict for quick lookup
+    char_skills = {
+        cs.skill_id: cs
+        for cs in CharacterSkill.objects.filter(character=character)
+    }
+
+    # Calculate SP for each skill level
+    def get_sp_for_level(skill_id: int, level: int) -> int:
+        """Get total SP needed for a skill level."""
+        import math
+
+        # Get skill rank
+        try:
+            rank_attr = TypeAttribute.objects.get(type_id=skill_id, attribute_id=275)
+            rank = rank_attr.value_int if rank_attr.value_int else int(rank_attr.value_float or 1)
+        except TypeAttribute.DoesNotExist:
+            rank = 1
+
+        # SP formula: 2^((2.5 * level) - 2) * 32 * rank
+        return int(math.pow(2, (2.5 * level) - 2) * 32 * rank)
+
+    # Calculate progress
+    primary_sp_completed = 0
+    primary_sp_total = 0
+    prereq_sp_completed = 0
+    prereq_sp_total = 0
+    total_training_seconds = 0
+
+    # For now, treat all skills as prerequisites (primary/prereq distinction
+    # would require passing which are primary vs expanded)
+    for skill_id, level in all_skills:
+        sp_needed = get_sp_for_level(skill_id, level)
+
+        # Check what character has
+        char_skill = char_skills.get(skill_id)
+        if char_skill:
+            sp_completed = min(char_skill.skillpoints_in_skill, sp_needed)
+            current_level = char_skill.skill_level
+        else:
+            sp_completed = 0
+            current_level = 0
+
+        prereq_sp_completed += sp_completed
+        prereq_sp_total += sp_needed
+
+        # Calculate remaining training time (simplified - assumes avg attributes)
+        if current_level < level:
+            # Rough estimate: 1000 SP per minute (very approximate)
+            sp_remaining = sp_needed - sp_completed
+            total_training_seconds += (sp_remaining / 1000) * 60
+
+    prereq_percent_complete = (prereq_sp_completed / prereq_sp_total * 100) if prereq_sp_total > 0 else 0
+    prereq_complete = prereq_percent_complete >= 99.9  # Allow for rounding
+
+    # For now, primary = prereq (since we're treating all as prereqs)
+    primary_sp_completed = prereq_sp_completed
+    primary_sp_total = prereq_sp_total
+    primary_percent_complete = prereq_percent_complete
+
+    return {
+        'primary_sp_completed': primary_sp_completed,
+        'primary_sp_total': primary_sp_total,
+        'primary_percent_complete': primary_percent_complete,
+        'prereq_sp_completed': prereq_sp_completed,
+        'prereq_sp_total': prereq_sp_total,
+        'prereq_percent_complete': prereq_percent_complete,
+        'prereq_complete': prereq_complete,
+        'total_training_seconds': total_training_seconds,
+    }
+
+
 # Import models for aggregate functions
 from django.db import models

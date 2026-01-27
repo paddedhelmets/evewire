@@ -166,6 +166,179 @@ def fitting_detail(request: HttpRequest, fitting_id: int) -> HttpResponse:
 
 
 @login_required
+def fitting_skill_plans(request: HttpRequest, fitting_id: int) -> HttpResponse:
+    """View the ephemerally generated skill plan for a fitting."""
+    from core.doctrines.models import Fitting
+    from core.character.models import SkillPlan, SkillPlanEntry
+    from core.models import Character
+    from core.skill_plans import (
+        extract_fitting_skills,
+        expand_prerequisites,
+        order_skills_by_prerequisites,
+        calculate_fitting_plan_progress,
+    )
+    from core.eve.models import ItemType
+
+    try:
+        fitting = Fitting.objects.get(id=fitting_id)
+    except Fitting.DoesNotExist:
+        return render(request, 'core/error.html', {
+            'message': 'Fitting not found',
+        }, status=404)
+
+    # Step 1: Extract primary skills from fitting
+    primary_skills = extract_fitting_skills(fitting)
+
+    if not primary_skills:
+        return render(request, 'core/error.html', {
+            'message': 'This fitting has no skill requirements.',
+        }, status=400)
+
+    # Step 2: Expand with all prerequisites and intermediate levels
+    all_skills = expand_prerequisites(primary_skills)
+
+    # Step 3: Order by prerequisites
+    ordered_skills = order_skills_by_prerequisites(all_skills)
+
+    # Step 4: Calculate pilot progress
+    characters = Character.objects.filter(user=request.user).order_by('character_name')
+    pilot_progress = []
+
+    for character in characters:
+        progress = calculate_fitting_plan_progress(character, all_skills)
+        pilot_progress.append({
+            'character': character,
+            'progress': progress,
+        })
+
+    # Step 5: Find overlapping plans (user's + global)
+    # Get all plans the user can see
+    user_plans = SkillPlan.objects.filter(owner=request.user)
+    global_plans = SkillPlan.objects.filter(owner__isnull=True, is_active=True)
+    all_plans = list(user_plans) + list(global_plans)
+
+    # Calculate overlap for each plan
+    plan_overlaps = []
+    for plan in all_plans:
+        # Get all skill IDs and levels from this plan
+        plan_skills = set(
+            (entry.skill_id, entry.level)
+            for entry in plan.entries.all()
+            if entry.level
+        )
+
+        # Calculate overlap
+        covered = all_skills & plan_skills
+        total = len(all_skills)
+        covered_count = len(covered)
+        coverage_percent = (covered_count / total * 100) if total > 0 else 0
+
+        # Only show plans with meaningful coverage (>0%)
+        if coverage_percent > 0:
+            plan_overlaps.append({
+                'plan': plan,
+                'coverage_percent': coverage_percent,
+                'covered_count': covered_count,
+                'total_count': total,
+                'missing': all_skills - plan_skills,
+            })
+
+    # Sort by coverage percent (highest first)
+    plan_overlaps.sort(key=lambda x: x['coverage_percent'], reverse=True)
+
+    # Build skill list for template (similar to skill_plan_detail entries)
+    skill_list = []
+    for skill_id, level in ordered_skills:
+        try:
+            skill_type = ItemType.objects.get(id=skill_id)
+            skill_name = skill_type.name
+        except ItemType.DoesNotExist:
+            skill_name = f"Skill {skill_id}"
+
+        # Determine if this is a primary skill (from fitting) or prerequisite
+        is_prerequisite = (skill_id, level) not in primary_skills
+
+        skill_list.append({
+            'skill_id': skill_id,
+            'skill_name': skill_name,
+            'level': level,
+            'level_roman': ['I', 'II', 'III', 'IV', 'V'][level - 1] if 1 <= level <= 5 else '',
+            'is_prerequisite': is_prerequisite,
+        })
+
+    return render(request, 'core/fitting_skill_plans.html', {
+        'fitting': fitting,
+        'skill_list': skill_list,
+        'primary_skill_count': len(primary_skills),
+        'total_skill_count': len(all_skills),
+        'pilot_progress': pilot_progress,
+        'plan_overlaps': plan_overlaps,
+    })
+
+
+@login_required
+@require_http_methods(['POST'])
+def fitting_adopt_plan(request: HttpRequest, fitting_id: int) -> HttpResponse:
+    """Adopt the fitting's skill plan as a real SkillPlan."""
+    from core.doctrines.models import Fitting
+    from core.character.models import SkillPlan
+    from core.skill_plans import (
+        extract_fitting_skills,
+        expand_prerequisites,
+    )
+    from django.contrib import messages
+
+    try:
+        fitting = Fitting.objects.get(id=fitting_id)
+    except Fitting.DoesNotExist:
+        messages.error(request, 'Fitting not found.')
+        return redirect('core:fittings_list')
+
+    # Extract and expand skills
+    primary_skills = extract_fitting_skills(fitting)
+    all_skills = expand_prerequisites(primary_skills)
+
+    # Get display order
+    from django.db.models import Max
+    max_order = SkillPlan.objects.filter(
+        owner=request.user,
+        parent__isnull=True
+    ).aggregate(max_order=Max('display_order'))['max_order'] or 0
+
+    # Create the skill plan
+    plan = SkillPlan.objects.create(
+        name=f"Skill Plan: {fitting.name}",
+        description=f"Skills required to fly {fitting.name} effectively.",
+        owner=request.user,
+        display_order=max_order + 1,
+    )
+
+    # Add all skills as entries
+    max_entry_order = 0
+    for skill_id, level in sorted(all_skills):
+        # Determine if this is a primary skill or prerequisite
+        is_prereq = (skill_id, level) not in primary_skills
+
+        SkillPlanEntry.objects.create(
+            skill_plan=plan,
+            skill_id=skill_id,
+            level=level,
+            is_prerequisite=is_prereq,
+            display_order=max_entry_order + 1,
+        )
+        max_entry_order += 1
+
+    # Run prerequisite expansion (idempotent, ensures consistency)
+    plan.ensure_prerequisites()
+
+    # Reorder by prerequisites
+    plan.reorder_by_prerequisites()
+
+    messages.success(request, f'Created skill plan "{plan.name}" with {all_skills.__len__()} skills.')
+    return redirect('core:skill_plan_detail', plan_id=plan.id)
+
+
+@login_required
 @require_http_methods(['POST'])
 def fitting_ignore_toggle(request: HttpRequest, fitting_id: int) -> HttpResponse:
     """Toggle ignore status for a global fitting."""
