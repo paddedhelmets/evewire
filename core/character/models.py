@@ -963,7 +963,7 @@ class SkillPlan(models.Model):
             if skill:
                 # Count SP towards this level up to the required amount
                 current_sp += min(skill.skillpoints_in_skill, entry_sp)
-                if skill.skill_level >= entry.level:
+                if skill.trained_skill_level >= entry.level:
                     completed += 1
 
         return {
