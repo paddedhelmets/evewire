@@ -13,8 +13,8 @@ Usage:
     python manage.py import_sde_browser              # Import all browser tables
     python manage.py import_sde_browser --tables=invTypes,invGroups  # Specific tables
     python manage.py import_sde_browser --list       # List available tables
-    python manage.py import_sde_browser --force       # Re-import even if exists
-    python manage.py import_sde_browser --version=3171578-01ec212  # Use specific SDE version
+    python manage.py import_sde_browser --force      # Re-import even if exists
+    python manage.py import_sde_browser --sde-version=3171578-01ec212  # Use specific SDE version
 """
 
 import json
@@ -207,7 +207,7 @@ class Command(BaseCommand):
             help='Re-import even if table exists',
         )
         parser.add_argument(
-            '--version',
+            '--sde-version',
             type=str,
             help='Specific SDE version tag (e.g., 3171578-01ec212). Default: latest from GitHub.',
         )
@@ -218,7 +218,7 @@ class Command(BaseCommand):
             return self._list_tables()
 
         # Get SDE download URL
-        version = options.get('version')
+        version = options.get('sde_version')
         if version:
             sde_url = f"https://github.com/garveen/eve-sde-converter/releases/download/sde-{version}/sde.sqlite.bz2"
             self.stdout.write(f'Using SDE version: {version}')
