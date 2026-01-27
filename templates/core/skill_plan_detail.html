@@ -113,10 +113,11 @@
 .progress-mini-fill {
     height: 100%;
     transition: width 0.3s ease;
+    background: linear-gradient(90deg, #1976d2, #42a5f5);
 }
 
 .progress-mini-fill.prereq-fill {
-    background: linear-gradient(90deg, #3a7ca5, #5bc0de);
+    background: linear-gradient(90deg, #f57c00, #ffc107);
 }
 }
 
@@ -212,13 +213,13 @@
     <div class="card">
         <h2>Skills ({{ entries|length }})</h2>
         <div class="toggle-prereqs">
-            <input type="checkbox" id="showPrereqs" onchange="togglePrerequisites()">
-            <label for="showPrereqs">Show prerequisites (📦)</label>
+            <input type="checkbox" id="hidePrereqs" onchange="togglePrerequisites()">
+            <label for="hidePrereqs">Hide prerequisites (📦)</label>
         </div>
         {% if entries %}
             <ul id="skillList" style="list-style: none; padding: 0; margin: 0;">
                 {% for entry in entries %}
-                <li class="skill-list-item {% if entry.is_prerequisite %}prerequisite{% endif %}" {% if entry.is_prerequisite %}style="display: none;"{% endif %}>
+                <li class="skill-list-item {% if entry.is_prerequisite %}prerequisite{% endif %}">
                     <span>
                         {% if entry.is_prerequisite %}
                         <span class="skill-icon">📦</span>
@@ -272,10 +273,10 @@ Gallente Cruiser 3
 
 <script>
 function togglePrerequisites() {
-    const showPrereqs = document.getElementById('showPrereqs').checked;
+    const hidePrereqs = document.getElementById('hidePrereqs').checked;
     const items = document.querySelectorAll('#skillList li.prerequisite');
     items.forEach(item => {
-        item.style.display = showPrereqs ? 'flex' : 'none';
+        item.style.display = hidePrereqs ? 'none' : 'flex';
     });
 }
 </script>
