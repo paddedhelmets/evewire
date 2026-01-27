@@ -38,6 +38,7 @@ class Command(BaseCommand):
 
     # Tables available for import (expand as needed)
     # Maps SDE table name to our evesde_ prefixed table name
+    # NOTE: This list only includes tables that actually exist in garveen's SDE schema
     AVAILABLE_TABLES = {
         # === Items & hierarchy ===
         'invTypes': 'evesde_invtypes',
@@ -45,42 +46,42 @@ class Command(BaseCommand):
         'invCategories': 'evesde_invcategories',
         'invMarketGroups': 'evesde_invmarketgroups',
         'invMetaGroups': 'evesde_invmetagroups',
-        'invMetaTypes': 'evesde_invmetatypes',  # Variants (Tech II, faction, etc.)
+        'invMetaTypes': 'evesde_invmetatypes',
+        'invNames': 'evesde_invnames',
+        'invTypeMaterials': 'evesde_invtypematerials',
+        'invFlags': 'evesde_invflags',
+        'invContrabandTypes': 'evesde_invcontrabandtypes',
 
         # === Assets/Graphics ===
         'eveIcons': 'evesde_eveicons',
         'eveGraphics': 'evesde_evegraphics',
+        'eveUnits': 'evesde_eveunits',
 
         # === Attributes (dogma) ===
         'dgmAttributeTypes': 'evesde_dgmattributetypes',
+        'dgmAttributeCategories': 'evesde_dgmattributecategories',
         'dgmTypeAttributes': 'evesde_dgmatypeattributes',
         'dgmEffects': 'evesde_dgmeffects',
         'dgmTypeEffects': 'evesde_dgmtypeeffects',
-        'dgmSkillAttributes': 'evesde_dgmskillattributes',
-        'dgmExprExpressions': 'evesde_dgmexprexpressions',
-        'dgmExprInfo': 'evesde_dgmexprinfo',
 
-        # === Skills ===
-        'chrSkills': 'evesde_chrskills',
-        'chrSkillLevelAttributes': 'evesde_chrskilllevelattributes',
-        'chrCertificates': 'evesde_chrcertificates',
-        'chrCertSkills': 'evesde_chrcertskills',
+        # === Certificates ===
+        'certCerts': 'evesde_certcerts',
+        'certSkills': 'evesde_certskills',
+        'certMasteries': 'evesde_certmasteries',
 
-        # === Universe/map ===
+        # === Universe / Map ===
         'mapRegions': 'evesde_mapregions',
         'mapConstellations': 'evesde_mapconstellations',
         'mapSolarSystems': 'evesde_mapsolarsystems',
-        'mapLocationWormholeClasses': 'evesde_maplocationwormholeclasses',
+        'mapDenormalize': 'evesde_mapdenormalize',
+        'mapLandmarks': 'evesde_maplandmarks',
 
         # === Stations ===
         'staStations': 'evesde_stastations',
-        'staOperationServices': 'evesde_staoperationservices',
-        'staStationTypes': 'evesde_stastationtypes',
-        'staOperationTypes': 'evesde_staoperationtypes',  # Referenced by staOperationServices
 
         # === Corporations/Factions ===
         'crpNPCCorporations': 'evesde_crpnpccorporations',
-        'crpNPCCorporationTrades': 'evesde_crpnpccorporationtrades',
+        'crpActivities': 'evesde_crpactivities',
         'chrFactions': 'evesde_chrfactions',
         'chrRaces': 'evesde_chrraces',
         'chrAncestries': 'evesde_chrancestries',
@@ -89,71 +90,99 @@ class Command(BaseCommand):
         # === Agents ===
         'agtAgents': 'evesde_agtagents',
         'agtAgentTypes': 'evesde_agtagenttypes',
+        'agtAgentsInSpace': 'evesde_agtagentsinspace',
         'agtResearchAgents': 'evesde_agtresearchagents',
 
         # === Blueprints ===
-        'invBlueprints': 'evesde_invblueprints',
-        'industryActivity': 'evesde_industryactivity',
-        'industryActivityMaterials': 'evesde_industryactivitymaterials',
-        'industryActivityProducts': 'evesde_industryactivityproducts',
-        'industryActivitySkills': 'evesde_industryactivityskills',
+        'industryBlueprints': 'evesde_industryblueprints',
 
         # === Control towers (POS) ===
         'invControlTowerResources': 'evesde_invcontroltowerresources',
 
-        # === Universe landmarks ===
-        'mapLandmarks': 'evesde_maplandmarks',
-        'mapUniverse': 'evesde_mapuniverse',
+        # === Planet interaction ===
+        'planetSchematics': 'evesde_planetschematics',
+        'planetSchematicsPinMap': 'evesde_planetschematicspinmap',
+        'planetSchematicsTypeMap': 'evesde_planetschematicstypemap',
 
-        # === Prices (market history base) ===
-        'history': 'evesde_history',  # optional, big table
+        # === SKIN system ===
+        'skinLicense': 'evesde_skinlicense',
+        'skinMaterials': 'evesde_skinmaterials',
+        'skinShip': 'evesde_skinship',
+
+        # === Translations ===
+        'trnTranslations': 'evesde_trntranslations',
     }
 
-    # Default set for browser (core tables + direct dependencies)
+    # Default set for browser (core tables + direct dependencies + useful extras)
+    # NOTE: Only includes tables that exist in the current SDE schema
     DEFAULT_TABLES = {
-        # Items & hierarchy (core)
+        # Items & hierarchy (core + Level 1/2)
         'invTypes',
         'invGroups',
         'invCategories',
         'invMarketGroups',
         'invMetaGroups',
-        'invMetaTypes',  # Variants
+        'invMetaTypes',
+        'invNames',
+        'invFlags',
+        'invContrabandTypes',
+        'invTypeMaterials',
 
         # Assets/Graphics
         'eveIcons',
         'eveGraphics',
+        'eveUnits',
 
-        # Attributes (core)
+        # Attributes (core + Level 2)
         'dgmAttributeTypes',
+        'dgmAttributeCategories',
         'dgmTypeAttributes',
         'dgmEffects',
         'dgmTypeEffects',
 
-        # Map hierarchy (core)
+        # Map hierarchy (core + Level 2)
         'mapRegions',
         'mapConstellations',
         'mapSolarSystems',
+        'mapDenormalize',
+        'mapLandmarks',
 
         # Stations
         'staStations',
-        'staOperationServices',
-        'staStationTypes',
 
-        # Corporations/Factions
+        # Corporations/Factions (core + Level 2)
         'crpNPCCorporations',
+        'crpActivities',
         'chrFactions',
         'chrRaces',
+        'chrAncestries',
+        'chrBloodlines',
 
-        # Skills
-        'chrSkills',
-        'chrSkillLevelAttributes',
-        'chrCertificates',
+        # Certificates (Level 2)
+        'certCerts',
+        'certSkills',
+        'certMasteries',
 
-        # Agents
+        # Agents (Level 1 + Level 3)
         'agtAgents',
+        'agtAgentTypes',
+        'agtAgentsInSpace',
 
-        # Blueprints
-        'invBlueprints',
+        # Blueprints (Level 3)
+        'industryBlueprints',
+
+        # Control towers (POS)
+        'invControlTowerResources',
+
+        # Planet interaction
+        'planetSchematics',
+        'planetSchematicsPinMap',
+        'planetSchematicsTypeMap',
+
+        # SKIN system
+        'skinLicense',
+        'skinMaterials',
+        'skinShip',
     }
 
     def add_arguments(self, parser):
@@ -317,6 +346,10 @@ class Command(BaseCommand):
                     {'sde': 'invMarketGroups', 'desc': 'Market groups'},
                     {'sde': 'invMetaGroups', 'desc': 'Meta groups (Tech I/II, faction, etc.)'},
                     {'sde': 'invMetaTypes', 'desc': 'Item variants (Tech II, faction versions)'},
+                    {'sde': 'invNames', 'desc': 'Localized item names'},
+                    {'sde': 'invFlags', 'desc': 'Item flags (slots, hangars)'},
+                    {'sde': 'invContrabandTypes', 'desc': 'Contraband types by faction'},
+                    {'sde': 'invTypeMaterials', 'desc': 'Manufacturing requirements'},
                 ]
             },
             {
@@ -324,25 +357,25 @@ class Command(BaseCommand):
                 'tables': [
                     {'sde': 'eveIcons', 'desc': 'Item icons'},
                     {'sde': 'eveGraphics', 'desc': 'Item graphics'},
+                    {'sde': 'eveUnits', 'desc': 'Measurement units for attributes'},
                 ]
             },
             {
                 'name': 'Attributes (Dogma)',
                 'tables': [
                     {'sde': 'dgmAttributeTypes', 'desc': 'Attribute type definitions'},
+                    {'sde': 'dgmAttributeCategories', 'desc': 'Attribute categories'},
                     {'sde': 'dgmTypeAttributes', 'desc': 'Item attributes'},
                     {'sde': 'dgmEffects', 'desc': 'Effect definitions'},
                     {'sde': 'dgmTypeEffects', 'desc': 'Item effects'},
-                    {'sde': 'dgmSkillAttributes', 'desc': 'Skill bonus attributes'},
                 ]
             },
             {
-                'name': 'Skills & Certificates',
+                'name': 'Certificates',
                 'tables': [
-                    {'sde': 'chrSkills', 'desc': 'Skill definitions'},
-                    {'sde': 'chrSkillLevelAttributes', 'desc': 'SP per level'},
-                    {'sde': 'chrCertificates', 'desc': 'Certificates'},
-                    {'sde': 'chrCertSkills', 'desc': 'Certificate skill requirements'},
+                    {'sde': 'certCerts', 'desc': 'Certificate definitions'},
+                    {'sde': 'certSkills', 'desc': 'Certificate skill requirements'},
+                    {'sde': 'certMasteries', 'desc': 'Certificate mastery levels'},
                 ]
             },
             {
@@ -351,23 +384,21 @@ class Command(BaseCommand):
                     {'sde': 'mapRegions', 'desc': 'Regions'},
                     {'sde': 'mapConstellations', 'desc': 'Constellations'},
                     {'sde': 'mapSolarSystems', 'desc': 'Solar systems'},
-                    {'sde': 'mapLocationWormholeClasses', 'desc': 'Wormhole classes'},
+                    {'sde': 'mapDenormalize', 'desc': 'Denormalized map data (celestial objects)'},
+                    {'sde': 'mapLandmarks', 'desc': 'Space landmarks'},
                 ]
             },
             {
                 'name': 'Stations',
                 'tables': [
                     {'sde': 'staStations', 'desc': 'Stations'},
-                    {'sde': 'staOperationServices', 'desc': 'Station services'},
-                    {'sde': 'staOperationTypes', 'desc': 'Station operation types'},
-                    {'sde': 'staStationTypes', 'desc': 'Station types'},
                 ]
             },
             {
                 'name': 'Corporations & Factions',
                 'tables': [
                     {'sde': 'crpNPCCorporations', 'desc': 'NPC corporations'},
-                    {'sde': 'crpNPCCorporationTrades', 'desc': 'NPC corporation trades'},
+                    {'sde': 'crpActivities', 'desc': 'Corporation activities'},
                     {'sde': 'chrFactions', 'desc': 'Factions'},
                     {'sde': 'chrRaces', 'desc': 'Races'},
                     {'sde': 'chrAncestries', 'desc': 'Ancestries'},
@@ -379,17 +410,42 @@ class Command(BaseCommand):
                 'tables': [
                     {'sde': 'agtAgents', 'desc': 'Agents'},
                     {'sde': 'agtAgentTypes', 'desc': 'Agent types'},
+                    {'sde': 'agtAgentsInSpace', 'desc': 'Mission agents in space'},
                     {'sde': 'agtResearchAgents', 'desc': 'Research agents'},
                 ]
             },
             {
                 'name': 'Industry / Blueprints',
                 'tables': [
-                    {'sde': 'invBlueprints', 'desc': 'Blueprint metadata'},
-                    {'sde': 'industryActivity', 'desc': 'Industry activities'},
-                    {'sde': 'industryActivityMaterials', 'desc': 'Activity materials'},
-                    {'sde': 'industryActivityProducts', 'desc': 'Activity products'},
-                    {'sde': 'industryActivitySkills', 'desc': 'Activity skills'},
+                    {'sde': 'industryBlueprints', 'desc': 'Blueprint metadata'},
+                ]
+            },
+            {
+                'name': 'Control Towers (POS)',
+                'tables': [
+                    {'sde': 'invControlTowerResources', 'desc': 'POS resources'},
+                ]
+            },
+            {
+                'name': 'Planet Interaction',
+                'tables': [
+                    {'sde': 'planetSchematics', 'desc': 'Planet resource data'},
+                    {'sde': 'planetSchematicsPinMap', 'desc': 'Planet pin map'},
+                    {'sde': 'planetSchematicsTypeMap', 'desc': 'Planet type map'},
+                ]
+            },
+            {
+                'name': 'SKIN System',
+                'tables': [
+                    {'sde': 'skinLicense', 'desc': 'SKIN licenses'},
+                    {'sde': 'skinMaterials', 'desc': 'SKIN materials'},
+                    {'sde': 'skinShip', 'desc': 'SKIN ship bindings'},
+                ]
+            },
+            {
+                'name': 'Translations',
+                'tables': [
+                    {'sde': 'trnTranslations', 'desc': 'Localized strings'},
                 ]
             },
         ]

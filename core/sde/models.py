@@ -532,75 +532,709 @@ class EveGraphics(models.Model):
 
 
 # ============================================================================
-# Station Types and Services
+# Additional Items & Variants (Level 2)
 # ============================================================================
 
-class StaOperationServices(models.Model):
+class InvNames(models.Model):
     """
-    EVE SDE: staOperationServices table
+    EVE SDE: invNames table
 
-    Services available at stations (repair, market, cloning, etc.)
+    Localized item names for various entities
     """
-    operation_id = models.IntegerField(primary_key=True, db_column='operationID')
-    service_id = models.IntegerField(db_index=True, db_column='serviceID')
+    item_id = models.IntegerField(primary_key=True, db_column='itemID')
+    item_name = models.CharField(max_length=200, db_column='itemName')
 
     class Meta:
-        db_table = 'evesde_staoperationservices'
+        db_table = 'evesde_invnames'
         managed = False
-        verbose_name = 'Station Operation Service'
-        verbose_name_plural = 'Station Operation Services'
-        ordering = ['operation_id']
+        verbose_name = 'Item Name'
+        verbose_name_plural = 'Item Names'
+        ordering = ['item_name']
 
     def __str__(self):
-        return f'Operation {self.operation_id} - Service {self.service_id}'
+        return self.item_name
 
 
-class StaOperationTypes(models.Model):
+class InvFlags(models.Model):
     """
-    EVE SDE: staOperationTypes table
+    EVE SDE: invFlags table
 
-    Operation type definitions
+    Item flags (slots, hangars, etc.)
     """
-    operation_id = models.IntegerField(primary_key=True, db_column='operationID')
-    operation_name = models.CharField(max_length=255, blank=True, db_column='operationName')
+    flag_id = models.IntegerField(primary_key=True, db_column='flagID')
+    flag_name = models.CharField(max_length=200, blank=True, db_column='flagName')
+    flag_text = models.CharField(max_length=100, blank=True, db_column='flagText')
+    order_id = models.IntegerField(null=True, blank=True, db_column='orderID')
+
+    class Meta:
+        db_table = 'evesde_invflags'
+        managed = False
+        verbose_name = 'Item Flag'
+        verbose_name_plural = 'Item Flags'
+        ordering = ['order_id', 'flag_id']
+
+    def __str__(self):
+        return self.flag_text or self.flag_name or f'Flag {self.flag_id}'
+
+
+class InvContrabandTypes(models.Model):
+    """
+    EVE SDE: invContrabandTypes table
+
+    Contraband types by faction
+    """
+    faction_id = models.IntegerField(db_column='factionID')
+    type_id = models.IntegerField(db_column='typeID')
+    standing_loss = models.FloatField(null=True, blank=True, db_column='standingLoss')
+    confiscate_min_sec = models.FloatField(null=True, blank=True, db_column='confiscateMinSec')
+    fine_by_value = models.FloatField(null=True, blank=True, db_column='fineByValue')
+    attack_min_sec = models.FloatField(null=True, blank=True, db_column='attackMinSec')
+
+    class Meta:
+        db_table = 'evesde_invcontrabandtypes'
+        managed = False
+        verbose_name = 'Contraband Type'
+        verbose_name_plural = 'Contraband Types'
+        # Note: SDE uses composite key (factionID, typeID)
+
+
+class InvTypeMaterials(models.Model):
+    """
+    EVE SDE: invTypeMaterials table
+
+    Materials required for manufacturing (reprocessing)
+    """
+    type_id = models.IntegerField(db_index=True, db_column='typeID')
+    material_type_id = models.IntegerField(db_index=True, db_column='materialTypeID')
+    quantity = models.IntegerField(db_column='quantity')
+
+    class Meta:
+        db_table = 'evesde_invtypematerials'
+        managed = False
+        verbose_name = 'Type Material'
+        verbose_name_plural = 'Type Materials'
+        # Note: SDE uses composite key (typeID, materialTypeID)
+
+
+# ============================================================================
+# Additional Graphics (Level 2)
+# ============================================================================
+
+class EveUnits(models.Model):
+    """
+    EVE SDE: eveUnits table
+
+    Measurement units for attributes (e.g., "mm", "m³", "%")
+    """
+    unit_id = models.IntegerField(primary_key=True, db_column='unitID')
+    unit_name = models.CharField(max_length=100, blank=True, db_column='unitName')
+    display_name = models.CharField(max_length=50, blank=True, db_column='displayName')
+    description = models.CharField(max_length=1000, blank=True, db_column='description')
+
+    class Meta:
+        db_table = 'evesde_eveunits'
+        managed = False
+        verbose_name = 'Unit'
+        verbose_name_plural = 'Units'
+        ordering = ['unit_id']
+
+    def __str__(self):
+        return self.display_name or self.unit_name or f'Unit {self.unit_id}'
+
+
+# ============================================================================
+# Additional Attributes (Level 2)
+# ============================================================================
+
+class DgmAttributeCategories(models.Model):
+    """
+    EVE SDE: dgmAttributeCategories table
+
+    Attribute categories for grouping attributes
+    """
+    category_id = models.IntegerField(primary_key=True, db_column='categoryID')
+    category_name = models.CharField(max_length=50, blank=True, db_column='categoryName')
+    category_description = models.CharField(max_length=200, blank=True, db_column='categoryDescription')
+
+    class Meta:
+        db_table = 'evesde_dgmattributecategories'
+        managed = False
+        verbose_name = 'Attribute Category'
+        verbose_name_plural = 'Attribute Categories'
+        ordering = ['category_name']
+
+    def __str__(self):
+        return self.category_name or f'Category {self.category_id}'
+
+
+class DgmEffects(models.Model):
+    """
+    EVE SDE: dgmEffects table
+
+    Effect definitions (module activation, passive effects, etc.)
+    """
+    effect_id = models.IntegerField(primary_key=True, db_column='effectID')
+    effect_name = models.CharField(max_length=400, blank=True, db_column='effectName')
+    effect_category = models.IntegerField(null=True, blank=True, db_column='effectCategory')
+    pre_expression = models.IntegerField(null=True, blank=True, db_column='preExpression')
+    post_expression = models.IntegerField(null=True, blank=True, db_column='postExpression')
+    description = models.CharField(max_length=1000, blank=True, db_column='description')
+    guid = models.CharField(max_length=60, blank=True, db_column='guid')
+    icon_id = models.IntegerField(null=True, blank=True, db_column='iconID')
+    is_offensive = models.BooleanField(null=True, blank=True, db_column='isOffensive')
+    is_assistance = models.BooleanField(null=True, blank=True, db_column='isAssistance')
+    duration_attribute_id = models.IntegerField(null=True, blank=True, db_column='durationAttributeID')
+    tracking_speed_attribute_id = models.IntegerField(null=True, blank=True, db_column='trackingSpeedAttributeID')
+    discharge_attribute_id = models.IntegerField(null=True, blank=True, db_column='dischargeAttributeID')
+    range_attribute_id = models.IntegerField(null=True, blank=True, db_column='rangeAttributeID')
+    falloff_attribute_id = models.IntegerField(null=True, blank=True, db_column='falloffAttributeID')
+    disallow_auto_repeat = models.BooleanField(null=True, blank=True, db_column='disallowAutoRepeat')
+    published = models.BooleanField(null=True, blank=True, db_column='published')
+    display_name = models.CharField(max_length=100, blank=True, db_column='displayName')
+    is_warp_safe = models.BooleanField(null=True, blank=True, db_column='isWarpSafe')
+    range_chance = models.BooleanField(null=True, blank=True, db_column='rangeChance')
+    electronic_chance = models.BooleanField(null=True, blank=True, db_column='electronicChance')
+    propagation_chance = models.BooleanField(null=True, blank=True, db_column='propagationChance')
+
+    class Meta:
+        db_table = 'evesde_dgmeffects'
+        managed = False
+        verbose_name = 'Effect'
+        verbose_name_plural = 'Effects'
+        ordering = ['effect_name']
+
+    def __str__(self):
+        return self.effect_name or f'Effect {self.effect_id}'
+
+
+class DgmTypeEffects(models.Model):
+    """
+    EVE SDE: dgmTypeEffects table
+
+    Effects applied to item types
+    """
+    type_id = models.IntegerField(db_index=True, db_column='typeID')
+    effect_id = models.IntegerField(db_index=True, db_column='effectID')
+    is_default = models.BooleanField(null=True, blank=True, db_column='isDefault')
+
+    class Meta:
+        db_table = 'evesde_dgmtypeeffects'
+        managed = False
+        verbose_name = 'Type Effect'
+        verbose_name_plural = 'Type Effects'
+        # Note: SDE uses composite key (typeID, effectID)
+
+
+# ============================================================================
+# Character Creation (Level 2)
+# ============================================================================
+
+class ChrAncestries(models.Model):
+    """
+    EVE SDE: chrAncestries table
+
+    Character ancestry options (during character creation)
+    """
+    ancestry_id = models.IntegerField(primary_key=True, db_column='ancestryID')
+    ancestry_name = models.CharField(max_length=100, blank=True, db_column='ancestryName')
+    bloodline_id = models.IntegerField(null=True, blank=True, db_column='bloodlineID')
+    description = models.CharField(max_length=1000, blank=True, db_column='description')
+    perception = models.IntegerField(null=True, blank=True, db_column='perception')
+    willpower = models.IntegerField(null=True, blank=True, db_column='willpower')
+    charisma = models.IntegerField(null=True, blank=True, db_column='charisma')
+    memory = models.IntegerField(null=True, blank=True, db_column='memory')
+    intelligence = models.IntegerField(null=True, blank=True, db_column='intelligence')
+    icon_id = models.IntegerField(null=True, blank=True, db_column='iconID')
+    short_description = models.CharField(max_length=500, blank=True, db_column='shortDescription')
+
+    class Meta:
+        db_table = 'evesde_chrancestries'
+        managed = False
+        verbose_name = 'Ancestry'
+        verbose_name_plural = 'Ancestries'
+        ordering = ['ancestry_name']
+
+    def __str__(self):
+        return self.ancestry_name or f'Ancestry {self.ancestry_id}'
+
+
+class ChrBloodlines(models.Model):
+    """
+    EVE SDE: chrBloodlines table
+
+    Character bloodlines
+    """
+    bloodline_id = models.IntegerField(primary_key=True, db_column='bloodlineID')
+    bloodline_name = models.CharField(max_length=100, blank=True, db_column='bloodlineName')
+    race_id = models.IntegerField(null=True, blank=True, db_column='raceID')
+    description = models.CharField(max_length=1000, blank=True, db_column='description')
+    male_description = models.CharField(max_length=1000, blank=True, db_column='maleDescription')
+    female_description = models.CharField(max_length=1000, blank=True, db_column='femaleDescription')
+    ship_type_id = models.IntegerField(null=True, blank=True, db_column='shipTypeID')
+    corporation_id = models.IntegerField(null=True, blank=True, db_column='corporationID')
+    perception = models.IntegerField(null=True, blank=True, db_column='perception')
+    willpower = models.IntegerField(null=True, blank=True, db_column='willpower')
+    charisma = models.IntegerField(null=True, blank=True, db_column='charisma')
+    memory = models.IntegerField(null=True, blank=True, db_column='memory')
+    intelligence = models.IntegerField(null=True, blank=True, db_column='intelligence')
+    icon_id = models.IntegerField(null=True, blank=True, db_column='iconID')
+    short_description = models.CharField(max_length=500, blank=True, db_column='shortDescription')
+    short_male_description = models.CharField(max_length=500, blank=True, db_column='shortMaleDescription')
+    short_female_description = models.CharField(max_length=500, blank=True, db_column='shortFemaleDescription')
+
+    class Meta:
+        db_table = 'evesde_chrbloodlines'
+        managed = False
+        verbose_name = 'Bloodline'
+        verbose_name_plural = 'Bloodlines'
+        ordering = ['bloodline_name']
+
+    def __str__(self):
+        return self.bloodline_name or f'Bloodline {self.bloodline_id}'
+
+
+# ============================================================================
+# Certificates (Level 2)
+# ============================================================================
+
+class CertCerts(models.Model):
+    """
+    EVE SDE: certCerts table
+
+    Certificate definitions
+    """
+    cert_id = models.IntegerField(primary_key=True, db_column='certID')
     description = models.TextField(blank=True, db_column='description')
+    group_id = models.IntegerField(null=True, blank=True, db_column='groupID')
+    name = models.CharField(max_length=255, blank=True, db_column='name')
 
     class Meta:
-        db_table = 'evesde_staoperationtypes'
+        db_table = 'evesde_certcerts'
         managed = False
-        verbose_name = 'Station Operation Type'
-        verbose_name_plural = 'Station Operation Types'
-        ordering = ['operation_id']
+        verbose_name = 'Certificate'
+        verbose_name_plural = 'Certificates'
+        ordering = ['name']
 
     def __str__(self):
-        return self.operation_name or f'Operation {self.operation_id}'
+        return self.name or f'Certificate {self.cert_id}'
 
 
-class StaStationTypes(models.Model):
+class CertSkills(models.Model):
     """
-    EVE SDE: staStationTypes table
+    EVE SDE: certSkills table
 
-    Station type definitions
+    Certificate skill requirements
     """
-    station_type_id = models.IntegerField(primary_key=True, db_column='stationTypeID')
-    station_name = models.CharField(max_length=255, blank=True, db_column='stationTypeName')
+    cert_id = models.IntegerField(db_index=True, db_column='certID')
+    skill_id = models.IntegerField(db_index=True, db_column='skillID')
+    cert_level_int = models.IntegerField(null=True, blank=True, db_column='certLevelInt')
+    skill_level = models.IntegerField(null=True, blank=True, db_column='skillLevel')
+    cert_level_text = models.CharField(max_length=8, blank=True, db_column='certLevelText')
+
+    class Meta:
+        db_table = 'evesde_certskills'
+        managed = False
+        verbose_name = 'Certificate Skill'
+        verbose_name_plural = 'Certificate Skills'
+        # Note: No primary key in SDE table
+
+
+class CertMasteries(models.Model):
+    """
+    EVE SDE: certMasteries table
+
+    Certificate mastery levels
+    """
+    type_id = models.IntegerField(null=True, blank=True, db_column='typeID')
+    mastery_level = models.IntegerField(null=True, blank=True, db_column='masteryLevel')
+    cert_id = models.IntegerField(null=True, blank=True, db_column='certID')
+
+    class Meta:
+        db_table = 'evesde_certmasteries'
+        managed = False
+        verbose_name = 'Certificate Mastery'
+        verbose_name_plural = 'Certificate Masteries'
+        # Note: No primary key in SDE table
+
+
+# ============================================================================
+# Agents (Level 3)
+# ============================================================================
+
+class AgtAgents(models.Model):
+    """
+    EVE SDE: agtAgents table
+
+    NPC agents for missions
+    """
+    agent_id = models.IntegerField(primary_key=True, db_column='agentID')
+    division_id = models.IntegerField(null=True, blank=True, db_column='divisionID')
+    corporation_id = models.IntegerField(null=True, blank=True, db_index=True, db_column='corporationID')
+    location_id = models.IntegerField(null=True, blank=True, db_index=True, db_column='locationID')
+    level = models.IntegerField(null=True, blank=True, db_column='level')
+    quality = models.IntegerField(null=True, blank=True, db_column='quality')
+    agent_type_id = models.IntegerField(null=True, blank=True, db_column='agentTypeID')
+    is_locator = models.BooleanField(null=True, blank=True, db_column='isLocator')
+
+    class Meta:
+        db_table = 'evesde_agtagents'
+        managed = False
+        verbose_name = 'Agent'
+        verbose_name_plural = 'Agents'
+        ordering = ['agent_id']
+
+    def __str__(self):
+        return f'Agent {self.agent_id}'
+
+
+class AgtAgentTypes(models.Model):
+    """
+    EVE SDE: agtAgentTypes table
+
+    Agent type definitions
+    """
+    agent_type_id = models.IntegerField(primary_key=True, db_column='agentTypeID')
+    agent_type = models.CharField(max_length=50, blank=True, db_column='agentType')
+
+    class Meta:
+        db_table = 'evesde_agtagenttypes'
+        managed = False
+        verbose_name = 'Agent Type'
+        verbose_name_plural = 'Agent Types'
+        ordering = ['agent_type']
+
+    def __str__(self):
+        return self.agent_type or f'Agent Type {self.agent_type_id}'
+
+
+class AgtAgentsInSpace(models.Model):
+    """
+    EVE SDE: agtAgentsInSpace table
+
+    Mission agents located in space (not at stations)
+    """
+    agent_id = models.IntegerField(primary_key=True, db_column='agentID')
+    dungeon_id = models.IntegerField(null=True, blank=True, db_column='dungeonID')
+    solar_system_id = models.IntegerField(null=True, blank=True, db_index=True, db_column='solarSystemID')
+    spawn_point_id = models.IntegerField(null=True, blank=True, db_column='spawnPointID')
+    type_id = models.IntegerField(null=True, blank=True, db_column='typeID')
+
+    class Meta:
+        db_table = 'evesde_agtagentsinspace'
+        managed = False
+        verbose_name = 'Agent in Space'
+        verbose_name_plural = 'Agents in Space'
+        ordering = ['agent_id']
+
+    def __str__(self):
+        return f'In-Space Agent {self.agent_id}'
+
+
+class AgtResearchAgents(models.Model):
+    """
+    EVE SDE: agtResearchAgents table
+
+    Research agents for skill point research
+    """
+    agent_id = models.IntegerField(db_column='agentID')
+    type_id = models.IntegerField(db_index=True, db_column='typeID')
+
+    class Meta:
+        db_table = 'evesde_agtresearchagents'
+        managed = False
+        verbose_name = 'Research Agent'
+        verbose_name_plural = 'Research Agents'
+        # Note: SDE uses composite key (agentID, typeID)
+
+    def __str__(self):
+        return f'Research Agent {self.agent_id}'
+
+
+# ============================================================================
+# Industry / Blueprints (Level 3)
+# ============================================================================
+
+class IndustryBlueprints(models.Model):
+    """
+    EVE SDE: industryBlueprints table
+
+    Blueprint metadata
+    """
+    type_id = models.IntegerField(primary_key=True, db_column='typeID')
+    max_production_limit = models.IntegerField(null=True, blank=True, db_column='maxProductionLimit')
+
+    class Meta:
+        db_table = 'evesde_industryblueprints'
+        managed = False
+        verbose_name = 'Blueprint'
+        verbose_name_plural = 'Blueprints'
+        ordering = ['type_id']
+
+    def __str__(self):
+        try:
+            return f'Blueprint: {self.type.name}'
+        except InvTypes.DoesNotExist:
+            return f'Blueprint {self.type_id}'
+
+
+# ============================================================================
+# Corporation Activities (Level 2)
+# ============================================================================
+
+class CrpActivities(models.Model):
+    """
+    EVE SDE: crpActivities table
+
+    Corporation activity types
+    """
+    activity_id = models.IntegerField(primary_key=True, db_column='activityID')
+    activity_name = models.CharField(max_length=100, blank=True, db_column='activityName')
+    description = models.CharField(max_length=1000, blank=True, db_column='description')
+
+    class Meta:
+        db_table = 'evesde_crpactivities'
+        managed = False
+        verbose_name = 'Corporation Activity'
+        verbose_name_plural = 'Corporation Activities'
+        ordering = ['activity_name']
+
+    def __str__(self):
+        return self.activity_name or f'Activity {self.activity_id}'
+
+
+# ============================================================================
+# Control Towers (POS) (Level 3)
+# ============================================================================
+
+class InvControlTowerResources(models.Model):
+    """
+    EVE SDE: invControlTowerResources table
+
+    POS fuel and resource requirements
+    """
+    control_tower_type_id = models.IntegerField(db_column='controlTowerTypeID')
+    resource_type_id = models.IntegerField(db_column='resourceTypeID')
+    purpose = models.IntegerField(null=True, blank=True, db_column='purpose')
+    quantity = models.IntegerField(null=True, blank=True, db_column='quantity')
+    min_security_level = models.FloatField(null=True, blank=True, db_column='minSecurityLevel')
+    faction_id = models.IntegerField(null=True, blank=True, db_column='factionID')
+
+    class Meta:
+        db_table = 'evesde_invcontroltowerresources'
+        managed = False
+        verbose_name = 'Control Tower Resource'
+        verbose_name_plural = 'Control Tower Resources'
+        # Note: SDE uses composite key (controlTowerTypeID, resourceTypeID)
+
+
+# ============================================================================
+# Additional Map Data (Level 2)
+# ============================================================================
+
+class MapDenormalize(models.Model):
+    """
+    EVE SDE: mapDenormalize table
+
+    Denormalized map data for easy querying (celestial objects)
+    """
+    item_id = models.IntegerField(primary_key=True, db_column='itemID')
+    type_id = models.IntegerField(null=True, blank=True, db_index=True, db_column='typeID')
+    group_id = models.IntegerField(null=True, blank=True, db_column='groupID')
+    solar_system_id = models.IntegerField(null=True, blank=True, db_index=True, db_column='solarSystemID')
+    constellation_id = models.IntegerField(null=True, blank=True, db_index=True, db_column='constellationID')
+    region_id = models.IntegerField(null=True, blank=True, db_index=True, db_column='regionID')
+    orbit_id = models.IntegerField(null=True, blank=True, db_index=True, db_column='orbitID')
+    x = models.FloatField(null=True, blank=True, db_column='x')
+    y = models.FloatField(null=True, blank=True, db_column='y')
+    z = models.FloatField(null=True, blank=True, db_column='z')
+    radius = models.FloatField(null=True, blank=True, db_column='radius')
+    item_name = models.CharField(max_length=100, blank=True, db_column='itemName')
+    security = models.FloatField(null=True, blank=True, db_column='security')
+    celestial_index = models.IntegerField(null=True, blank=True, db_column='celestialIndex')
+    orbit_index = models.IntegerField(null=True, blank=True, db_column='orbitIndex')
+
+    class Meta:
+        db_table = 'evesde_mapdenormalize'
+        managed = False
+        verbose_name = 'Celestial Object'
+        verbose_name_plural = 'Celestial Objects'
+        ordering = ['solar_system_id', 'celestial_index']
+
+    def __str__(self):
+        return self.item_name or f'Celestial {self.item_id}'
+
+
+class MapLandmarks(models.Model):
+    """
+    EVE SDE: mapLandmarks table
+
+    Landmarks in space
+    """
+    landmark_id = models.IntegerField(primary_key=True, db_column='landmarkID')
+    landmark_name = models.CharField(max_length=100, blank=True, db_column='landmarkName')
     description = models.TextField(blank=True, db_column='description')
-    dock_entry_x = models.FloatField(null=True, blank=True, db_column='dockEntryX')
-    dock_entry_y = models.FloatField(null=True, blank=True, db_column='dockEntryY')
-    dock_entry_z = models.FloatField(null=True, blank=True, db_column='dockEntryZ')
-    dock_orientation_x = models.FloatField(null=True, blank=True, db_column='dockOrientationX')
-    dock_orientation_y = models.FloatField(null=True, blank=True, db_column='dockOrientationY')
-    dock_orientation_z = models.FloatField(null=True, blank=True, db_column='dockOrientationZ')
-    office_slots = models.IntegerField(null=True, blank=True, db_column='officeSlots')
-    reprocessing_efficiency = models.FloatField(null=True, blank=True, db_column='reprocessingEfficiency')
+    location_id = models.IntegerField(null=True, blank=True, db_column='locationID')
+    x = models.FloatField(null=True, blank=True, db_column='x')
+    y = models.FloatField(null=True, blank=True, db_column='y')
+    z = models.FloatField(null=True, blank=True, db_column='z')
 
     class Meta:
-        db_table = 'evesde_stastationtypes'
+        db_table = 'evesde_maplandmarks'
         managed = False
-        verbose_name = 'Station Type'
-        verbose_name_plural = 'Station Types'
-        ordering = ['station_name']
+        verbose_name = 'Landmark'
+        verbose_name_plural = 'Landmarks'
+        ordering = ['landmark_name']
 
     def __str__(self):
-        return self.station_name or f'Station Type {self.station_type_id}'
+        return self.landmark_name or f'Landmark {self.landmark_id}'
+
+
+# ============================================================================
+# Planet Interaction (Level 3)
+# ============================================================================
+
+class PlanetSchematics(models.Model):
+    """
+    EVE SDE: planetSchematics table
+
+    Planet interaction schematic definitions
+    """
+    schematic_id = models.IntegerField(primary_key=True, db_column='schematicID')
+    schematic_name = models.CharField(max_length=255, blank=True, db_column='schematicName')
+    cycle_time = models.IntegerField(null=True, blank=True, db_column='cycleTime')
+
+    class Meta:
+        db_table = 'evesde_planetschematics'
+        managed = False
+        verbose_name = 'Planet Schematic'
+        verbose_name_plural = 'Planet Schematics'
+        ordering = ['schematic_name']
+
+    def __str__(self):
+        return self.schematic_name or f'Schematic {self.schematic_id}'
+
+
+class PlanetSchematicsPinMap(models.Model):
+    """
+    EVE SDE: planetSchematicsPinMap table
+
+    Planet pin mappings for schematics
+    """
+    schematic_id = models.IntegerField(db_index=True, db_column='schematicID')
+    pin_type_id = models.IntegerField(db_index=True, db_column='pinTypeID')
+
+    class Meta:
+        db_table = 'evesde_planetschematicspinmap'
+        managed = False
+        verbose_name = 'Planet Schematic Pin'
+        verbose_name_plural = 'Planet Schematic Pins'
+        # Note: SDE uses composite key (schematicID, pinTypeID)
+
+
+class PlanetSchematicsTypeMap(models.Model):
+    """
+    EVE SDE: planetSchematicsTypeMap table
+
+    Planet type mappings for schematics (inputs/outputs)
+    """
+    schematic_id = models.IntegerField(db_index=True, db_column='schematicID')
+    type_id = models.IntegerField(db_index=True, db_column='typeID')
+    quantity = models.BooleanField(null=True, blank=True, db_column='quantity')  # Is output?
+    is_input = models.BooleanField(null=True, blank=True, db_column='isInput')
+
+    class Meta:
+        db_table = 'evesde_planetschematicstypemap'
+        managed = False
+        verbose_name = 'Planet Schematic Type'
+        verbose_name_plural = 'Planet Schematic Types'
+        # Note: SDE uses composite key
+
+
+# ============================================================================
+# SKIN System (Level 3)
+# ============================================================================
+
+class SkinLicense(models.Model):
+    """
+    EVE SDE: skinLicense table
+
+    SKIN license definitions
+    """
+    license_id = models.IntegerField(primary_key=True, db_column='licenseID')
+    type_id = models.IntegerField(null=True, blank=True, db_column='typeID')
+    skin_id = models.IntegerField(null=True, blank=True, db_column='skinID')
+
+    class Meta:
+        db_table = 'evesde_skinlicense'
+        managed = False
+        verbose_name = 'SKIN License'
+        verbose_name_plural = 'SKIN Licenses'
+        ordering = ['license_id']
+
+    def __str__(self):
+        return f'SKIN License {self.license_id}'
+
+
+class SkinMaterials(models.Model):
+    """
+    EVE SDE: skinMaterials table
+
+    SKIN material definitions
+    """
+    skin_material_id = models.IntegerField(primary_key=True, db_column='skinMaterialID')
+    display_name = models.CharField(max_length=100, blank=True, db_column='displayName')
+    skin_material = models.CharField(max_length=100, blank=True, db_column='skinMaterial')
+
+    class Meta:
+        db_table = 'evesde_skinmaterials'
+        managed = False
+        verbose_name = 'SKIN Material'
+        verbose_name_plural = 'SKIN Materials'
+        ordering = ['display_name']
+
+    def __str__(self):
+        return self.display_name or f'SKIN Material {self.skin_material_id}'
+
+
+class SkinShip(models.Model):
+    """
+    EVE SDE: skinShip table
+
+    SKIN to ship bindings
+    """
+    skin_id = models.IntegerField(primary_key=True, db_column='skinID')
+    type_id = models.IntegerField(null=True, blank=True, db_column='typeID')
+
+    class Meta:
+        db_table = 'evesde_skinship'
+        managed = False
+        verbose_name = 'Ship SKIN'
+        verbose_name_plural = 'Ship SKINs'
+        ordering = ['skin_id']
+
+    def __str__(self):
+        return f'Ship SKIN {self.skin_id}'
+
+
+# ============================================================================
+# Translations (Level 3)
+# ============================================================================
+
+class TrnTranslations(models.Model):
+    """
+    EVE SDE: trnTranslations table
+
+    Translated strings for localization
+    """
+    tc_id = models.IntegerField(db_index=True, db_column='tcID')
+    key_id = models.IntegerField(db_index=True, db_column='keyID')
+    language_id = models.CharField(max_length=5, db_index=True, db_column='languageID')
+    text = models.TextField(db_column='text')
+
+    class Meta:
+        db_table = 'evesde_trntranslations'
+        managed = False
+        verbose_name = 'Translation'
+        verbose_name_plural = 'Translations'
+        # Note: SDE uses composite key (tcID, keyID, languageID)
 
