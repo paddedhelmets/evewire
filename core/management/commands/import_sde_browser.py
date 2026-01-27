@@ -14,11 +14,15 @@ Usage:
     python manage.py import_sde_browser --tables=invTypes,invGroups  # Specific tables
     python manage.py import_sde_browser --list       # List available tables
     python manage.py import_sde_browser --force       # Re-import even if exists
+    python manage.py import_sde_browser --version=3171578-01ec212  # Use specific SDE version
 """
 
+import json
 import os
+import re
 import tempfile
 import urllib.request
+import urllib.error
 import bz2
 from pathlib import Path
 from django.core.management.base import BaseCommand
@@ -28,8 +32,9 @@ from django.conf import settings
 class Command(BaseCommand):
     help = 'Import EVE SDE tables for the SDE Browser (evesde_ prefix)'
 
-    # Fuzzwork SDE SQLite database (compressed)
-    SDE_URL = "https://www.fuzzwork.co.uk/dump/sqlite-latest.sqlite.bz2"
+    # Garveen's eve-sde-converter GitHub releases
+    # URL pattern: https://github.com/garveen/eve-sde-converter/releases/download/sde-{BUILD}-{HASH}/sde.sqlite.bz2
+    RELEASES_API = "https://api.github.com/repos/garveen/eve-sde-converter/releases"
 
     # Tables available for import (expand as needed)
     # Maps SDE table name to our evesde_ prefixed table name
@@ -144,11 +149,27 @@ class Command(BaseCommand):
             action='store_true',
             help='Re-import even if table exists',
         )
+        parser.add_argument(
+            '--version',
+            type=str,
+            help='Specific SDE version tag (e.g., 3171578-01ec212). Default: latest from GitHub.',
+        )
 
     def handle(self, *args, **options):
         # List mode
         if options['list']:
             return self._list_tables()
+
+        # Get SDE download URL
+        version = options.get('version')
+        if version:
+            sde_url = f"https://github.com/garveen/eve-sde-converter/releases/download/sde-{version}/sde.sqlite.bz2"
+            self.stdout.write(f'Using SDE version: {version}')
+        else:
+            sde_url = self._get_latest_sde_url()
+            if not sde_url:
+                self.stdout.write(self.style.ERROR('Failed to fetch latest SDE release. Use --version to specify a version.'))
+                return
 
         # Determine which tables to import
         if options['all']:
@@ -169,10 +190,10 @@ class Command(BaseCommand):
             sde_path = os.path.join(tmpdir, 'sde.sqlite')
 
             # Download and decompress
-            self.stdout.write('Downloading SDE database (~50MB compressed, ~300MB uncompressed)...')
+            self.stdout.write(f'Downloading SDE database from {sde_url}...')
             try:
                 compressed_path = os.path.join(tmpdir, 'sde.sqlite.bz2')
-                urllib.request.urlretrieve(self.SDE_URL, compressed_path)
+                urllib.request.urlretrieve(sde_url, compressed_path)
 
                 self.stdout.write('Decompressing (this may take a minute)...')
                 with bz2.open(compressed_path, 'rb') as compressed:
@@ -204,6 +225,42 @@ class Command(BaseCommand):
                     failed += 1
 
         self.stdout.write(f'\nDone: {imported} imported, {skipped} skipped, {failed} failed')
+
+    def _get_latest_sde_url(self) -> str | None:
+        """Fetch the latest SDE release URL from GitHub."""
+        try:
+            req = urllib.request.Request(
+                self.RELEASES_API,
+                headers={'Accept': 'application/vnd.github.v3+json'}
+            )
+            with urllib.request.urlopen(req, timeout=10) as response:
+                releases = json.loads(response.read().decode())
+
+            if not releases:
+                self.stdout.write(self.style.WARNING('No releases found'))
+                return None
+
+            # Get the latest release
+            latest = releases[0]
+            tag_name = latest.get('tag_name', '')
+
+            # Tag format should be sde-{BUILD}-{HASH}
+            if not tag_name.startswith('sde-'):
+                self.stdout.write(self.style.WARNING(f'Unexpected tag format: {tag_name}'))
+                return None
+
+            version = tag_name[4:]  # Strip 'sde-' prefix
+            url = f"https://github.com/garveen/eve-sde-converter/releases/download/sde-{version}/sde.sqlite.bz2"
+
+            self.stdout.write(f'Latest SDE version: {version}')
+            return url
+
+        except urllib.error.URLError as e:
+            self.stdout.write(self.style.ERROR(f'Failed to fetch releases: {e}'))
+            return None
+        except Exception as e:
+            self.stdout.write(self.style.ERROR(f'Error fetching latest release: {e}'))
+            return None
 
     def _list_tables(self):
         """List all available tables."""

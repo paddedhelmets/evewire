@@ -1,7 +1,7 @@
 """
 Management command to import EVE SDE (Static Data Export).
 
-Uses Fuzzwork Enterprises pre-built SQLite database - the simplest approach.
+Uses garveen's eve-sde-converter pre-built SQLite database.
 Downloads the SDE database and copies required tables into the main database.
 
 SDE tables use the core_ prefix (e.g., core_itemtype) to avoid naming conflicts
@@ -11,6 +11,7 @@ NOTE: Models use db_column to map to SDE column names, so we can copy
 tables directly without any column name transformations.
 """
 
+import json
 import os
 import tempfile
 import urllib.request
@@ -22,10 +23,10 @@ from django.db import connection
 
 
 class Command(BaseCommand):
-    help = 'Download and import EVE SDE data from Fuzzwork SQLite'
+    help = 'Download and import EVE SDE data from garveen eve-sde-converter'
 
-    # Fuzzwork SDE SQLite database (compressed)
-    SDE_URL = "https://www.fuzzwork.co.uk/dump/sqlite-latest.sqlite.bz2"
+    # Garveen's eve-sde-converter GitHub releases API
+    RELEASES_API = "https://api.github.com/repos/garveen/eve-sde-converter/releases"
 
     # Tables we need for skill plans and basic operations
     # Maps SDE table name to Django model table name
@@ -63,6 +64,11 @@ class Command(BaseCommand):
             action='store_true',
             help='Initialize the SDE database (download full SDE to shared location)',
         )
+        parser.add_argument(
+            '--version',
+            type=str,
+            help='Specific SDE version tag (e.g., 3171578-01ec212). Default: latest from GitHub.',
+        )
 
     def handle(self, *args, **options):
         # Get the shared SDE database path
@@ -81,7 +87,18 @@ class Command(BaseCommand):
         else:
             table_map = self.REQUIRED_TABLES
 
-        self.stdout.write(f'Importing {len(table_map)} tables from Fuzzwork SDE SQLite database')
+        # Get SDE download URL
+        version = options.get('version')
+        if version:
+            sde_url = f"https://github.com/garveen/eve-sde-converter/releases/download/sde-{version}/sde.sqlite.bz2"
+            self.stdout.write(f'Using SDE version: {version}')
+        else:
+            sde_url = self._get_latest_sde_url()
+            if not sde_url:
+                self.stdout.write(self.style.ERROR('Failed to fetch latest SDE release. Use --version to specify a version.'))
+                return
+
+        self.stdout.write(f'Importing {len(table_map)} tables from garveen eve-sde-converter')
 
         # Dry run mode
         if options['dry_run']:
@@ -97,10 +114,10 @@ class Command(BaseCommand):
             sde_path = os.path.join(tmpdir, 'sde.sqlite')
 
             # Download and decompress
-            self.stdout.write('Downloading SDE database (~50MB compressed, ~300MB uncompressed)...')
+            self.stdout.write(f'Downloading SDE database...')
             try:
                 compressed_path = os.path.join(tmpdir, 'sde.sqlite.bz2')
-                urllib.request.urlretrieve(self.SDE_URL, compressed_path)
+                urllib.request.urlretrieve(sde_url, compressed_path)
 
                 self.stdout.write('Decompressing (this may take a minute)...')
                 with bz2.open(compressed_path, 'rb') as compressed:
@@ -141,6 +158,12 @@ class Command(BaseCommand):
         self.stdout.write(f'Initializing SDE database at {target_path}')
         self.stdout.write('This will download the full SDE (~300MB) and may take several minutes.')
 
+        # Get latest SDE URL
+        sde_url = self._get_latest_sde_url()
+        if not sde_url:
+            self.stdout.write(self.style.ERROR('Failed to fetch latest SDE release.'))
+            return
+
         # Create parent directory if it doesn't exist
         target_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -151,7 +174,7 @@ class Command(BaseCommand):
 
             self.stdout.write('Downloading SDE database...')
             try:
-                urllib.request.urlretrieve(self.SDE_URL, compressed_path)
+                urllib.request.urlretrieve(sde_url, compressed_path)
             except Exception as e:
                 self.stdout.write(self.style.ERROR(f'Failed to download SDE: {e}'))
                 return
@@ -304,3 +327,33 @@ class Command(BaseCommand):
         django_conn.close()
 
         return total_copied
+
+    def _get_latest_sde_url(self) -> str | None:
+        """Fetch the latest SDE release URL from GitHub."""
+        try:
+            req = urllib.request.Request(
+                self.RELEASES_API,
+                headers={'Accept': 'application/vnd.github.v3+json'}
+            )
+            with urllib.request.urlopen(req, timeout=10) as response:
+                releases = json.loads(response.read().decode())
+
+            if not releases:
+                return None
+
+            # Get the latest release
+            latest = releases[0]
+            tag_name = latest.get('tag_name', '')
+
+            # Tag format should be sde-{BUILD}-{HASH}
+            if not tag_name.startswith('sde-'):
+                return None
+
+            version = tag_name[4:]  # Strip 'sde-' prefix
+            url = f"https://github.com/garveen/eve-sde-converter/releases/download/sde-{version}/sde.sqlite.bz2"
+
+            self.stdout.write(f'Latest SDE version: {version}')
+            return url
+
+        except Exception:
+            return None
