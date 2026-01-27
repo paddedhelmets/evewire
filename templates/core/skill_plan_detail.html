@@ -47,17 +47,44 @@
 }
 
 .pilot-row {
-    padding: 0.5rem;
-    border-bottom: 1px solid var(--table-border);
+    padding: 0.75rem 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.pilot-row .pilot-left {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    flex: 1;
+    min-width: 150px;
 }
 
 .pilot-row .pilot-name {
     font-weight: 500;
 }
 
+.pilot-row .pilot-time {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.pilot-row .pilot-right {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 1;
+    justify-content: flex-end;
+    min-width: 200px;
+}
+
 .pilot-row .pilot-sp {
     font-size: 0.85rem;
     color: var(--text-secondary);
+    white-space: nowrap;
 }
 
 .progress-mini {
@@ -104,29 +131,22 @@
         {% if pilot_progress %}
             {% for pilot in pilot_progress %}
             <div class="pilot-row">
-                <div class="pilot-name">
+                <div class="pilot-left">
                     <a href="{% url 'core:character_overview' pilot.character.id %}" style="text-decoration: none; color: inherit;">
-                        {{ pilot.character.character_name }}
+                        <span class="pilot-name">{{ pilot.character.character_name }}</span>
                     </a>
+                    {% if pilot.percent_complete < 100 and pilot.total_training_seconds %}
+                    <span class="pilot-time">({{ pilot.total_training_seconds|format_duration }})</span>
+                    {% elif pilot.percent_complete == 100 %}
+                    <span class="pilot-time" style="color: #080;">✓</span>
+                    {% endif %}
                 </div>
-                <div class="pilot-sp" style="margin-top: 0.25rem;">
-                    {{ pilot.progress.current_sp|commas }} / {{ pilot.progress.total_sp|commas }} SP
-                </div>
-                <div style="margin-top: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                <div class="pilot-right">
+                    <span class="pilot-sp">{{ pilot.progress.current_sp|commas }} / {{ pilot.progress.total_sp|commas }} SP</span>
                     <div class="progress-mini">
                         <div class="progress-mini-fill" style="width: {{ pilot.percent_complete }}%; background: {% if pilot.percent_complete == 100 %}#080{% elif pilot.percent_complete >= 50 %}#cc0{% else %}#c00{% endif %};"></div>
                     </div>
-                    <span style="font-size: 0.85rem; color: var(--text-secondary);">{{ pilot.percent_complete|floatformat:0 }}%</span>
                 </div>
-                {% if pilot.percent_complete < 100 and pilot.total_training_seconds %}
-                <div style="margin-top: 0.25rem; font-size: 0.8rem; color: var(--text-secondary);">
-                    {{ pilot.total_training_seconds|format_duration }} remaining
-                </div>
-                {% elif pilot.percent_complete == 100 %}
-                <div style="margin-top: 0.25rem; font-size: 0.8rem; color: #080;">
-                    ✓ Complete
-                </div>
-                {% endif %}
             </div>
             {% endfor %}
         {% else %}
