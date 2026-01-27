@@ -964,11 +964,16 @@ class SkillPlan(models.Model):
 
             skill = character_skills.get(entry.skill_id)
 
-            # Get skill rank for SP calculation
+            # Get skill rank for SP calculation (from TypeAttribute attribute_id 275)
             try:
-                item_type = ItemType.objects.get(id=entry.skill_id)
-                rank = item_type.rank or 1
-            except ItemType.DoesNotExist:
+                rank_attr = TypeAttribute.objects.get(type_id=entry.skill_id, attribute_id=275)
+                if rank_attr.value_int is not None:
+                    rank = rank_attr.value_int
+                elif rank_attr.value_float is not None:
+                    rank = int(rank_attr.value_float)
+                else:
+                    rank = 1
+            except TypeAttribute.DoesNotExist:
                 rank = 1
 
             target_sp = sp_for_level(entry.level, rank)
