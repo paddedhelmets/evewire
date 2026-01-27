@@ -16,21 +16,29 @@
     </div>
 </div>
 
-{% if reference_plans %}
+{% if global_plans %}
 <div style="margin-bottom: 2rem;">
-    <h2>Reference Plans</h2>
-    <p style="color: #666; margin-bottom: 1rem;">Shared skill plan templates from the alliance.</p>
+    <h2>Global Plans</h2>
+    <p style="color: #666; margin-bottom: 1rem;">Shared skill plans visible to all users.</p>
     <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem;">
-        {% for item in reference_plans %}
+        {% for item in global_plans %}
         <div class="card" style="margin: 0;">
-            <h3 style="margin: 0 0 0.5rem 0;">
-                <a href="{% url 'core:skill_plan_detail' item.id %}" style="text-decoration: none; color: inherit;">{{ item.name }}</a>
-            </h3>
-            {% if item.description %}
-            <p style="color: #666; margin: 0 0 0.5rem 0; font-size: 0.9rem;">{{ item.description|truncatewords:15 }}</p>
-            {% endif %}
-            <div style="display: flex; gap: 1rem; font-size: 0.9rem; color: #666;">
-                <span>{{ item.entry_count }} skills</span>
+            <div style="display: flex; justify-content: space-between; align-items: start;">
+                <div style="flex: 1;">
+                    <h3 style="margin: 0 0 0.5rem 0;">
+                        <a href="{% url 'core:skill_plan_detail' item.id %}" style="text-decoration: none; color: inherit;">{{ item.name }}</a>
+                    </h3>
+                    {% if item.description %}
+                    <p style="color: #666; margin: 0 0 0.5rem 0; font-size: 0.9rem;">{{ item.description|truncatewords:15 }}</p>
+                    {% endif %}
+                    <div style="display: flex; gap: 1rem; font-size: 0.9rem; color: #666;">
+                        <span>{{ item.entry_count }} skills</span>
+                    </div>
+                </div>
+                <form method="post" action="{% url 'core:skill_plan_ignore_toggle' item.id %}" style="display: inline;">
+                    {% csrf_token %}
+                    <button type="submit" style="background: none; border: none; color: #999; cursor: pointer; font-size: 0.85rem;" title="Hide this plan">✕</button>
+                </form>
             </div>
         </div>
         {% endfor %}

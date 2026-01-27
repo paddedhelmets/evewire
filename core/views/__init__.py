@@ -531,9 +531,9 @@ def character_plans_page(request: HttpRequest, character_id: int) -> HttpRespons
             'message': 'Character not found',
         }, status=404)
 
-    # Get all plans (user's + reference)
-    user_plans = SkillPlan.objects.filter(owner=request.user, parent__isnull=True, is_reference=False)
-    reference_plans = SkillPlan.objects.filter(parent__isnull=True, is_reference=True)
+    # Get all plans (user's + global)
+    user_plans = SkillPlan.objects.filter(owner=request.user, parent__isnull=True, is_active=True)
+    global_plans = SkillPlan.objects.filter(owner__isnull=True, parent__isnull=True, is_active=True)
 
     # Add progress for each plan
     def enrich_plans(plans):
@@ -549,7 +549,7 @@ def character_plans_page(request: HttpRequest, character_id: int) -> HttpRespons
     return render(request, 'core/character_plans.html', {
         'character': character,
         'user_plans': enrich_plans(user_plans),
-        'reference_plans': enrich_plans(reference_plans),
+        'global_plans': enrich_plans(global_plans),
     })
 
 

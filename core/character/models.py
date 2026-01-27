@@ -828,20 +828,27 @@ class SkillPlan(models.Model):
     Skill plans can be hierarchical (parent/child) and represent
     goals like "Fly Loki" or "Max Industrialist". Each plan contains
     skill entries with required and recommended levels.
+
+    Ownership model (matches Fittings):
+    - owner=None: Global plan visible to all users (e.g., reference templates)
+    - owner=<user>: Private plan only visible to that user
     """
 
     name = models.CharField(max_length=255, db_index=True)
     description = models.TextField(blank=True)
+
+    # Owner: null = global/shared, set = user-private
     owner = models.ForeignKey(
         'core.User',
         on_delete=models.CASCADE,
         related_name='skill_plans',
         null=True,
         blank=True,
+        help_text="User who owns this plan (null = global/shared plan)",
     )
 
-    # Reference plans are shared templates visible to all users
-    is_reference = models.BooleanField(default=False, db_index=True)
+    # Active/inactive flag for soft deletion
+    is_active = models.BooleanField(default=True, db_index=True)
 
     # Hierarchical structure - allow sub-plans
     parent = models.ForeignKey(
@@ -1334,6 +1341,36 @@ class SkillPlanEntry(models.Model):
                 raise ValidationError({
                     'recommended_level': 'Recommended level must be greater than required level.'
                 })
+
+
+class SkillPlanIgnore(models.Model):
+    """
+    User's ignored global skill plans.
+
+    Allows users to hide global/shared plans they don't want to see
+    without deleting them (since they don't own them).
+    """
+
+    user = models.ForeignKey(
+        'core.User',
+        on_delete=models.CASCADE,
+        related_name='ignored_skill_plans',
+    )
+
+    plan = models.ForeignKey(
+        SkillPlan,
+        on_delete=models.CASCADE,
+        related_name='ignored_by',
+    )
+
+    class Meta:
+        verbose_name = _('skill plan ignore')
+        verbose_name_plural = _('skill plan ignores')
+        unique_together = [['user', 'plan']]
+        db_table = 'core_skillplanignore'
+
+    def __str__(self) -> str:
+        return f"{self.user.username} ignores {self.plan.name}"
 
 
 class IndustryJob(models.Model):

@@ -106,46 +106,96 @@
     }
 </style>
 
-{% if plans %}
-<div class="plan-grid">
-    {% for item in plans %}
-    <div class="plan-card">
-        <h3>{{ item.plan.name }}</h3>
-        {% if item.plan.description %}
-        <p class="description">{{ item.plan.description }}</p>
-        {% endif %}
+{% if global_plans %}
+<div style="margin-bottom: 2rem;">
+    <h2>Global Plans</h2>
+    <p style="color: #666; margin-bottom: 1rem;">Shared skill plans visible to all users.</p>
+    <div class="plan-grid">
+        {% for item in global_plans %}
+        <div class="plan-card">
+            <h3>{{ item.plan.name }}</h3>
+            {% if item.plan.description %}
+            <p class="description">{{ item.plan.description }}</p>
+            {% endif %}
 
-        {% if item.progress %}
-        <div class="plan-progress">
-            <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 0.25rem;">
-                <span>Progress</span>
-                <span>{{ item.progress.percent_complete|floatformat:0 }}%</span>
+            {% if item.progress %}
+            <div class="plan-progress">
+                <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 0.25rem;">
+                    <span>Progress</span>
+                    <span>{{ item.progress.percent_complete|floatformat:0 }}%</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: {{ item.progress.percent_complete }}%;"></div>
+                </div>
+                <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                    {{ item.progress.completed_count }} / {{ item.progress.total_count }} skills complete
+                </div>
             </div>
-            <div class="progress-bar">
-                <div class="progress-fill" style="width: {{ item.progress.percent_complete }}%;"></div>
+
+            <div class="plan-stats">
+                <div class="plan-stat">
+                    <span>Entries:</span>
+                    <strong>{{ item.progress.total_count }}</strong>
+                </div>
+                <div class="plan-stat">
+                    <span>Remaining:</span>
+                    <strong>{{ item.progress.remaining_count }}</strong>
+                </div>
             </div>
-            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">
-                {{ item.progress.completed_count }} / {{ item.progress.total_count }} skills complete
-            </div>
+            {% else %}
+            <p style="color: var(--text-secondary); font-size: 0.9rem;">No progress data available</p>
+            {% endif %}
+
+            <a href="{% url 'core:skill_plan_detail' item.plan.id %}" class="btn">View Plan →</a>
         </div>
-
-        <div class="plan-stats">
-            <div class="plan-stat">
-                <span>Entries:</span>
-                <strong>{{ item.progress.total_count }}</strong>
-            </div>
-            <div class="plan-stat">
-                <span>Remaining:</span>
-                <strong>{{ item.progress.remaining_count }}</strong>
-            </div>
-        </div>
-        {% else %}
-        <p style="color: var(--text-secondary); font-size: 0.9rem;">No progress data available</p>
-        {% endif %}
-
-        <a href="{% url 'core:skill_plan_detail' item.plan.id %}" class="btn">View Plan →</a>
+        {% endfor %}
     </div>
-    {% endfor %}
+</div>
+{% endif %}
+
+{% if user_plans %}
+<div>
+    <h2>My Plans</h2>
+    <div class="plan-grid">
+        {% for item in user_plans %}
+        <div class="plan-card">
+            <h3>{{ item.plan.name }}</h3>
+            {% if item.plan.description %}
+            <p class="description">{{ item.plan.description }}</p>
+            {% endif %}
+
+            {% if item.progress %}
+            <div class="plan-progress">
+                <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 0.25rem;">
+                    <span>Progress</span>
+                    <span>{{ item.progress.percent_complete|floatformat:0 }}%</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: {{ item.progress.percent_complete }}%;"></div>
+                </div>
+                <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                    {{ item.progress.completed_count }} / {{ item.progress.total_count }} skills complete
+                </div>
+            </div>
+
+            <div class="plan-stats">
+                <div class="plan-stat">
+                    <span>Entries:</span>
+                    <strong>{{ item.progress.total_count }}</strong>
+                </div>
+                <div class="plan-stat">
+                    <span>Remaining:</span>
+                    <strong>{{ item.progress.remaining_count }}</strong>
+                </div>
+            </div>
+            {% else %}
+            <p style="color: var(--text-secondary); font-size: 0.9rem;">No progress data available</p>
+            {% endif %}
+
+            <a href="{% url 'core:skill_plan_detail' item.plan.id %}" class="btn">View Plan →</a>
+        </div>
+        {% endfor %}
+    </div>
 </div>
 
 <div style="margin-top: 2rem;">
@@ -157,7 +207,8 @@
     <h3>No Skill Plans</h3>
     <p style="color: var(--text-secondary);">You haven't created any skill plans yet.</p>
     <div style="margin-top: 1rem;">
-        <a href="{% url 'core:skill_plan_create' %}" class="btn">Create Your First Plan</a>
+        <a href="{% url 'core:skill_plan_list' %}" class="btn">Browse Global Plans</a>
+        <a href="{% url 'core:skill_plan_create' %}" class="btn" style="margin-left: 0.5rem;">Create Your First Plan</a>
         <a href="{% url 'core:skill_plan_import' %}" class="btn" style="margin-left: 0.5rem;">Import from EVE</a>
     </div>
 </div>

@@ -56,10 +56,10 @@ class Command(BaseCommand):
             self.stdout.write(f'\nProcessing: {plan_name}')
 
             # Check if already exists
-            if SkillPlan.objects.filter(name=plan_name, is_reference=True).exists():
+            if SkillPlan.objects.filter(name=plan_name, owner__isnull=True).exists():
                 if options['force']:
                     self.stdout.write(self.style.WARNING('  Force re-import: deleting existing plan'))
-                    SkillPlan.objects.filter(name=plan_name, is_reference=True).delete()
+                    SkillPlan.objects.filter(name=plan_name, owner__isnull=True).delete()
                 else:
                     self.stdout.write(self.style.WARNING('  Skipping: already exists'))
                     skipped += 1
@@ -70,12 +70,12 @@ class Command(BaseCommand):
                 with open(xml_file, 'r') as f:
                     xml_content = f.read()
 
-                # Create plan using importer (without owner for reference plans)
+                # Create plan using importer (without owner for global plans)
                 plan = SkillPlan.objects.create(
                     name=plan_name,
                     description=f'Reference skill plan imported from {filename}',
                     owner=None,
-                    is_reference=True,
+                    is_active=True,
                     display_order=imported,
                 )
 

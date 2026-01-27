@@ -20,22 +20,34 @@ logger = logging.getLogger(__name__)
 
 @login_required
 def skill_plan_list(request: HttpRequest) -> HttpResponse:
-    """List all skill plans for the current user plus reference plans."""
-    from core.character.models import SkillPlan
-    from django.db.models import Prefetch, Count
+    """List all skill plans for the current user plus global plans."""
+    from core.character.models import SkillPlan, SkillPlanIgnore
+    from django.db.models import Prefetch, Count, Q
 
-    # Prefetch entries to avoid N+1 queries
+    # Get IDs of plans this user has ignored
+    ignored_plan_ids = SkillPlanIgnore.objects.filter(
+        user=request.user
+    ).values_list('plan_id', flat=True)
+
+    # User's private plans
     user_plans = SkillPlan.objects.filter(
-        owner=request.user, parent__isnull=True, is_reference=False
+        owner=request.user,
+        parent__isnull=True,
+        is_active=True
     ).prefetch_related('entries').annotate(entry_count=Count('entries'))
 
-    reference_plans = SkillPlan.objects.filter(
-        parent__isnull=True, is_reference=True
+    # Global plans (owner=None) that are active and not ignored
+    global_plans = SkillPlan.objects.filter(
+        owner__isnull=True,
+        parent__isnull=True,
+        is_active=True
+    ).exclude(
+        id__in=ignored_plan_ids
     ).prefetch_related('entries').annotate(entry_count=Count('entries'))
 
     return render(request, 'core/skill_plan_list.html', {
         'user_plans': user_plans,
-        'reference_plans': reference_plans,
+        'global_plans': global_plans,
     })
 
 
@@ -62,11 +74,11 @@ def skill_plan_detail(request: HttpRequest, plan_id: int) -> HttpResponse:
         progress = plan.get_progress_for_character(char)
         percent_complete = progress['percent_complete']
 
-        # Calculate remaining training time
+        # Calculate remaining training time (primary entries only)
         character_skills = {s.skill_id: s for s in char.skills.all()}
         total_training_seconds = 0
 
-        for entry in plan.entries.all():
+        for entry in plan.entries.filter(is_prerequisite=False):
             target_level = entry.level or entry.recommended_level
             if target_level:
                 skill = character_skills.get(entry.skill_id)
@@ -218,6 +230,32 @@ def skill_plan_delete(request: HttpRequest, plan_id: int) -> HttpResponse:
 
 @login_required
 @require_http_methods(['POST'])
+def skill_plan_ignore_toggle(request: HttpRequest, plan_id: int) -> HttpResponse:
+    """Toggle ignore status for a global skill plan."""
+    from core.character.models import SkillPlan, SkillPlanIgnore
+    from django.contrib import messages
+
+    try:
+        plan = SkillPlan.objects.get(id=plan_id, owner__isnull=True, is_active=True)
+    except SkillPlan.DoesNotExist:
+        messages.error(request, 'Plan not found or you may not modify it.')
+        return redirect('core:skill_plan_list')
+
+    # Toggle ignore status
+    existing = SkillPlanIgnore.objects.filter(user=request.user, plan=plan).first()
+
+    if existing:
+        existing.delete()
+        messages.success(request, f'Plan "{plan.name}" is now visible.')
+    else:
+        SkillPlanIgnore.objects.create(user=request.user, plan=plan)
+        messages.success(request, f'Plan "{plan.name}" is now hidden.')
+
+    return redirect('core:skill_plan_list')
+
+
+@login_required
+@require_http_methods(['POST'])
 def skill_plan_add_skill(request: HttpRequest, plan_id: int) -> HttpResponse:
     """Add a skill to a skill plan."""
     from core.character.models import SkillPlan, SkillPlanEntry
@@ -281,9 +319,11 @@ def skill_plan_add_skill(request: HttpRequest, plan_id: int) -> HttpResponse:
         level=level,
         recommended_level=recommended_level,
         display_order=max_order + 1,
+        is_prerequisite=False,  # Explicitly mark as primary entry
     )
 
-    plan.reorder_by_prerequisites()
+    plan.ensure_prerequisites()  # Auto-add missing prerequisites
+    plan.reorder_by_prerequisites()  # Sort entries
     messages.success(request, 'Skill added to plan.')
     return redirect('core:skill_plan_detail', plan_id=plan.id)
 
@@ -333,7 +373,73 @@ def skill_search(request: HttpRequest) -> JsonResponse:
 @login_required
 @require_http_methods(['POST'])
 def skill_plan_remove_skill(request: HttpRequest, plan_id: int, entry_id: int) -> HttpResponse:
-    """Remove a skill from a skill plan."""
+    """Remove a skill from a skill plan.
+
+    If the skill is a prerequisite for other entries in the plan, it will be
+    converted to a prerequisite entry instead of being deleted.
+    """
+    from core.character.models import SkillPlan, SkillPlanEntry
+    from core.eve.models import TypeAttribute
+    from django.contrib import messages
+
+    try:
+        plan = SkillPlan.objects.get(id=plan_id, owner=request.user)
+        entry = SkillPlanEntry.objects.get(id=entry_id, skill_plan=plan)
+    except (SkillPlan.DoesNotExist, SkillPlanEntry.DoesNotExist):
+        messages.error(request, 'Skill plan or entry not found.')
+        return redirect('core:skill_plan_list')
+
+    skill_id = entry.skill_id
+    entry_level = entry.level or 0
+
+    # Check if this skill is a prerequisite for any other primary entries in the plan
+    skill_attribute_map = {
+        182: 277, 183: 278, 184: 279, 1285: 1286, 1289: 1287, 1290: 1289
+    }
+
+    is_needed_as_prereq = False
+
+    # Get all primary entries (excluding this one)
+    primary_entries = plan.entries.filter(is_prerequisite=False).exclude(id=entry.id)
+
+    for primary_entry in primary_entries:
+        # Get prerequisites for this primary entry's skill
+        try:
+            prereq_attrs = TypeAttribute.objects.filter(
+                type_id=primary_entry.skill_id,
+                attribute_id__in=skill_attribute_map.keys()
+            )
+
+            for attr in prereq_attrs:
+                prereq_skill_id = int(attr.value_float) if attr.value_float else None
+                if prereq_skill_id == skill_id:
+                    is_needed_as_prereq = True
+                    break
+        except:
+            pass
+
+        if is_needed_as_prereq:
+            break
+
+    if is_needed_as_prereq and not entry.is_prerequisite:
+        # Convert to prerequisite instead of deleting
+        entry.is_prerequisite = True
+        entry.save()
+        messages.info(request, f'Converted {entry.skill_name} to a prerequisite (still needed by other skills).')
+    else:
+        # Safe to delete
+        entry.delete()
+        # Clean up any orphaned prerequisites
+        plan.ensure_prerequisites()
+        messages.success(request, 'Skill removed from plan.')
+
+    return redirect('core:skill_plan_detail', plan_id=plan.id)
+
+
+@login_required
+@require_http_methods(['POST'])
+def skill_plan_promote_prereq(request: HttpRequest, plan_id: int, entry_id: int) -> HttpResponse:
+    """Promote a prerequisite entry to a primary entry."""
     from core.character.models import SkillPlan, SkillPlanEntry
     from django.contrib import messages
 
@@ -344,8 +450,15 @@ def skill_plan_remove_skill(request: HttpRequest, plan_id: int, entry_id: int) -
         messages.error(request, 'Skill plan or entry not found.')
         return redirect('core:skill_plan_list')
 
-    entry.delete()
-    messages.success(request, 'Skill removed from plan.')
+    if not entry.is_prerequisite:
+        messages.warning(request, 'This skill is already a primary entry.')
+        return redirect('core:skill_plan_detail', plan_id=plan.id)
+
+    # Promote to primary entry
+    entry.is_prerequisite = False
+    entry.save()
+
+    messages.success(request, f'Promoted {entry.skill_name} to a primary goal.')
     return redirect('core:skill_plan_detail', plan_id=plan.id)
 
 
@@ -465,9 +578,10 @@ def skill_plan_import_skills(request: HttpRequest, plan_id: int) -> HttpResponse
         else:
             messages.error(request, 'No valid skills found to import.')
 
-    # Reorder skills by prerequisites after import
+    # Add missing prerequisites and reorder after import
     if added_count > 0:
-        plan.reorder_by_prerequisites()
+        plan.ensure_prerequisites()  # Auto-add missing prerequisite skills
+        plan.reorder_by_prerequisites()  # Sort entries by prerequisite order
 
     return redirect('core:skill_plan_detail', plan_id=plan.id)
 
