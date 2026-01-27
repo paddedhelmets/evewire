@@ -1121,25 +1121,25 @@ class SkillPlan(models.Model):
 
         # Add missing prerequisite entries (all levels 1 through N)
         max_display_order = self.entries.aggregate(max_order=Max('display_order'))['max_order'] or 0
-        entries_to_create = []
 
+        # Use get_or_create to handle cases where a level already exists
+        # (e.g., user has skill at level 3 as primary, we need to add levels 1-2 and 4-5 as prereqs)
         for skill_id, max_level in required_prereqs:
             # Add all levels 1 through max_level for correct SP calculation
             for level in range(1, max_level + 1):
-                if (skill_id, level) not in existing_entries:
+                entry, created = SkillPlanEntry.objects.get_or_create(
+                    skill_plan=self,
+                    skill_id=skill_id,
+                    level=level,
+                    defaults={
+                        'is_prerequisite': True,
+                        'display_order': max_display_order + 1
+                    }
+                )
+                if created:
                     max_display_order += 1
-                    entries_to_create.append(
-                        SkillPlanEntry(
-                            skill_plan=self,
-                            skill_id=skill_id,
-                            level=level,
-                            is_prerequisite=True,
-                            display_order=max_display_order
-                        )
-                    )
-
-        if entries_to_create:
-            SkillPlanEntry.objects.bulk_create(entries_to_create)
+                # If entry already exists as primary, don't change it to prerequisite
+                # If entry exists as prerequisite, leave it as is
 
         # Remove orphaned prerequisite entries (no longer needed)
         # Get all skills that are either primary entries or required by primary entries
