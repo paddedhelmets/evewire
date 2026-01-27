@@ -1119,22 +1119,24 @@ class SkillPlan(models.Model):
                     # Recursively process this prerequisite's prerequisites
                     skill_ids_to_process.append((prereq_skill_id, required_level))
 
-        # Add missing prerequisite entries
+        # Add missing prerequisite entries (all levels 1 through N)
         max_display_order = self.entries.aggregate(max_order=Max('display_order'))['max_order'] or 0
         entries_to_create = []
 
-        for skill_id, level in required_prereqs:
-            if (skill_id, level) not in existing_entries:
-                max_display_order += 1
-                entries_to_create.append(
-                    SkillPlanEntry(
-                        skill_plan=self,
-                        skill_id=skill_id,
-                        level=level,
-                        is_prerequisite=True,
-                        display_order=max_display_order
+        for skill_id, max_level in required_prereqs:
+            # Add all levels 1 through max_level for correct SP calculation
+            for level in range(1, max_level + 1):
+                if (skill_id, level) not in existing_entries:
+                    max_display_order += 1
+                    entries_to_create.append(
+                        SkillPlanEntry(
+                            skill_plan=self,
+                            skill_id=skill_id,
+                            level=level,
+                            is_prerequisite=True,
+                            display_order=max_display_order
+                        )
                     )
-                )
 
         if entries_to_create:
             SkillPlanEntry.objects.bulk_create(entries_to_create)
