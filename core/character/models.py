@@ -983,7 +983,7 @@ class SkillPlan(models.Model):
                 current_sp = 0
                 trained_level = 0
             else:
-                current_sp = skill.total_sp
+                current_sp = skill.skillpoints_in_skill
                 trained_level = skill.trained_skill_level
 
             if entry.is_prerequisite:
