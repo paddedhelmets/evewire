@@ -894,85 +894,249 @@ class SkillPlan(models.Model):
         SP required for all three levels is summed.
 
         Returns dict with:
-        - total_sp: total SP required for all entries
-        - current_sp: current SP character has in those skills
-        - percent_complete: percentage of SP trained
-        - total_entries: count of entries
-        - completed: count of entries fully trained
+        - Primary entries (user-added goals):
+          - primary_total: total primary entries
+          - primary_completed: primary entries that meet required level
+          - primary_in_progress: primary entries partially trained
+          - primary_not_started: primary entries not started
+          - primary_percent_complete: percentage of primary entries completed
+          - primary_sp_total: total SP required for primary entries
+          - primary_sp_completed: SP already trained towards primary entries
+
+        - Prerequisite entries (auto-added required skills):
+          - prereq_total: total prerequisite entries
+          - prereq_completed: prerequisite entries that meet required level
+          - prereq_in_progress: prerequisite entries partially trained
+          - prereq_not_started: prerequisite entries not started
+          - prereq_percent_complete: percentage of prerequisite entries completed
+          - prereq_sp_total: total SP required for prerequisite entries
+          - prereq_sp_completed: SP already trained towards prerequisite entries
+          - prereq_complete: True if all prerequisites are met (for hiding prereq bar)
+
+        - Legacy compatibility (totals including both)
+          - total_entries: total entries (primary + prereq)
+          - completed: completed entries (primary + prereq)
+          - percent_complete: overall completion percentage
         """
         import math
-        from core.eve.models import TypeAttribute
+        from core.eve.models import TypeAttribute, ItemType
 
         entries = self.get_all_entries()
         character_skills = {s.skill_id: s for s in character.skills.all()}
 
-        # Helper to get skill rank from SDE
-        def get_skill_rank(skill_id: int) -> int:
-            try:
-                rank_attr = TypeAttribute.objects.get(
-                    type_id=skill_id,
-                    attribute_id=275  # Training time multiplier
-                )
-                if rank_attr.value_int is not None:
-                    return rank_attr.value_int
-                if rank_attr.value_float is not None:
-                    return int(rank_attr.value_float)
-            except TypeAttribute.DoesNotExist:
-                pass
-            return 1  # Default to rank 1
-
-        # EVE skill point formula:
-        # SP to reach level L from 0: rank * 250 * sqrt(32) * (sqrt(32))^(L-1)
-        # where sqrt(32) = 5.656854...
-        SP_multiplier = 32 ** 0.5  # ~5.656854
+        # SP calculation constants
+        SP_multiplier = 32 ** 0.5
 
         def sp_for_level(level: int, rank: int) -> int:
-            """Total SP needed to reach a specific level from 0."""
+            """Calculate SP required for a given skill level."""
             if level == 0:
                 return 0
-            # Formula: rank * 250 * (sqrt(32)^level - 1) / (sqrt(32) - 1)
-            # This gives cumulative SP from 0 to level
             base = 250 * rank
             geometric_sum = (SP_multiplier ** level - 1) / (SP_multiplier - 1)
             return int(base * geometric_sum)
 
-        def sp_between_levels(from_level: int, to_level: int, rank: int) -> int:
-            """SP needed to go from one level to another."""
-            if to_level <= from_level:
-                return 0
-            return sp_for_level(to_level, rank) - sp_for_level(from_level, rank)
+        # Primary entries tracking
+        primary_total = 0
+        primary_completed = 0
+        primary_in_progress = 0
+        primary_not_started = 0
+        primary_sp_total = 0
+        primary_sp_completed = 0
 
-        total_sp = 0
-        current_sp = 0
-        total_entries = 0
-        completed = 0
+        # Prerequisite entries tracking
+        prereq_total = 0
+        prereq_completed = 0
+        prereq_in_progress = 0
+        prereq_not_started = 0
+        prereq_sp_total = 0
+        prereq_sp_completed = 0
 
         for entry in entries:
             if not entry.level:
-                continue  # Skip entries without required level
+                continue  # Skip entries without required level (recommended-only)
 
-            total_entries += 1
-            rank = get_skill_rank(entry.skill_id)
-
-            # SP needed for this specific level entry
-            entry_sp = sp_between_levels(0, entry.level, rank)
-            total_sp += entry_sp
-
-            # Character's current SP in this skill
             skill = character_skills.get(entry.skill_id)
-            if skill:
-                # Count SP towards this level up to the required amount
-                current_sp += min(skill.skillpoints_in_skill, entry_sp)
-                if skill.trained_skill_level >= entry.level:
-                    completed += 1
+
+            # Get skill rank for SP calculation
+            try:
+                item_type = ItemType.objects.get(id=entry.skill_id)
+                rank = item_type.rank or 1
+            except ItemType.DoesNotExist:
+                rank = 1
+
+            target_sp = sp_for_level(entry.level, rank)
+
+            if not skill:
+                # Skill not injected
+                current_sp = 0
+                trained_level = 0
+            else:
+                current_sp = skill.total_sp
+                trained_level = skill.trained_skill_level
+
+            if entry.is_prerequisite:
+                # Prerequisite entry tracking
+                prereq_total += 1
+                prereq_sp_total += target_sp
+
+                if trained_level >= entry.level:
+                    prereq_completed += 1
+                    prereq_sp_completed += target_sp
+                elif trained_level > 0:
+                    prereq_in_progress += 1
+                    prereq_sp_completed += current_sp
+                else:
+                    prereq_not_started += 1
+            else:
+                # Primary entry tracking
+                primary_total += 1
+                primary_sp_total += target_sp
+
+                if trained_level >= entry.level:
+                    primary_completed += 1
+                    primary_sp_completed += target_sp
+                elif trained_level > 0:
+                    primary_in_progress += 1
+                    primary_sp_completed += current_sp
+                else:
+                    primary_not_started += 1
+
+        prereq_complete = (prereq_completed == prereq_total) if prereq_total > 0 else True
 
         return {
-            'total_sp': total_sp,
-            'current_sp': current_sp,
-            'percent_complete': (current_sp / total_sp * 100) if total_sp > 0 else 0,
-            'total_entries': total_entries,
-            'completed': completed,
+            # Primary entries (user goals)
+            'primary_total': primary_total,
+            'primary_completed': primary_completed,
+            'primary_in_progress': primary_in_progress,
+            'primary_not_started': primary_not_started,
+            'primary_percent_complete': (primary_completed / primary_total * 100) if primary_total > 0 else 0,
+            'primary_sp_total': primary_sp_total,
+            'primary_sp_completed': primary_sp_completed,
+            'primary_sp_remaining': primary_sp_total - primary_sp_completed,
+
+            # Prerequisite entries (auto-added)
+            'prereq_total': prereq_total,
+            'prereq_completed': prereq_completed,
+            'prereq_in_progress': prereq_in_progress,
+            'prereq_not_started': prereq_not_started,
+            'prereq_percent_complete': (prereq_completed / prereq_total * 100) if prereq_total > 0 else 0,
+            'prereq_sp_total': prereq_sp_total,
+            'prereq_sp_completed': prereq_sp_completed,
+            'prereq_sp_remaining': prereq_sp_total - prereq_sp_completed,
+            'prereq_complete': prereq_complete,
+
+            # Legacy compatibility (totals including both)
+            'total_entries': primary_total + prereq_total,
+            'completed': primary_completed + prereq_completed,
+            'percent_complete': ((primary_completed + prereq_completed) / (primary_total + prereq_total) * 100) if (primary_total + prereq_total) > 0 else 0,
         }
+
+    def ensure_prerequisites(self) -> None:
+        """
+        Ensure all prerequisite skills for primary entries are present in the plan.
+
+        This method:
+        1. Identifies all prerequisite skills for primary (non-prerequisite) entries
+        2. Adds missing prerequisites as is_prerequisite=True entries
+        3. Removes prerequisite entries that are no longer needed (nothing depends on them)
+
+        Should be called after modifying primary entries in a plan.
+        """
+        from core.eve.models import TypeAttribute
+        from django.db.models import Max
+
+        # Get all primary entries (user-added goals, not prerequisites)
+        primary_entries = list(self.entries.filter(is_prerequisite=False))
+        existing_prereqs = set(self.entries.filter(is_prerequisite=True).values_list('skill_id', 'level'))
+
+        # Map of skill attribute IDs to their corresponding level attribute IDs
+        skill_attribute_map = {
+            182: 277,
+            183: 278,
+            184: 279,
+            1285: 1286,
+            1289: 1287,
+            1290: 1289,  # Note: SDE quirk
+        }
+
+        # Collect all required prerequisites using BFS
+        required_prereqs = set()  # (skill_id, level) tuples
+        skill_ids_to_process = [(e.skill_id, e.level or 0) for e in primary_entries]
+        processed = set()
+
+        while skill_ids_to_process:
+            skill_id, target_level = skill_ids_to_process.pop(0)
+
+            if (skill_id, target_level) in processed:
+                continue
+            processed.add((skill_id, target_level))
+
+            # Get prerequisites for this skill
+            skill_attrs = TypeAttribute.objects.filter(
+                type_id=skill_id,
+                attribute_id__in=skill_attribute_map.keys()
+            )
+
+            for skill_attr in skill_attrs:
+                attr_id = skill_attr.attribute_id
+                prereq_skill_id = int(skill_attr.value_float) if skill_attr.value_float else None
+
+                if not prereq_skill_id:
+                    continue
+
+                # Get required level
+                level_attr_id = skill_attribute_map.get(attr_id)
+                if not level_attr_id:
+                    continue
+
+                try:
+                    level_obj = TypeAttribute.objects.get(
+                        type_id=skill_id,
+                        attribute_id=level_attr_id
+                    )
+                    required_level = int(level_obj.value_float) if level_obj.value_float else 1
+                except TypeAttribute.DoesNotExist:
+                    required_level = 1
+
+                prereq_key = (prereq_skill_id, required_level)
+
+                # Add to required prerequisites
+                if prereq_key not in required_prereqs:
+                    required_prereqs.add(prereq_key)
+                    # Recursively process this prerequisite's prerequisites
+                    skill_ids_to_process.append((prereq_skill_id, required_level))
+
+        # Add missing prerequisite entries
+        max_display_order = self.entries.aggregate(max_order=Max('display_order'))['max_order'] or 0
+        entries_to_create = []
+
+        for skill_id, level in required_prereqs:
+            if (skill_id, level) not in existing_prereqs:
+                max_display_order += 1
+                entries_to_create.append(
+                    SkillPlanEntry(
+                        skill_plan=self,
+                        skill_id=skill_id,
+                        level=level,
+                        is_prerequisite=True,
+                        display_order=max_display_order
+                    )
+                )
+
+        if entries_to_create:
+            SkillPlanEntry.objects.bulk_create(entries_to_create)
+
+        # Remove orphaned prerequisite entries (no longer needed)
+        # Get all skills that are either primary entries or required by primary entries
+        all_required_skill_ids = set(entry.skill_id for entry in primary_entries)
+        all_required_skill_ids.update(skill_id for skill_id, _ in required_prereqs)
+
+        # Delete prerequisite entries for skills that are no longer needed
+        self.entries.filter(
+            is_prerequisite=True
+        ).exclude(
+            skill_id__in=list(all_required_skill_ids)
+        ).delete()
 
     def reorder_by_prerequisites(self) -> None:
         """
@@ -1099,6 +1263,10 @@ class SkillPlanEntry(models.Model):
     Each entry represents a skill with an optional required level
     and recommended level. The recommended level should always be
     higher than the required level.
+
+    Two taxa of entries:
+    - Primary entries (is_prerequisite=False): User-added goals, counted in total SP
+    - Prerequisite entries (is_prerequisite=True): Auto-added required skills, not exported
     """
 
     skill_plan = models.ForeignKey(
@@ -1115,6 +1283,13 @@ class SkillPlanEntry(models.Model):
     # Recommended level (1-5) - optional, higher than required
     recommended_level = models.SmallIntegerField(null=True, blank=True)
 
+    # Whether this entry is a prerequisite (auto-added) vs primary goal (user-added)
+    is_prerequisite = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="True if this is an auto-added prerequisite skill, False if user-added goal"
+    )
+
     # Display order for sorting within the plan
     display_order = models.IntegerField(default=0)
 
@@ -1130,7 +1305,8 @@ class SkillPlanEntry(models.Model):
         db_table = 'core_skillplanentry'
 
     def __str__(self) -> str:
-        return f"{self.skill_plan.name}: {self.skill_name} -> L{self.level}"
+        prereq_prefix = "📦 " if self.is_prerequisite else ""
+        return f"{prereq_prefix}{self.skill_plan.name}: {self.skill_name} -> L{self.level}"
 
     @property
     def skill_name(self) -> str:

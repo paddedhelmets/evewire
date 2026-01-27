@@ -48,6 +48,10 @@ class SkillPlanExporter:
             if not entry.level:
                 continue  # Skip recommended-only entries for export
 
+            # Skip auto-added prerequisite entries - EVE client handles these via include_prereqs
+            if entry.is_prerequisite:
+                continue
+
             skill_id = entry.skill_id
             level = entry.level
 
@@ -283,8 +287,12 @@ class SkillPlanImporter:
                     defaults={
                         'level': level,
                         'display_order': max_entry_order + 1,
+                        'is_prerequisite': False,  # Imported skills are primary entries
                     }
                 )
+
+        # Auto-add all prerequisites for the imported skills
+        plan.ensure_prerequisites()
 
         return plan
 
