@@ -283,6 +283,7 @@ def skill_plan_add_skill(request: HttpRequest, plan_id: int) -> HttpResponse:
         display_order=max_order + 1,
     )
 
+    plan.reorder_by_prerequisites()
     messages.success(request, 'Skill added to plan.')
     return redirect('core:skill_plan_detail', plan_id=plan.id)
 
@@ -463,6 +464,10 @@ def skill_plan_import_skills(request: HttpRequest, plan_id: int) -> HttpResponse
             messages.error(request, f'No skills added. Skills not found: {", ".join(not_found[:5])}{"..." if len(not_found) > 5 else ""}')
         else:
             messages.error(request, 'No valid skills found to import.')
+
+    # Reorder skills by prerequisites after import
+    if added_count > 0:
+        plan.reorder_by_prerequisites()
 
     return redirect('core:skill_plan_detail', plan_id=plan.id)
 

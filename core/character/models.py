@@ -974,6 +974,123 @@ class SkillPlan(models.Model):
             'completed': completed,
         }
 
+    def reorder_by_prerequisites(self) -> None:
+        """
+        Reorder all skill entries in this plan based on prerequisite tree.
+
+        Uses topological sort to ensure prerequisites come before the skills
+        that require them. Updates display_order for all entries.
+
+        This should be called whenever skills are added to a plan to maintain
+        proper training order.
+        """
+        from collections import defaultdict, deque
+        from core.eve.models import TypeAttribute
+
+        # Get all entries for this plan
+        entries = list(self.entries.all())
+        if not entries:
+            return
+
+        # Map of skill attribute IDs to their corresponding level attribute IDs
+        skill_attribute_map = {
+            182: 277,
+            183: 278,
+            184: 279,
+            1285: 1286,
+            1289: 1287,
+            1290: 1289,
+        }
+
+        # Build prerequisite graph: for each (skill_id, level), list its (prereq_skill_id, prereq_level)
+        def get_prerequisites_for_skill_level(skill_id: int, target_level: int) -> list:
+            """Get list of (skill_id, level) prerequisites for a skill level."""
+            prereqs = []
+            # Get all prerequisite attributes for this skill
+            skill_attrs = TypeAttribute.objects.filter(
+                type_id=skill_id,
+                attribute_id__in=skill_attribute_map.keys()
+            )
+
+            for skill_attr in skill_attrs:
+                prereq_skill_id = int(skill_attr.value_float) if skill_attr.value_float else None
+                if not prereq_skill_id:
+                    continue
+
+                # Get the required level from the corresponding level attribute
+                level_attr_id = skill_attribute_map.get(skill_attr.attribute_id)
+                if not level_attr_id:
+                    continue
+
+                try:
+                    level_obj = TypeAttribute.objects.get(
+                        type_id=skill_id,
+                        attribute_id=level_attr_id
+                    )
+                    required_level = int(level_obj.value_float) if level_obj.value_float else 0
+                except TypeAttribute.DoesNotExist:
+                    required_level = 1
+
+                # Only include if prerequisite level <= our target level
+                if required_level <= target_level:
+                    prereqs.append((prereq_skill_id, required_level))
+
+            return prereqs
+
+        # Build graph: entry_key -> list of (entry_key, is_prereq) edges
+        # where is_prereq=True means the edge is a prerequisite constraint
+        graph = defaultdict(list)
+        in_degree = defaultdict(int)
+        entry_map = {}  # (skill_id, level) -> entry
+
+        for entry in entries:
+            if not entry.level:
+                continue
+            key = (entry.skill_id, entry.level)
+            entry_map[key] = entry
+
+            # Get prerequisites for this skill level
+            prereqs = get_prerequisites_for_skill_level(entry.skill_id, entry.level)
+
+            for prereq_skill_id, prereq_level in prereqs:
+                prereq_key = (prereq_skill_id, prereq_level)
+                if prereq_key in entry_map:
+                    graph[prereq_key].append(key)
+                    in_degree[key] += 1
+
+        # Also track entries that have no prerequisites in the plan
+        for entry in entries:
+            if not entry.level:
+                continue
+            key = (entry.skill_id, entry.level)
+            if key not in in_degree:
+                in_degree[key] = 0
+
+        # Topological sort using Kahn's algorithm
+        queue = deque([k for k in in_degree if in_degree[k] == 0])
+        sorted_order = []
+
+        while queue:
+            key = queue.popleft()
+            if key in entry_map:
+                sorted_order.append(entry_map[key])
+
+            for dependent in graph[key]:
+                in_degree[dependent] -= 1
+                if in_degree[dependent] == 0:
+                    queue.append(dependent)
+
+        # Handle any remaining entries (cycles or orphans) - append at end
+        processed = set(e.id for e in sorted_order)
+        for entry in entries:
+            if entry.id not in processed:
+                sorted_order.append(entry)
+
+        # Update display_order
+        for idx, entry in enumerate(sorted_order):
+            entry.display_order = idx
+            entry.save(update_fields=['display_order'])
+
 
 class SkillPlanEntry(models.Model):
     """
