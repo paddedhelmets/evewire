@@ -60,9 +60,7 @@ def skill_plan_detail(request: HttpRequest, plan_id: int) -> HttpResponse:
     pilot_progress = []
     for char in characters:
         progress = plan.get_progress_for_character(char)
-        percent_complete = 0
-        if progress['total_entries'] > 0:
-            percent_complete = (progress['completed'] / progress['total_entries']) * 100
+        percent_complete = progress['percent_complete']
 
         # Calculate remaining training time
         character_skills = {s.skill_id: s for s in char.skills.all()}
@@ -90,8 +88,8 @@ def skill_plan_detail(request: HttpRequest, plan_id: int) -> HttpResponse:
     # Sort by percent complete descending
     pilot_progress.sort(key=lambda x: x['percent_complete'], reverse=True)
 
-    # Count completed pilots
-    completed_pilots = sum(1 for p in pilot_progress if p['progress']['completed'] >= p['progress']['total_entries'])
+    # Count completed pilots (100% SP trained)
+    completed_pilots = sum(1 for p in pilot_progress if p['percent_complete'] >= 100)
     total_pilots = len(pilot_progress)
 
     # Get all skills organized by group for the Add Skill dropdown
@@ -358,6 +356,8 @@ def skill_plan_import_skills(request: HttpRequest, plan_id: int) -> HttpResponse
     Format: One skill per line: SKILL_NAME LEVEL
     Level can be 1-5 or I-V (Roman numerals optional).
     Example: "Amarr Battleship V" or "Amarr Battleship 5"
+
+    If a skill already exists in the plan, updates to the higher level.
     """
     from core.character.models import SkillPlan, SkillPlanEntry
     from core.eve.models import ItemType
@@ -381,13 +381,15 @@ def skill_plan_import_skills(request: HttpRequest, plan_id: int) -> HttpResponse
     # Parse skills: each line is "SKILL_NAME LEVEL"
     lines = skills_text.strip().split('\n')
     added_count = 0
+    updated_count = 0
     skipped_count = 0
     not_found = []
 
-    # Get current skills in plan
-    existing_skill_ids = set(
-        SkillPlanEntry.objects.filter(skill_plan=plan).values_list('skill_id', flat=True)
-    )
+    # Get existing entries for updating
+    existing_entries = {
+        e.skill_id: e
+        for e in SkillPlanEntry.objects.filter(skill_plan=plan)
+    }
 
     # Get max display order
     max_order = SkillPlanEntry.objects.filter(
@@ -428,24 +430,35 @@ def skill_plan_import_skills(request: HttpRequest, plan_id: int) -> HttpResponse
             not_found.append(skill_name)
             continue
 
-        # Skip if already in plan
-        if skill.id in existing_skill_ids:
-            skipped_count += 1
-            continue
-
-        # Add to plan
-        SkillPlanEntry.objects.create(
-            skill_plan=plan,
-            skill_id=skill.id,
-            level=level,
-            display_order=max_order + added_count + 1,
-        )
-        existing_skill_ids.add(skill.id)
-        added_count += 1
+        # Check if skill already exists in plan
+        if skill.id in existing_entries:
+            existing_entry = existing_entries[skill.id]
+            # Update to higher level if needed
+            if existing_entry.level is None or level > existing_entry.level:
+                existing_entry.level = level
+                existing_entry.save()
+                updated_count += 1
+            else:
+                skipped_count += 1
+        else:
+            # Add new entry
+            SkillPlanEntry.objects.create(
+                skill_plan=plan,
+                skill_id=skill.id,
+                level=level,
+                display_order=max_order + added_count + 1,
+            )
+            existing_entries[skill.id] = skill.id  # Track for dedup in this batch
+            added_count += 1
 
     # Build result message
-    if added_count > 0:
-        msg = f'Added {added_count} skill(s) to plan.'
+    if added_count > 0 or updated_count > 0:
+        parts = []
+        if added_count > 0:
+            parts.append(f'added {added_count}')
+        if updated_count > 0:
+            parts.append(f'updated {updated_count}')
+        msg = 'Skill plan ' + ' and '.join(parts) + '.'
         if skipped_count > 0:
             msg += f' Skipped {skipped_count} invalid line(s).'
         if not_found:

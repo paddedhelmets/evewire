@@ -887,47 +887,72 @@ class SkillPlan(models.Model):
         """
         Calculate progress for a character against this plan.
 
+        SP-based calculation: sums total SP required vs current SP in plan skills.
+
         Returns dict with:
-        - total_entries: total skill entries
-        - completed: entries that meet required level
-        - in_progress: entries partially trained
-        - not_started: entries not started
-        - recommended_completed: entries that meet recommended level
+        - total_sp: total SP required for all skills in plan
+        - current_sp: current SP character has in plan skills
+        - percent_complete: percentage of SP trained
+        - total_entries: count of entries for reference
+        - completed: count of entries fully trained
         """
+        import math
+        from core.eve.models import TypeAttribute
+
         entries = self.get_all_entries()
         character_skills = {s.skill_id: s for s in character.skills.all()}
 
-        total = 0
+        # Helper to get skill rank from SDE
+        def get_skill_rank(skill_id: int) -> int:
+            try:
+                rank_attr = TypeAttribute.objects.get(
+                    type_id=skill_id,
+                    attribute_id=275  # Training time multiplier
+                )
+                if rank_attr.value_int is not None:
+                    return rank_attr.value_int
+                if rank_attr.value_float is not None:
+                    return int(rank_attr.value_float)
+            except TypeAttribute.DoesNotExist:
+                pass
+            return 1  # Default to rank 1
+
+        # Helper to calculate SP needed for a level
+        def sp_for_level(level: int, rank: int) -> int:
+            """SP needed to reach a specific level from 0."""
+            if level == 0:
+                return 0
+            return int(math.pow(2, (2.5 * level) - 2) * 32 * rank)
+
+        total_sp = 0
+        current_sp = 0
+        total_entries = 0
         completed = 0
-        in_progress = 0
-        not_started = 0
-        recommended_completed = 0
 
         for entry in entries:
             if not entry.level:
-                continue  # Skip entries without required level (recommended-only)
+                continue  # Skip entries without required level
 
-            total += 1
+            total_entries += 1
+            rank = get_skill_rank(entry.skill_id)
+
+            # SP needed for this skill's target level
+            target_sp = sp_for_level(entry.level, rank)
+            total_sp += target_sp
+
+            # Character's current SP in this skill
             skill = character_skills.get(entry.skill_id)
-
-            if not skill:
-                not_started += 1
-            elif skill.skill_level >= entry.level:
-                completed += 1
-                if entry.recommended_level and skill.skill_level >= entry.recommended_level:
-                    recommended_completed += 1
-            elif skill.skill_level > 0:
-                in_progress += 1
-            else:
-                not_started += 1
+            if skill:
+                current_sp += min(skill.skillpoints_in_skill, target_sp)
+                if skill.skill_level >= entry.level:
+                    completed += 1
 
         return {
-            'total_entries': total,
+            'total_sp': total_sp,
+            'current_sp': current_sp,
+            'percent_complete': (current_sp / total_sp * 100) if total_sp > 0 else 0,
+            'total_entries': total_entries,
             'completed': completed,
-            'in_progress': in_progress,
-            'not_started': not_started,
-            'recommended_completed': recommended_completed,
-            'percent_complete': (completed / total * 100) if total > 0 else 0,
         }
 
 

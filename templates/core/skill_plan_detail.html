@@ -36,7 +36,7 @@
             <thead>
                 <tr style="border-bottom: 2px solid #ddd;">
                     <th style="padding: 0.5rem; text-align: left;">Pilot</th>
-                    <th style="padding: 0.5rem; text-align: center;">Skills Complete</th>
+                    <th style="padding: 0.5rem; text-align: center;">SP Trained</th>
                     <th style="padding: 0.5rem; text-align: center;">%</th>
                     <th style="padding: 0.5rem; text-align: left;">Est. Remaining</th>
                 </tr>
@@ -49,8 +49,8 @@
                             {{ pilot.character.character_name }}
                         </a>
                     </td>
-                    <td style="padding: 0.5rem; text-align: center;">
-                        {{ pilot.progress.completed }}/{{ pilot.progress.total_entries }}
+                    <td style="padding: 0.5rem; text-align: center; font-size: 0.9rem;">
+                        {{ pilot.progress.current_sp|commas }} / {{ pilot.progress.total_sp|commas }}
                     </td>
                     <td style="padding: 0.5rem; text-align: center; width: 150px;">
                         <div style="background: #eee; height: 8px; border-radius: 4px; overflow: hidden; margin: 0 auto;">
@@ -89,7 +89,7 @@
                 {% for entry in entries %}
                 <li style="padding: 0.5rem; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
                     <span>
-                        <strong>{{ entry.skill.name }}</strong>
+                        <strong>{{ entry.skill_name }}</strong>
                         {% if entry.level %} → L{{ entry.level }}{% endif %}
                     </span>
                     <form method="post" action="{% url 'core:skill_plan_remove_skill' plan.id entry.id %}" style="display: inline;" onsubmit="return confirm('Remove this skill from the plan?');">
