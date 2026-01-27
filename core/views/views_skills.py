@@ -133,9 +133,13 @@ def skill_plan_detail(request: HttpRequest, plan_id: int) -> HttpResponse:
     for group_name in skills_by_group_dict:
         skills_by_group_dict[group_name] = sorted(skills_by_group_dict[group_name], key=lambda s: s.name)
 
+    # Count primary entries only (excluding prerequisites)
+    primary_entry_count = plan.entries.filter(is_prerequisite=False).count()
+
     return render(request, 'core/skill_plan_detail.html', {
         'plan': plan,
         'entries': plan.entries.all().order_by('display_order'),
+        'primary_entry_count': primary_entry_count,
         'pilot_progress': pilot_progress,
         'completed_pilots': completed_pilots,
         'total_pilots': total_pilots,
