@@ -436,7 +436,7 @@ def skill_plan_import_skills(request: HttpRequest, plan_id: int) -> HttpResponse
         # Add to plan
         SkillPlanEntry.objects.create(
             skill_plan=plan,
-            skill=skill,
+            skill_id=skill.id,
             level=level,
             display_order=max_order + added_count + 1,
         )
