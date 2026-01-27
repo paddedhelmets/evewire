@@ -45,6 +45,11 @@ class Command(BaseCommand):
         'invCategories': 'evesde_invcategories',
         'invMarketGroups': 'evesde_invmarketgroups',
         'invMetaGroups': 'evesde_invmetagroups',
+        'invMetaTypes': 'evesde_invmetatypes',  # Variants (Tech II, faction, etc.)
+
+        # === Assets/Graphics ===
+        'eveIcons': 'evesde_eveicons',
+        'eveGraphics': 'evesde_evegraphics',
 
         # === Attributes (dogma) ===
         'dgmAttributeTypes': 'evesde_dgmattributetypes',
@@ -71,6 +76,7 @@ class Command(BaseCommand):
         'staStations': 'evesde_stastations',
         'staOperationServices': 'evesde_staoperationservices',
         'staStationTypes': 'evesde_stastationtypes',
+        'staOperationTypes': 'evesde_staoperationtypes',  # Referenced by staOperationServices
 
         # === Corporations/Factions ===
         'crpNPCCorporations': 'evesde_crpnpccorporations',
@@ -103,28 +109,50 @@ class Command(BaseCommand):
         'history': 'evesde_history',  # optional, big table
     }
 
-    # Default set for browser (core tables)
+    # Default set for browser (core tables + direct dependencies)
     DEFAULT_TABLES = {
+        # Items & hierarchy (core)
         'invTypes',
         'invGroups',
         'invCategories',
         'invMarketGroups',
         'invMetaGroups',
+        'invMetaTypes',  # Variants
+
+        # Assets/Graphics
+        'eveIcons',
+        'eveGraphics',
+
+        # Attributes (core)
         'dgmAttributeTypes',
         'dgmTypeAttributes',
         'dgmEffects',
         'dgmTypeEffects',
-        'chrSkills',
-        'chrSkillLevelAttributes',
-        'chrCertificates',
+
+        # Map hierarchy (core)
         'mapRegions',
         'mapConstellations',
         'mapSolarSystems',
+
+        # Stations
         'staStations',
+        'staOperationServices',
+        'staStationTypes',
+
+        # Corporations/Factions
         'crpNPCCorporations',
         'chrFactions',
         'chrRaces',
+
+        # Skills
+        'chrSkills',
+        'chrSkillLevelAttributes',
+        'chrCertificates',
+
+        # Agents
         'agtAgents',
+
+        # Blueprints
         'invBlueprints',
     }
 
@@ -288,6 +316,14 @@ class Command(BaseCommand):
                     {'sde': 'invCategories', 'desc': 'Item categories'},
                     {'sde': 'invMarketGroups', 'desc': 'Market groups'},
                     {'sde': 'invMetaGroups', 'desc': 'Meta groups (Tech I/II, faction, etc.)'},
+                    {'sde': 'invMetaTypes', 'desc': 'Item variants (Tech II, faction versions)'},
+                ]
+            },
+            {
+                'name': 'Assets / Graphics',
+                'tables': [
+                    {'sde': 'eveIcons', 'desc': 'Item icons'},
+                    {'sde': 'eveGraphics', 'desc': 'Item graphics'},
                 ]
             },
             {
@@ -323,6 +359,7 @@ class Command(BaseCommand):
                 'tables': [
                     {'sde': 'staStations', 'desc': 'Stations'},
                     {'sde': 'staOperationServices', 'desc': 'Station services'},
+                    {'sde': 'staOperationTypes', 'desc': 'Station operation types'},
                     {'sde': 'staStationTypes', 'desc': 'Station types'},
                 ]
             },
@@ -330,6 +367,7 @@ class Command(BaseCommand):
                 'name': 'Corporations & Factions',
                 'tables': [
                     {'sde': 'crpNPCCorporations', 'desc': 'NPC corporations'},
+                    {'sde': 'crpNPCCorporationTrades', 'desc': 'NPC corporation trades'},
                     {'sde': 'chrFactions', 'desc': 'Factions'},
                     {'sde': 'chrRaces', 'desc': 'Races'},
                     {'sde': 'chrAncestries', 'desc': 'Ancestries'},

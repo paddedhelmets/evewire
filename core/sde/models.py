@@ -455,3 +455,152 @@ class CrpNPCCorporations(models.Model):
 
     def __str__(self):
         return self.corporation_name
+
+
+# ============================================================================
+# Additional Items & Variants
+# ============================================================================
+
+class InvMetaTypes(models.Model):
+    """
+    EVE SDE: invMetaTypes table
+
+    Item variants (Tech II, faction, deadspace, etc.) - links to base items
+    """
+    type_id = models.IntegerField(primary_key=True, db_column='typeID')
+    parent_type_id = models.IntegerField(null=True, blank=True, db_column='parentTypeID')
+    meta_group_id = models.IntegerField(db_index=True, db_column='metaGroupID')
+
+    class Meta:
+        db_table = 'evesde_invmetatypes'
+        managed = False
+        verbose_name = 'Meta Type'
+        verbose_name_plural = 'Meta Types'
+        ordering = ['type_id']
+
+    def __str__(self):
+        try:
+            return f'{self.parent_type.name} ({self.meta_group.meta_group_name})'
+        except:
+            return f'Type {self.type_id}'
+
+
+# ============================================================================
+# Assets / Graphics
+# ============================================================================
+
+class EveIcons(models.Model):
+    """
+    EVE SDE: eveIcons table
+
+    Icon files for items, ships, stations, etc.
+    """
+    icon_id = models.IntegerField(primary_key=True, db_column='iconID')
+    icon_file = models.CharField(max_length=500, blank=True, db_column='iconFile')
+    description = models.TextField(blank=True, db_column='description')
+
+    class Meta:
+        db_table = 'evesde_eveicons'
+        managed = False
+        verbose_name = 'Icon'
+        verbose_name_plural = 'Icons'
+        ordering = ['icon_id']
+
+    def __str__(self):
+        return self.description or f'Icon {self.icon_id}'
+
+
+class EveGraphics(models.Model):
+    """
+    EVE SDE: eveGraphics table
+
+    Graphics references for item models
+    """
+    graphic_id = models.IntegerField(primary_key=True, db_column='graphicID')
+    # Note: schema may vary - check actual SDE
+    url = models.CharField(max_length=500, blank=True, db_column='url')
+
+    class Meta:
+        db_table = 'evesde_evegraphics'
+        managed = False
+        verbose_name = 'Graphic'
+        verbose_name_plural = 'Graphics'
+        ordering = ['graphic_id']
+
+    def __str__(self):
+        return f'Graphic {self.graphic_id}'
+
+
+# ============================================================================
+# Station Types and Services
+# ============================================================================
+
+class StaOperationServices(models.Model):
+    """
+    EVE SDE: staOperationServices table
+
+    Services available at stations (repair, market, cloning, etc.)
+    """
+    operation_id = models.IntegerField(primary_key=True, db_column='operationID')
+    service_id = models.IntegerField(db_index=True, db_column='serviceID')
+
+    class Meta:
+        db_table = 'evesde_staoperationservices'
+        managed = False
+        verbose_name = 'Station Operation Service'
+        verbose_name_plural = 'Station Operation Services'
+        ordering = ['operation_id']
+
+    def __str__(self):
+        return f'Operation {self.operation_id} - Service {self.service_id}'
+
+
+class StaOperationTypes(models.Model):
+    """
+    EVE SDE: staOperationTypes table
+
+    Operation type definitions
+    """
+    operation_id = models.IntegerField(primary_key=True, db_column='operationID')
+    operation_name = models.CharField(max_length=255, blank=True, db_column='operationName')
+    description = models.TextField(blank=True, db_column='description')
+
+    class Meta:
+        db_table = 'evesde_staoperationtypes'
+        managed = False
+        verbose_name = 'Station Operation Type'
+        verbose_name_plural = 'Station Operation Types'
+        ordering = ['operation_id']
+
+    def __str__(self):
+        return self.operation_name or f'Operation {self.operation_id}'
+
+
+class StaStationTypes(models.Model):
+    """
+    EVE SDE: staStationTypes table
+
+    Station type definitions
+    """
+    station_type_id = models.IntegerField(primary_key=True, db_column='stationTypeID')
+    station_name = models.CharField(max_length=255, blank=True, db_column='stationTypeName')
+    description = models.TextField(blank=True, db_column='description')
+    dock_entry_x = models.FloatField(null=True, blank=True, db_column='dockEntryX')
+    dock_entry_y = models.FloatField(null=True, blank=True, db_column='dockEntryY')
+    dock_entry_z = models.FloatField(null=True, blank=True, db_column='dockEntryZ')
+    dock_orientation_x = models.FloatField(null=True, blank=True, db_column='dockOrientationX')
+    dock_orientation_y = models.FloatField(null=True, blank=True, db_column='dockOrientationY')
+    dock_orientation_z = models.FloatField(null=True, blank=True, db_column='dockOrientationZ')
+    office_slots = models.IntegerField(null=True, blank=True, db_column='officeSlots')
+    reprocessing_efficiency = models.FloatField(null=True, blank=True, db_column='reprocessingEfficiency')
+
+    class Meta:
+        db_table = 'evesde_stastationtypes'
+        managed = False
+        verbose_name = 'Station Type'
+        verbose_name_plural = 'Station Types'
+        ordering = ['station_name']
+
+    def __str__(self):
+        return self.station_name or f'Station Type {self.station_type_id}'
+
