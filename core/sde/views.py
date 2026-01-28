@@ -18,6 +18,9 @@ from core.sde.models import (
     StaStations,
     CertCerts, CertSkills, CertMasteries,
     IndustryBlueprints,
+    AgtAgents, AgtAgentTypes, InvNames,
+    IndustryActivity, IndustryActivityMaterials, IndustryActivityProducts, IndustryActivitySkills,
+    RamTypeRequirements,
 )
 
 
@@ -70,6 +73,11 @@ def sde_index(request: HttpRequest) -> HttpResponse:
     # Get a sample of certificates to display
     certificates = CertCerts.objects.all().order_by('name')[:20]
 
+    # Universe stats
+    factions_count = ChrFactions.objects.count()
+    corporations_count = CrpNPCCorporations.objects.count()
+    agents_count = AgtAgents.objects.count()
+
     return render(request, 'core/sde/index.html', {
         'stats': stats,
         'all_categories': all_categories,
@@ -79,34 +87,116 @@ def sde_index(request: HttpRequest) -> HttpResponse:
         'skills_count': skills_count,
         'certificates_count': certificates_count,
         'certificates': certificates,
+        'factions_count': factions_count,
+        'corporations_count': corporations_count,
+        'agents_count': agents_count,
     })
 
 
 def sde_search(request: HttpRequest) -> HttpResponse:
-    """Search SDE items."""
+    """Search SDE items with filters and sorting."""
     query = request.GET.get('q', '').strip()
     page = request.GET.get('page', 1)
 
+    # Get filter parameters
+    category_id = request.GET.get('category', '')
+    meta_group_id = request.GET.get('meta_group', '')
+    sort_by = request.GET.get('sort', 'name')
+
     results = []
     total_count = 0
+    active_filters = {}
 
+    # Build the base queryset with filters
+    queryset = InvTypes.objects.all().select_related(
+        'group', 'group__category', 'meta_type__meta_group'
+    )
+
+    # Apply search query
     if query and len(query) >= 2:
-        # Search across multiple fields
-        results = InvTypes.objects.filter(
+        queryset = queryset.filter(
             Q(name__icontains=query) |
             Q(description__icontains=query)
-        ).select_related('group', 'group__category').order_by('name')
+        )
+        active_filters['query'] = query
+    elif not query:
+        # If no query, still show results but apply filters only
+        pass
+    else:
+        # Query is too short
+        queryset = queryset.none()
 
-        total_count = results.count()
+    # Apply category filter
+    if category_id:
+        queryset = queryset.filter(group__category_id=category_id)
+        try:
+            category = InvCategories.objects.get(category_id=category_id)
+            active_filters['category'] = category
+        except InvCategories.DoesNotExist:
+            pass
 
-        # Paginate
-        paginator = Paginator(results, 50)
-        results = paginator.get_page(page)
+    # Apply meta group filter
+    if meta_group_id:
+        queryset = queryset.filter(meta_type__meta_group_id=meta_group_id)
+        try:
+            meta_group = InvMetaGroups.objects.get(meta_group_id=meta_group_id)
+            active_filters['meta_group'] = meta_group
+        except InvMetaGroups.DoesNotExist:
+            pass
+
+    # Apply sorting
+    sort_options = {
+        'name': 'name',
+        'name_desc': '-name',
+        'price': 'base_price',
+        'price_desc': '-base_price',
+        'volume': 'volume',
+        'volume_desc': '-volume',
+    }
+
+    if sort_by in sort_options:
+        queryset = queryset.order_by(sort_options[sort_by])
+    else:
+        queryset = queryset.order_by('name')
+
+    # Count total results before pagination
+    total_count = queryset.count()
+
+    # Paginate
+    paginator = Paginator(queryset, 50)
+    results = paginator.get_page(page)
+
+    # Get filter options
+    # Top 20 categories by item count
+    categories = InvCategories.objects.filter(
+        published=True
+    ).annotate(
+        item_count=Count('invgroups__invtypes', filter=Q(invgroups__invtypes__published=True))
+    ).filter(item_count__gt=0).order_by('-item_count')[:20]
+
+    # All meta groups
+    meta_groups = InvMetaGroups.objects.annotate(
+        item_count=Count('types')
+    ).filter(item_count__gt=0).order_by('meta_group_id')
 
     return render(request, 'core/sde/search.html', {
         'query': query,
         'results': results,
         'total_count': total_count,
+        'categories': categories,
+        'meta_groups': meta_groups,
+        'active_filters': active_filters,
+        'selected_category': category_id,
+        'selected_meta_group': meta_group_id,
+        'selected_sort': sort_by,
+        'sort_options': {
+            'name': 'Name (A-Z)',
+            'name_desc': 'Name (Z-A)',
+            'price': 'Price (Low to High)',
+            'price_desc': 'Price (High to Low)',
+            'volume': 'Volume (Low to High)',
+            'volume_desc': 'Volume (High to Low)',
+        },
     })
 
 
@@ -1100,4 +1190,395 @@ def sde_certificate_detail(request: HttpRequest, cert_id: int) -> HttpResponse:
         'total_skill_reqs': total_skill_reqs,
         'total_mastery_ships': total_mastery_ships,
         'cert_levels': [0, 1, 2, 3, 4],
+    })
+
+
+# ============================================================================
+# Agents & NPC Browser
+# ============================================================================
+
+def sde_faction_list(request: HttpRequest) -> HttpResponse:
+    """List all factions."""
+    factions = ChrFactions.objects.all().order_by('faction_name')
+
+    # Count corporations per faction
+    faction_stats = {}
+    for faction in factions:
+        corp_count = CrpNPCCorporations.objects.filter(faction_id=faction.faction_id).count()
+        faction_stats[faction.faction_id] = {
+            'corporation_count': corp_count,
+        }
+
+    return render(request, 'core/sde/faction_list.html', {
+        'factions': factions,
+        'faction_stats': faction_stats,
+    })
+
+
+def sde_faction_detail(request: HttpRequest, faction_id: int) -> HttpResponse:
+    """Detail page for a faction."""
+    try:
+        faction = ChrFactions.objects.get(faction_id=faction_id)
+    except ChrFactions.DoesNotExist:
+        return render(request, 'core/error.html', {
+            'message': f'Faction {faction_id} not found',
+        }, status=404)
+
+    # Get member corporations
+    corporations = CrpNPCCorporations.objects.filter(
+        faction_id=faction_id
+    ).order_by('corporation_id')
+
+    # Get corporation names from InvNames
+    corp_list = []
+    for corp in corporations:
+        try:
+            name_obj = InvNames.objects.get(item_id=corp.corporation_id)
+            corp_name = name_obj.item_name
+        except InvNames.DoesNotExist:
+            corp_name = f'Corporation {corp.corporation_id}'
+
+        # Count agents for this corporation
+        agent_count = AgtAgents.objects.filter(corporation_id=corp.corporation_id).count()
+
+        corp_list.append({
+            'corporation': corp,
+            'name': corp_name,
+            'agent_count': agent_count,
+        })
+
+    # Get solar systems controlled by this faction
+    controlled_systems = MapSolarSystems.objects.filter(
+        faction_id=faction_id
+    ).order_by('system_name')[:20]
+
+    # Get militia corporation if applicable
+    militia_corp = None
+    militia_corp_name = None
+    if faction.militia_corporation_id:
+        try:
+            militia_corp = CrpNPCCorporations.objects.get(
+                corporation_id=faction.militia_corporation_id
+            )
+            militia_name_obj = InvNames.objects.get(item_id=militia_corp.corporation_id)
+            militia_corp_name = militia_name_obj.item_name
+        except (CrpNPCCorporations.DoesNotExist, InvNames.DoesNotExist):
+            pass
+
+    return render(request, 'core/sde/faction_detail.html', {
+        'faction': faction,
+        'corporations': corp_list,
+        'controlled_systems': controlled_systems,
+        'militia_corp': militia_corp,
+        'militia_corp_name': militia_corp_name,
+    })
+
+
+def sde_corporation_detail(request: HttpRequest, corporation_id: int) -> HttpResponse:
+    """Detail page for an NPC corporation."""
+    try:
+        corporation = CrpNPCCorporations.objects.get(corporation_id=corporation_id)
+    except CrpNPCCorporations.DoesNotExist:
+        return render(request, 'core/error.html', {
+            'message': f'Corporation {corporation_id} not found',
+        }, status=404)
+
+    # Get corporation name from InvNames
+    try:
+        name_obj = InvNames.objects.get(item_id=corporation_id)
+        corporation_name = name_obj.item_name
+    except InvNames.DoesNotExist:
+        corporation_name = f'Corporation {corporation_id}'
+
+    # Get faction
+    faction = None
+    if corporation.faction_id:
+        try:
+            faction = ChrFactions.objects.get(faction_id=corporation.faction_id)
+        except ChrFactions.DoesNotExist:
+            pass
+
+    # Get agents employed by this corporation
+    agents = AgtAgents.objects.filter(
+        corporation_id=corporation_id
+    ).order_by('-level', 'agent_id')
+
+    # Get agent details with location info
+    agent_list = []
+    for agent in agents[:50]:  # Limit to 50 agents
+        # Get agent type
+        agent_type = None
+        if agent.agent_type_id:
+            try:
+                agent_type = AgtAgentTypes.objects.get(agent_type_id=agent.agent_type_id)
+            except AgtAgentTypes.DoesNotExist:
+                pass
+
+        # Get station info
+        station = None
+        system = None
+        if agent.location_id:
+            try:
+                station = StaStations.objects.get(station_id=agent.location_id)
+                system = station.solar_system
+            except StaStations.DoesNotExist:
+                pass
+
+        agent_list.append({
+            'agent': agent,
+            'agent_type': agent_type,
+            'station': station,
+            'system': system,
+        })
+
+    # Get stations owned by this corporation
+    stations = StaStations.objects.filter(
+        corporation_id=corporation_id
+    ).select_related('solar_system', 'region').order_by('station_name')[:20]
+
+    return render(request, 'core/sde/corporation_detail.html', {
+        'corporation': corporation,
+        'corporation_name': corporation_name,
+        'faction': faction,
+        'agents': agent_list,
+        'stations': stations,
+    })
+
+
+def sde_agent_detail(request: HttpRequest, agent_id: int) -> HttpResponse:
+    """Detail page for an agent."""
+    try:
+        agent = AgtAgents.objects.get(agent_id=agent_id)
+    except AgtAgents.DoesNotExist:
+        return render(request, 'core/error.html', {
+            'message': f'Agent {agent_id} not found',
+        }, status=404)
+
+    # Get corporation info
+    corporation = None
+    corporation_name = None
+    faction = None
+    if agent.corporation_id:
+        try:
+            corporation = CrpNPCCorporations.objects.get(
+                corporation_id=agent.corporation_id
+            )
+            # Get corporation name
+            name_obj = InvNames.objects.get(item_id=agent.corporation_id)
+            corporation_name = name_obj.item_name
+
+            # Get faction
+            if corporation.faction_id:
+                faction = ChrFactions.objects.get(faction_id=corporation.faction_id)
+        except (CrpNPCCorporations.DoesNotExist, InvNames.DoesNotExist, ChrFactions.DoesNotExist):
+            pass
+
+    # Get agent type
+    agent_type = None
+    if agent.agent_type_id:
+        try:
+            agent_type = AgtAgentTypes.objects.get(agent_type_id=agent.agent_type_id)
+        except AgtAgentTypes.DoesNotExist:
+            pass
+
+    # Get station/location info
+    station = None
+    system = None
+    region = None
+    if agent.location_id:
+        try:
+            station = StaStations.objects.select_related(
+                'solar_system', 'solar_system__region', 'solar_system__constellation'
+            ).get(station_id=agent.location_id)
+            system = station.solar_system
+            region = system.region
+        except StaStations.DoesNotExist:
+            pass
+
+    # Get division info (from CrpActivities)
+    division_name = None
+    if agent.division_id:
+        from core.sde.models import CrpActivities
+        try:
+            division = CrpActivities.objects.get(activity_id=agent.division_id)
+            division_name = division.activity_name
+        except CrpActivities.DoesNotExist:
+            pass
+
+    return render(request, 'core/sde/agent_detail.html', {
+        'agent': agent,
+        'corporation': corporation,
+        'corporation_name': corporation_name,
+        'faction': faction,
+        'agent_type': agent_type,
+        'station': station,
+        'system': system,
+        'region': region,
+        'division_name': division_name,
+    })
+
+
+def sde_industry_activities(request: HttpRequest) -> HttpResponse:
+    """
+    Industry activity browser showing blueprints by activity type.
+
+    Activity Types:
+    - 1: Manufacturing (building items)
+    - 3: Time Efficiency Research (TE research)
+    - 4: Material Efficiency Research (ME research)
+    - 5: Invention (T2/T3 invention)
+    - 8: Reactions (moon gas, polymer reactions)
+
+    Shows:
+    - Activity type tabs
+    - Blueprints that support each activity
+    - Product outputs
+    - Material requirements
+    - Skill requirements
+    """
+    # Get selected activity type from query params
+    selected_activity = request.GET.get('activity', '1')
+
+    # Activity type definitions
+    ACTIVITY_TYPES = {
+        '1': {'name': 'Manufacturing', 'icon': '🏭', 'description': 'Build items from blueprints'},
+        '3': {'name': 'TE Research', 'icon': '⏱️', 'description': 'Reduce manufacturing time'},
+        '4': {'name': 'ME Research', 'icon': '📉', 'description': 'Reduce material requirements'},
+        '5': {'name': 'Invention', 'icon': '💡', 'description': 'Create T2/T3 blueprint copies'},
+        '8': {'name': 'Reactions', 'icon': '⚗️', 'description': 'Moon gas and polymer reactions'},
+    }
+
+    activity_info = ACTIVITY_TYPES.get(selected_activity, ACTIVITY_TYPES['1'])
+    activity_id = int(selected_activity)
+
+    # Get blueprints that support this activity
+    # Blueprints are in category 9
+    blueprints_with_activity = []
+
+    # Use raw SQL for better performance with composite key tables
+    from django.conf import settings
+    original_debug = settings.DEBUG
+    settings.DEBUG = False
+
+    try:
+        with connection.cursor() as cursor:
+            # Get all blueprints that have this activity
+            cursor.execute("""
+                SELECT DISTINCT
+                    ia.typeID,
+                    t.typeName,
+                    t.description,
+                    g.groupName,
+                    ia.time,
+                    ib.maxProductionLimit
+                FROM evesde_industryactivity ia
+                JOIN evesde_invtypes t ON ia.typeID = t.typeID
+                JOIN evesde_invgroups g ON t.groupID = g.groupID
+                LEFT JOIN evesde_industryblueprints ib ON ia.typeID = ib.typeID
+                WHERE ia.activityID = ?
+                    AND t.published = 1
+                    AND g.categoryID = 9
+                ORDER BY g.groupName, t.typeName
+                LIMIT 500
+            """, [activity_id])
+
+            blueprint_rows = cursor.fetchall()
+
+            # For each blueprint, get products and materials
+            for bp_row in blueprint_rows:
+                bp_type_id, bp_name, bp_desc, group_name, time_val, max_limit = bp_row
+
+                # Get product for this activity
+                cursor.execute("""
+                    SELECT iap.productTypeID, t.typeName, iap.quantity
+                    FROM evesde_industryactivityproducts iap
+                    JOIN evesde_invtypes t ON iap.productTypeID = t.typeID
+                    WHERE iap.typeID = ? AND iap.activityID = ?
+                """, [bp_type_id, activity_id])
+
+                product_row = cursor.fetchone()
+                product = None
+                if product_row:
+                    product = {
+                        'type_id': product_row[0],
+                        'name': product_row[1],
+                        'quantity': product_row[2],
+                    }
+
+                # Get top 5 materials for this activity
+                cursor.execute("""
+                    SELECT iam.materialTypeID, t.typeName, g.groupName, iam.quantity
+                    FROM evesde_industryactivitymaterials iam
+                    JOIN evesde_invtypes t ON iam.materialTypeID = t.typeID
+                    JOIN evesde_invgroups g ON t.groupID = g.groupID
+                    WHERE iam.typeID = ? AND iam.activityID = ?
+                    ORDER BY iam.quantity DESC
+                    LIMIT 5
+                """, [bp_type_id, activity_id])
+
+                material_rows = cursor.fetchall()
+                materials = []
+                for mat_row in material_rows:
+                    materials.append({
+                        'type_id': mat_row[0],
+                        'name': mat_row[1],
+                        'group': mat_row[2],
+                        'quantity': mat_row[3],
+                    })
+
+                # Get skill requirements
+                cursor.execute("""
+                    SELECT ias.skillID, t.typeName, g.groupName, ias.level
+                    FROM evesde_industryactivityskills ias
+                    JOIN evesde_invtypes t ON ias.skillID = t.typeID
+                    JOIN evesde_invgroups g ON t.groupID = g.groupID
+                    WHERE ias.typeID = ? AND ias.activityID = ?
+                    ORDER BY ias.level DESC, t.typeName
+                """, [bp_type_id, activity_id])
+
+                skill_rows = cursor.fetchall()
+                skills = []
+                for skill_row in skill_rows:
+                    skills.append({
+                        'type_id': skill_row[0],
+                        'name': skill_row[1],
+                        'group': skill_row[2],
+                        'level': skill_row[3],
+                    })
+
+                blueprints_with_activity.append({
+                    'type_id': bp_type_id,
+                    'name': bp_name,
+                    'description': bp_desc,
+                    'group': group_name,
+                    'time': time_val,
+                    'max_production_limit': max_limit,
+                    'product': product,
+                    'materials': materials,
+                    'skills': skills,
+                })
+    finally:
+        settings.DEBUG = original_debug
+
+    # Get activity counts for the tabs
+    activity_counts = {}
+    for act_id_key in ACTIVITY_TYPES.keys():
+        try:
+            count = IndustryActivity.objects.filter(
+                activity_id=int(act_id_key),
+                type__group__category_id=9,
+                type__published=True
+            ).count()
+            activity_counts[act_id_key] = count
+        except:
+            activity_counts[act_id_key] = 0
+
+    return render(request, 'core/sde/industry_activity.html', {
+        'activity_types': ACTIVITY_TYPES,
+        'selected_activity': selected_activity,
+        'activity_info': activity_info,
+        'activity_id': activity_id,
+        'blueprints': blueprints_with_activity,
+        'activity_counts': activity_counts,
+        'total_blueprints': len(blueprints_with_activity),
     })

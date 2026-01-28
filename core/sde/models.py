@@ -421,23 +421,35 @@ class CrpNPCCorporations(models.Model):
     EVE SDE: crpNPCCorporations table
 
     NPC corporations
+    Note: corporation names are stored in InvNames table, not here
     """
     corporation_id = models.IntegerField(primary_key=True, db_column='corporationID')
-    corporation_name = models.CharField(max_length=255, db_column='corporationName')
-    description = models.TextField(blank=True, db_column='description')
-    ticker = models.CharField(max_length=10, blank=True, db_column='ticker')
-    ceo_id = models.IntegerField(null=True, blank=True, db_column='ceoID')
-    station_id = models.IntegerField(null=True, blank=True, db_column='stationID')
-    system_id = models.IntegerField(null=True, blank=True, db_column='solarSystemID')
-    race_id = models.IntegerField(null=True, blank=True, db_column='raceID')
-    alliance_id = models.IntegerField(null=True, blank=True, db_column='allianceID')
-    tax_rate = models.FloatField(null=True, blank=True, db_column='taxRate')
-    faction_id = models.IntegerField(null=True, blank=True, db_column='factionID')
-    size_factor = models.FloatField(null=True, blank=True, db_column='sizeFactor')
-    extent = models.CharField(max_length=255, blank=True, db_column='extent')
+    size = models.CharField(max_length=1, blank=True, db_column='size')
+    extent = models.CharField(max_length=1, blank=True, db_column='extent')
+    solar_system_id = models.IntegerField(null=True, blank=True, db_column='solarSystemID')
+    investor_id1 = models.IntegerField(null=True, blank=True, db_column='investorID1')
+    investor_shares1 = models.IntegerField(null=True, blank=True, db_column='investorShares1')
+    investor_id2 = models.IntegerField(null=True, blank=True, db_column='investorID2')
+    investor_shares2 = models.IntegerField(null=True, blank=True, db_column='investorShares2')
+    investor_id3 = models.IntegerField(null=True, blank=True, db_column='investorID3')
+    investor_shares3 = models.IntegerField(null=True, blank=True, db_column='investorShares3')
+    investor_id4 = models.IntegerField(null=True, blank=True, db_column='investorID4')
+    investor_shares4 = models.IntegerField(null=True, blank=True, db_column='investorShares4')
     friend_id = models.IntegerField(null=True, blank=True, db_column='friendID')
     enemy_id = models.IntegerField(null=True, blank=True, db_column='enemyID')
-    public = models.BooleanField(null=True, blank=True, db_column='public')
+    public_shares = models.IntegerField(null=True, blank=True, db_column='publicShares')
+    initial_price = models.IntegerField(null=True, blank=True, db_column='initialPrice')
+    min_security = models.FloatField(null=True, blank=True, db_column='minSecurity')
+    scattered = models.BooleanField(null=True, blank=True, db_column='scattered')
+    fringe = models.BooleanField(null=True, blank=True, db_column='fringe')
+    corridor = models.BooleanField(null=True, blank=True, db_column='corridor')
+    hub = models.BooleanField(null=True, blank=True, db_column='hub')
+    border = models.BooleanField(null=True, blank=True, db_column='border')
+    faction_id = models.IntegerField(null=True, blank=True, db_column='factionID')
+    size_factor = models.FloatField(null=True, blank=True, db_column='sizeFactor')
+    station_count = models.IntegerField(null=True, blank=True, db_column='stationCount')
+    station_system_count = models.IntegerField(null=True, blank=True, db_column='stationSystemCount')
+    description = models.TextField(blank=True, db_column='description')
     icon_id = models.IntegerField(null=True, blank=True, db_column='iconID')
 
     class Meta:
@@ -445,10 +457,19 @@ class CrpNPCCorporations(models.Model):
         managed = False
         verbose_name = 'NPC Corporation'
         verbose_name_plural = 'NPC Corporations'
-        ordering = ['corporation_name']
+        ordering = ['corporation_id']
 
     def __str__(self):
-        return self.corporation_name
+        return f'Corporation {self.corporation_id}'
+
+    @property
+    def name(self):
+        """Get corporation name from InvNames table."""
+        try:
+            name_obj = InvNames.objects.get(item_id=self.corporation_id)
+            return name_obj.item_name
+        except InvNames.DoesNotExist:
+            return f'Corporation {self.corporation_id}'
 
 
 # ============================================================================
@@ -1233,4 +1254,119 @@ class TrnTranslations(models.Model):
         verbose_name = 'Translation'
         verbose_name_plural = 'Translations'
         # Note: SDE uses composite key (tcID, keyID, languageID)
+
+
+# ============================================================================
+# Industry Activities (Level 3)
+# ============================================================================
+
+class IndustryActivity(models.Model):
+    """
+    EVE SDE: industryActivity table
+
+    Activity types for industry (manufacturing, research, invention, etc.)
+    """
+    type_id = models.IntegerField(db_index=True, db_column='typeID')
+    activity_id = models.IntegerField(db_index=True, db_column='activityID')
+    time = models.IntegerField(null=True, blank=True, db_column='time')
+
+    class Meta:
+        db_table = 'evesde_industryactivity'
+        managed = False
+        verbose_name = 'Industry Activity'
+        verbose_name_plural = 'Industry Activities'
+        # Note: SDE uses composite key (typeID, activityID)
+
+    def __str__(self):
+        return f'Type {self.type_id} - Activity {self.activity_id}'
+
+
+class IndustryActivityMaterials(models.Model):
+    """
+    EVE SDE: industryActivityMaterials table
+
+    Material requirements for industry activities
+    """
+    type_id = models.IntegerField(db_index=True, db_column='typeID')
+    activity_id = models.IntegerField(db_index=True, db_column='activityID')
+    material_type_id = models.IntegerField(db_index=True, db_column='materialTypeID')
+    quantity = models.IntegerField(db_column='quantity')
+
+    class Meta:
+        db_table = 'evesde_industryactivitymaterials'
+        managed = False
+        verbose_name = 'Industry Activity Material'
+        verbose_name_plural = 'Industry Activity Materials'
+        # Note: SDE uses composite key (typeID, activityID, materialTypeID)
+
+    def __str__(self):
+        return f'Type {self.type_id} - Activity {self.activity_id} - Material {self.material_type_id}'
+
+
+class IndustryActivityProducts(models.Model):
+    """
+    EVE SDE: industryActivityProducts table
+
+    Products output by industry activities
+    """
+    type_id = models.IntegerField(db_index=True, db_column='typeID')
+    activity_id = models.IntegerField(db_index=True, db_column='activityID')
+    product_type_id = models.IntegerField(db_index=True, db_column='productTypeID')
+    quantity = models.IntegerField(db_column='quantity')
+
+    class Meta:
+        db_table = 'evesde_industryactivityproducts'
+        managed = False
+        verbose_name = 'Industry Activity Product'
+        verbose_name_plural = 'Industry Activity Products'
+        # Note: SDE uses composite key (typeID, activityID, productTypeID)
+
+    def __str__(self):
+        return f'Type {self.type_id} - Activity {self.activity_id} - Product {self.product_type_id}'
+
+
+class IndustryActivitySkills(models.Model):
+    """
+    EVE SDE: industryActivitySkills table
+
+    Skill requirements for industry activities
+    """
+    type_id = models.IntegerField(db_index=True, db_column='typeID')
+    activity_id = models.IntegerField(db_index=True, db_column='activityID')
+    skill_id = models.IntegerField(db_index=True, db_column='skillID')
+    level = models.IntegerField(db_column='level')
+
+    class Meta:
+        db_table = 'evesde_industryactivityskills'
+        managed = False
+        verbose_name = 'Industry Activity Skill'
+        verbose_name_plural = 'Industry Activity Skills'
+        # Note: SDE uses composite key (typeID, activityID, skillID)
+
+    def __str__(self):
+        return f'Type {self.type_id} - Activity {self.activity_id} - Skill {self.skill_id}'
+
+
+class RamTypeRequirements(models.Model):
+    """
+    EVE SDE: ramTypeRequirements table
+
+    Additional requirements for industry activities (items, skills)
+    """
+    type_id = models.IntegerField(db_index=True, db_column='typeID')
+    activity_id = models.IntegerField(db_index=True, db_column='activityID')
+    required_type_id = models.IntegerField(db_index=True, db_column='requiredTypeID')
+    quantity = models.IntegerField(db_column='quantity')
+    damage_per_job = models.FloatField(null=True, blank=True, db_column='damagePerJob')
+    recycle = models.BooleanField(null=True, blank=True, db_column='recycle')
+
+    class Meta:
+        db_table = 'evesde_ramtyperequirements'
+        managed = False
+        verbose_name = 'RAM Type Requirement'
+        verbose_name_plural = 'RAM Type Requirements'
+        # Note: SDE uses composite key (typeID, activityID, requiredTypeID)
+
+    def __str__(self):
+        return f'Type {self.type_id} - Activity {self.activity_id} - Required {self.required_type_id}'
 

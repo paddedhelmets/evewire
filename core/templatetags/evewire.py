@@ -267,3 +267,19 @@ def meta_badge_name(meta_group_id):
         14: 'Abyssal',
     }
     return meta_names.get(meta_group_id, 'Unknown')
+
+
+@register.filter
+def highlight(text, query):
+    """Highlight search query terms in text."""
+    if not query or not text:
+        return text
+
+    import re
+    # Escape special regex characters in the query
+    escaped_query = re.escape(str(query))
+    # Create a pattern that matches the query (case-insensitive)
+    pattern = re.compile(f'({escaped_query})', re.IGNORECASE)
+    # Wrap matches in a span with highlight class
+    highlighted = pattern.sub(r'<span class="highlight">\1</span>', str(text))
+    return mark_safe(highlighted)

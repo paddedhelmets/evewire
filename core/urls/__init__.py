@@ -148,6 +148,11 @@ urlpatterns = [
     path('sde/blueprint/<int:blueprint_id>/', sde_views.sde_blueprint_detail, name='sde_blueprint_detail'),
     path('sde/variants/<int:type_id>/', sde_views.sde_variant_comparison, name='sde_variant_comparison'),
     path('sde/certificate/<int:cert_id>/', sde_views.sde_certificate_detail, name='sde_certificate_detail'),
+    path('sde/industry/', sde_views.sde_industry_activities, name='sde_industry_activities'),
+    path('sde/factions/', sde_views.sde_faction_list, name='sde_faction_list'),
+    path('sde/faction/<int:faction_id>/', sde_views.sde_faction_detail, name='sde_faction_detail'),
+    path('sde/corporation/<int:corporation_id>/', sde_views.sde_corporation_detail, name='sde_corporation_detail'),
+    path('sde/agent/<int:agent_id>/', sde_views.sde_agent_detail, name='sde_agent_detail'),
 
     # API endpoints
     path('api/assets/locations/', api.api_asset_locations, name='api_asset_locations'),

@@ -1,0 +1,346 @@
+{% extends "base.html" %}
+
+{% block title %}Industry Activities - SDE Browser{% endblock %}
+
+{% block content %}
+<style>
+.activity-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.activity-tab {
+    padding: 0.75rem 1.25rem;
+    background: var(--bg-secondary);
+    border: 2px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    text-decoration: none;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.activity-tab:hover {
+    border-color: var(--link-color);
+    background: var(--bg-primary);
+    text-decoration: none;
+    color: var(--text-primary);
+}
+
+.activity-tab.active {
+    border-color: var(--btn-primary);
+    background: var(--btn-primary);
+    color: white;
+}
+
+.activity-count {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 0.1rem 0.5rem;
+    border-radius: 10px;
+    font-size: 0.85rem;
+}
+
+.activity-tab:not(.active) .activity-count {
+    background: var(--bg-primary);
+}
+
+.blueprint-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 1.5rem;
+}
+
+.blueprint-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.25rem;
+    transition: all 0.2s;
+}
+
+.blueprint-card:hover {
+    border-color: var(--link-color);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.blueprint-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.blueprint-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.blueprint-title a {
+    color: var(--text-primary);
+    text-decoration: none;
+}
+
+.blueprint-title a:hover {
+    color: var(--link-color);
+}
+
+.blueprint-group {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-top: 0.25rem;
+}
+
+.blueprint-meta {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.info-section {
+    margin-bottom: 1rem;
+}
+
+.info-label {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+.material-list, .skill-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+.material-list li, .skill-list li {
+    padding: 0.35rem 0;
+    border-bottom: 1px solid var(--table-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.material-list li:last-child, .skill-list li:last-child {
+    border-bottom: none;
+}
+
+.material-name, .skill-name {
+    flex: 1;
+    color: var(--text-primary);
+}
+
+.material-quantity, .skill-level {
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: var(--bg-primary);
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
+
+.product-display {
+    background: var(--bg-primary);
+    padding: 0.75rem;
+    border-radius: 6px;
+    border-left: 3px solid var(--btn-primary);
+}
+
+.product-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 1rem;
+}
+
+.product-quantity {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-top: 0.25rem;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-secondary);
+}
+
+.activity-icon {
+    font-size: 1.2rem;
+}
+</style>
+
+<div class="card">
+    <nav style="margin-bottom: 1rem; font-size: 0.9rem;">
+        <a href="{% url 'core:sde_index' %}">SDE</a> &gt;
+        <strong>Industry Activities</strong>
+    </nav>
+
+    <h1>Industry Activities Browser</h1>
+    <p style="color: var(--text-secondary); margin-top: 0.5rem;">
+        Explore blueprints and their industry activities
+    </p>
+</div>
+
+<div class="card">
+    <div class="activity-tabs">
+        {% for act_id, act_data in activity_types.items %}
+        <a href="?activity={{ act_id }}" class="activity-tab {% if act_id == selected_activity %}active{% endif %}">
+            <span class="activity-icon">{{ act_data.icon }}</span>
+            <span>{{ act_data.name }}</span>
+            <span class="activity-count">{{ activity_counts|lookup:act_id|default:0 }}</span>
+        </a>
+        {% endfor %}
+    </div>
+
+    <div style="margin-bottom: 1.5rem; padding: 1rem; background: var(--bg-primary); border-radius: 6px; border-left: 4px solid var(--btn-primary);">
+        <h3 style="margin: 0 0 0.5rem 0;">{{ activity_info.icon }} {{ activity_info.name }}</h3>
+        <p style="margin: 0; color: var(--text-secondary);">{{ activity_info.description }}</p>
+        <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem; color: var(--text-secondary);">
+            Showing {{ total_blueprints }} blueprints
+        </p>
+    </div>
+
+    {% if total_blueprints > 0 %}
+    <div class="blueprint-grid">
+        {% for bp in blueprints %}
+        <div class="blueprint-card">
+            <div class="blueprint-header">
+                <div>
+                    <h3 class="blueprint-title">
+                        <a href="{% url 'core:sde_blueprint_detail' bp.type_id %}">
+                            {{ bp.name }}
+                        </a>
+                    </h3>
+                    <div class="blueprint-group">{{ bp.group }}</div>
+                </div>
+            </div>
+
+            <div class="blueprint-meta" style="margin-bottom: 1rem;">
+                {% if bp.time %}
+                <div>
+                    <strong>Time:</strong> {{ bp.time|floatformat:0 }}s
+                </div>
+                {% endif %}
+                {% if bp.max_production_limit %}
+                <div>
+                    <strong>Max Runs:</strong> {{ bp.max_production_limit }}
+                </div>
+                {% endif %}
+            </div>
+
+            {% if bp.product %}
+            <div class="info-section">
+                <div class="info-label">Produces</div>
+                <div class="product-display">
+                    <div class="product-name">
+                        <a href="{% url 'core:sde_item_detail' bp.product.type_id %}" style="color: inherit; text-decoration: none;">
+                            {{ bp.product.name }}
+                        </a>
+                    </div>
+                    <div class="product-quantity">Quantity: {{ bp.product.quantity }}</div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if bp.materials %}
+            <div class="info-section">
+                <div class="info-label">Top Materials ({{ bp.materials|length }} shown)</div>
+                <ul class="material-list">
+                    {% for mat in bp.materials %}
+                    <li>
+                        <span class="material-name">
+                            <a href="{% url 'core:sde_item_detail' mat.type_id %}" style="color: inherit; text-decoration: none;">
+                                {{ mat.name }}
+                            </a>
+                        </span>
+                        <span class="material-quantity">{{ mat.quantity|floatformat:0 }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+
+            {% if bp.skills %}
+            <div class="info-section">
+                <div class="info-label">Required Skills</div>
+                <ul class="skill-list">
+                    {% for skill in bp.skills %}
+                    <li>
+                        <span class="skill-name">
+                            <a href="{% url 'core:sde_skill_detail' skill.type_id %}" style="color: inherit; text-decoration: none;">
+                                {{ skill.name }}
+                            </a>
+                        </span>
+                        <span class="skill-level">Level {{ skill.level }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if total_blueprints >= 500 %}
+    <div style="margin-top: 1.5rem; padding: 1rem; background: var(--bg-primary); border-radius: 6px; text-align: center; color: var(--text-secondary);">
+        Showing first 500 blueprints. Use the search to find specific blueprints.
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="empty-state">
+        <div style="font-size: 2rem; margin-bottom: 1rem;">{{ activity_info.icon }}</div>
+        <h3>No Blueprints Found</h3>
+        <p>No blueprints found for {{ activity_info.name }} activity.</p>
+    </div>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2>Activity Type Guide</h2>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin-top: 1rem;">
+        <div style="padding: 1rem; background: var(--bg-secondary); border-radius: 6px;">
+            <h4 style="margin: 0 0 0.5rem 0;">Manufacturing (1)</h4>
+            <p style="font-size: 0.9rem; color: var(--text-secondary); margin: 0;">
+                Build items from blueprints. Most common activity.
+            </p>
+        </div>
+        <div style="padding: 1rem; background: var(--bg-secondary); border-radius: 6px;">
+            <h4 style="margin: 0 0 0.5rem 0;">TE Research (3)</h4>
+            <p style="font-size: 0.9rem; color: var(--text-secondary); margin: 0;">
+                Research Time Efficiency to reduce manufacturing time.
+            </p>
+        </div>
+        <div style="padding: 1rem; background: var(--bg-secondary); border-radius: 6px;">
+            <h4 style="margin: 0 0 0.5rem 0;">ME Research (4)</h4>
+            <p style="font-size: 0.9rem; color: var(--text-secondary); margin: 0;">
+                Research Material Efficiency to reduce material waste.
+            </p>
+        </div>
+        <div style="padding: 1rem; background: var(--bg-secondary); border-radius: 6px;">
+            <h4 style="margin: 0 0 0.5rem 0;">Invention (5)</h4>
+            <p style="font-size: 0.9rem; color: var(--text-secondary); margin: 0;">
+                Create Tech 2 and Tech 3 blueprint copies from T1 BPCs.
+            </p>
+        </div>
+        <div style="padding: 1rem; background: var(--bg-secondary); border-radius: 6px;">
+            <h4 style="margin: 0 0 0.5rem 0;">Reactions (8)</h4>
+            <p style="font-size: 0.9rem; color: var(--text-secondary); margin: 0;">
+                Moon gas and polymer reactions at reaction arrays.
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}

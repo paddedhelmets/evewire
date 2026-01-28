@@ -82,6 +82,33 @@
 </div>
 
 <div class="card">
+    <h2 class="section-title">Universe</h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+        Explore factions, corporations, and agents throughout New Eden
+    </p>
+    <div class="browse-grid">
+        <div class="browse-item">
+            <a href="{% url 'core:sde_faction_list' %}">
+                <span class="browse-item-name">Factions</span>
+                <span class="browse-item-count">{{ factions_count }}</span>
+            </a>
+        </div>
+        <div class="browse-item">
+            <a href="{% url 'core:sde_faction_list' %}#corporations">
+                <span class="browse-item-name">Corporations</span>
+                <span class="browse-item-count">{{ corporations_count }}</span>
+            </a>
+        </div>
+        <div class="browse-item">
+            <a href="{% url 'core:sde_faction_list' %}#agents">
+                <span class="browse-item-name">Agents</span>
+                <span class="browse-item-count">{{ agents_count }}</span>
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="card">
     <h2>Search</h2>
     <form action="{% url 'core:sde_search' %}" method="get" style="display: flex; gap: 0.5rem;">
         <input type="text" name="q" placeholder="Search items..." style="padding: 0.5rem; min-width: 300px; flex: 1;" required>
@@ -103,6 +130,9 @@
         </a>
         <a href="{% url 'core:sde_category_detail' 7 %}" class="quick-link">
             Modules
+        </a>
+        <a href="{% url 'core:sde_industry_activities' %}" class="quick-link">
+            Industry Activities
         </a>
     </div>
 </div>
