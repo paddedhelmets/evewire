@@ -148,27 +148,8 @@ Q_CLUSTER = {
     'cpu_affinity': config('Q_CPU_AFFINITY', default=1, cast=int),
     'label': 'Django Q2',
     'orm': 'default',  # Use database broker with 'default' connection
-    'sync': True,  # Run scheduler inline with workers
-    'schedule': [
-        # Character metadata (location, wallet, orders) - 10 min
-        {
-            'func': 'core.eve.tasks.refresh_stale_characters',
-            'schedule': 600,  # 10 minutes
-            'name': 'Refresh stale character metadata',
-        },
-        # Assets - 1 hour minimum (ESI cache)
-        {
-            'func': 'core.eve.tasks.refresh_stale_assets',
-            'schedule': 3600,  # 1 hour
-            'name': 'Refresh stale character assets',
-        },
-        # Skills/queue - 30 min check, but will skip if no skill ending soon
-        {
-            'func': 'core.eve.tasks.refresh_stale_skills',
-            'schedule': 1800,  # 30 minutes
-            'name': 'Refresh stale skills/queue',
-        },
-    ],
+    # Note: Scheduler disabled due to crashes with sync=True
+    # Use cron/systemd timers instead (see management commands)
 }
 
 # Logging
