@@ -453,33 +453,33 @@ def queue_esi_refresh(task_path: str, *args, jitter_range: tuple = (0, 30), **kw
 
 def refresh_all_lp_stores() -> dict:
     """
-    Discover all loyalty stores by checking NPC corporations.
+    Discover all loyalty stores by checking corporations with mission agents.
 
     ESI Endpoint: GET /loyalty/{corporation_id}/offers/
     Returns list of offers for a specific corporation if they have an LP store.
 
     This should be called periodically (e.g., daily via cron).
 
-    The function queries NPC corporations from SDE and checks which ones have
-    LP stores by attempting to fetch their offers. Corporations with 404 or
-    empty responses are skipped.
+    The function queries corporations that have agents from SDE and checks which
+    ones have LP stores by attempting to fetch their offers. Corporations with
+    404 responses are skipped (no LP store).
 
     Returns:
         Dict with status and count of queued refreshes
     """
     from core.services import ESIClient
-    from core.eve.models import Corporation
+    from core.sde.models import AgtAgents
 
     client = ESIClient()
     count = 0
     checked = 0
 
-    # Get NPC corporations from SDE
-    npc_corps = Corporation.objects.filter(is_npc=True).values_list('id', flat=True)
+    # Get distinct corporation IDs that have agents (corps with mission agents likely have LP stores)
+    agent_corp_ids = AgtAgents.objects.values_list('corporation_id', flat=True).distinct()
 
-    logger.info(f'Checking {len(npc_corps)} NPC corporations for LP stores')
+    logger.info(f'Checking {len(agent_corp_ids)} corporations with agents for LP stores')
 
-    for corporation_id in npc_corps:
+    for corporation_id in agent_corp_ids:
         checked += 1
 
         # Try to fetch offers for this corporation
@@ -495,8 +495,8 @@ def refresh_all_lp_stores() -> dict:
             )
             count += 1
 
-            if count % 100 == 0:
-                logger.info(f'Found {count} LP stores so far (checked {checked}/{len(npc_corps)})')
+            if count % 50 == 0:
+                logger.info(f'Found {count} LP stores so far (checked {checked}/{len(agent_corp_ids)})')
 
         # Rate limiting - brief sleep between checks
         if checked % 50 == 0:
