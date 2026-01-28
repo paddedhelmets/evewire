@@ -446,7 +446,7 @@ def queue_esi_refresh(task_path: str, *args, jitter_range: tuple = (0, 30), **kw
     return async_task(
         task_path,
         *args,
-        schedule=schedule(scheduled_time),
+        schedule=scheduled_time,  # Pass datetime directly, not wrapped in schedule()
         **kwargs
     )
 
