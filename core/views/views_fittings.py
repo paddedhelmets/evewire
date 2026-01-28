@@ -972,3 +972,139 @@ def fleet_readiness(request: HttpRequest) -> HttpResponse:
         'fitting_readiness': fitting_readiness,
         'total_fittings': len(fitting_readiness),
     })
+
+
+@login_required
+def fitting_readiness_browser(request: HttpRequest, fitting_id: int) -> HttpResponse:
+    """
+    Fleet readiness browser for a specific fitting.
+
+    Shows all hulls of this ship type across all characters with their
+    readiness status, and generates shopping lists for selected ships.
+    """
+    from core.doctrines.models import Fitting, FittingMatch
+    from core.character.models import CharacterAsset
+    from core.models import Character
+    from core.eve.models import ItemType
+
+    try:
+        fitting = Fitting.objects.get(id=fitting_id)
+    except Fitting.DoesNotExist:
+        return render(request, 'core/error.html', {
+            'message': 'Fitting not found',
+        }, status=404)
+
+    # Get all user's characters
+    characters = list(request.user.characters.all())
+
+    # Get ALL assets of this ship type (packaged + assembled)
+    ship_assets = CharacterAsset.objects.filter(
+        character__in=characters,
+        type_id=fitting.ship_type_id
+    ).select_related('character').order_by('character__character_name', 'location_id', 'item_id')
+
+    # Get fitting requirements for shopping list generation
+    fitting_modules = set()
+    for entry in fitting.entries.all():
+        fitting_modules.add(entry.module_type_id)
+
+    # Enrich assets with readiness info
+    assets_with_readiness = []
+    asset_match_map = {}  # {asset_id: FittingMatch}
+
+    # Load all matches for this fitting across all characters
+    all_matches = FittingMatch.objects.filter(
+        character__in=characters,
+        fitting=fitting
+    )
+
+    for match in all_matches:
+        asset_match_map[match.asset_id] = match
+
+    for asset in ship_assets:
+        # Determine readiness state
+        match = asset_match_map.get(asset.item_id)
+
+        if asset.is_singleton:
+            # Assembled ship
+            if match and match.match_score >= 1.0:
+                readiness = 'ready'
+                readiness_percent = 100
+                missing_modules = []
+            elif match and match.match_score > 0:
+                readiness = 'partial'
+                readiness_percent = int(match.match_score * 100)
+                missing_modules = match.missing_modules or []
+            else:
+                # Assembled but empty or no match data
+                readiness = 'empty'
+                readiness_percent = 0
+                missing_modules = list(fitting_modules)
+        else:
+            # Packaged ship
+            readiness = 'packaged'
+            readiness_percent = 0
+            missing_modules = list(fitting_modules)
+
+        assets_with_readiness.append({
+            'asset': asset,
+            'readiness': readiness,
+            'readiness_percent': readiness_percent,
+            'missing_modules': missing_modules,
+            'match': match,
+        })
+
+    # Handle shopping list generation
+    shopping_list_text = None
+    owned_assets = None
+
+    if request.method == 'POST':
+        selected_asset_ids = request.POST.getlist('selected_assets')
+        selected_asset_ids = [int(aid) for aid in selected_asset_ids if aid.isdigit()]
+
+        if selected_asset_ids:
+            # Generate shopping list
+            from collections import Counter
+            shopping_modules = Counter()
+
+            for asset_info in assets_with_readiness:
+                if asset_info['asset'].item_id in selected_asset_ids:
+                    # Add missing modules for this ship
+                    for module_id in asset_info['missing_modules']:
+                        shopping_modules[module_id] += 1
+
+            # Also add the hull itself for packaged ships
+            for asset_info in assets_with_readiness:
+                if asset_info['asset'].item_id in selected_asset_ids:
+                    if asset_info['readiness'] in ('packaged', 'empty'):
+                        shopping_modules[fitting.ship_type_id] += 1
+
+            # Generate plain text shopping list
+            shopping_list_lines = []
+            for module_id, quantity in sorted(shopping_modules.items(), key=lambda x: x[1], reverse=True):
+                try:
+                    item_type = ItemType.objects.get(id=module_id)
+                    shopping_list_lines.append(f"{quantity}× {item_type.name}")
+                except ItemType.DoesNotExist:
+                    shopping_list_lines.append(f"{quantity}× Module {module_id}")
+
+            shopping_list_text = '\n'.join(shopping_list_lines)
+
+            # Find owned assets matching shopping list
+            module_type_ids = list(shopping_modules.keys())
+            owned_assets = CharacterAsset.objects.filter(
+                character__in=characters,
+                type_id__in=module_type_ids
+            ).select_related('character').order_by('character__character_name', 'type_id', 'location_id')
+
+    return render(request, 'core/fitting_readiness_browser.html', {
+        'fitting': fitting,
+        'ship_assets': assets_with_readiness,
+        'total_assets': len(assets_with_readiness),
+        'ready_count': sum(1 for a in assets_with_readiness if a['readiness'] == 'ready'),
+        'partial_count': sum(1 for a in assets_with_readiness if a['readiness'] == 'partial'),
+        'zero_count': sum(1 for a in assets_with_readiness if a['readiness'] in ('packaged', 'empty')),
+        'shopping_list_text': shopping_list_text,
+        'owned_assets': owned_assets,
+    })
+

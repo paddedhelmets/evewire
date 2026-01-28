@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}{{ fitting.name }} - Fleet Readiness Browser{% endblock %}
+
+{% block extra_head %}
+<style>
+.readiness-browser {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1rem;
+    min-height: 600px;
+}
+.readiness-column {
+    display: flex;
+    flex-direction: column;
+}
+.readiness-column h3 {
+    margin: 0 0 1rem 0;
+    padding: 0.5rem;
+    background: var(--bg-secondary);
+    border-radius: 4px;
+}
+.assets-container {
+    flex: 1;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-primary);
+}
+.readiness-badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-left: 0.5rem;
+}
+.readiness-ready {
+    background: #080;
+    color: white;
+}
+.readiness-partial {
+    background: #c60;
+    color: white;
+}
+.readiness-zero {
+    background: #888;
+    color: white;
+}
+.asset-checkbox {
+    margin-right: 0.5rem;
+}
+.generate-btn {
+    width: 100%;
+    padding: 0.75rem;
+    background: var(--link-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 1rem;
+    cursor: pointer;
+    margin-bottom: 1rem;
+}
+.generate-btn:hover {
+    opacity: 0.9;
+}
+.shopping-list-output {
+    flex: 1;
+    padding: 1rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.9rem;
+    white-space: pre-wrap;
+    overflow-y: auto;
+}
+.summary-stats {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: var(--bg-secondary);
+    border-radius: 4px;
+}
+.summary-stat {
+    flex: 1;
+    text-align: center;
+}
+.summary-stat-value {
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+.summary-stat-label {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 1rem;">
+    <a href="{% url 'core:fitting_detail' fitting.id %}">← Back to {{ fitting.name }}</a>
+</div>
+
+<h1>{{ fitting.name }} - Fleet Readiness</h1>
+<p style="color: var(--text-secondary);">Hull browser across all pilots</p>
+
+<div class="summary-stats">
+    <div class="summary-stat">
+        <div class="summary-stat-value">{{ total_assets }}</div>
+        <div class="summary-stat-label">Total Hulls</div>
+    </div>
+    <div class="summary-stat">
+        <div class="summary-stat-value" style="color: #080;">{{ ready_count }}</div>
+        <div class="summary-stat-label">Ready (100%)</div>
+    </div>
+    <div class="summary-stat">
+        <div class="summary-stat-value" style="color: #c60;">{{ partial_count }}</div>
+        <div class="summary-stat-label">Partial</div>
+    </div>
+    <div class="summary-stat">
+        <div class="summary-stat-value" style="color: #888;">{{ zero_count }}</div>
+        <div class="summary-stat-label">Need Full Fit</div>
+    </div>
+</div>
+
+<form method="post" id="readiness-form">
+    {% csrf_token %}
+    <div class="readiness-browser">
+        <!-- Left Column: Hull Inventory -->
+        <div class="readiness-column">
+            <h3>Hull Inventory</h3>
+            <div class="assets-container">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead style="position: sticky; top: 0; background: var(--bg-secondary); z-index: 10;">
+                        <tr>
+                            <th style="padding: 0.5rem; text-align: left; width: 30px;">
+                                <input type="checkbox" id="select-all" onchange="toggleAll(this)">
+                            </th>
+                            <th style="padding: 0.5rem; text-align: left;">Pilot / Location</th>
+                            <th style="padding: 0.5rem; text-align: center;">State</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for asset_info in ship_assets %}
+                        <tr style="border-bottom: 1px solid var(--border-color);">
+                            <td style="padding: 0.5rem;">
+                                <input type="checkbox"
+                                       name="selected_assets"
+                                       value="{{ asset_info.asset.item_id }}"
+                                       class="asset-checkbox"
+                                       id="asset-{{ asset_info.asset.item_id }}">
+                            </td>
+                            <td style="padding: 0.5rem;">
+                                <div>
+                                    <a href="{% url 'core:character_overview' asset_info.asset.character.id %}"
+                                       style="color: var(--link-color); text-decoration: none; font-weight: 500;">
+                                        {{ asset_info.asset.character.character_name }}
+                                    </a>
+                                </div>
+                                <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                                    {{ asset_info.asset.location_name }}
+                                    {% if asset_info.asset.is_singleton %}
+                                        <span style="color: #0066cc;">(Assembled)</span>
+                                    {% else %}
+                                        <span style="color: #888;">(Packaged)</span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td style="padding: 0.5rem; text-align: center;">
+                                {% if asset_info.readiness == 'ready' %}
+                                    <span class="readiness-badge readiness-ready">100%</span>
+                                {% elif asset_info.readiness == 'partial' %}
+                                    <span class="readiness-badge readiness-partial">{{ asset_info.readiness_percent }}%</span>
+                                {% else %}
+                                    <span class="readiness-badge readiness-zero">0%</span>
+                                {% endif %}
+                                {% if asset_info.missing_modules %}
+                                    <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                                        {{ asset_info.missing_modules|length }} missing
+                                    </div>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Middle Column: Shopping List -->
+        <div class="readiness-column">
+            <h3>Shopping List</h3>
+            <button type="submit" class="generate-btn">
+                Generate Shopping List
+            </button>
+            {% if shopping_list_text %}
+                <div class="shopping-list-output">{{ shopping_list_text }}</div>
+            {% else %}
+                <div class="shopping-list-output" style="color: var(--text-secondary); font-style: italic;">
+                    Select ships and click "Generate Shopping List" to see what's needed.
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- Right Column: Owned Assets -->
+        <div class="readiness-column">
+            <h3>Owned Assets</h3>
+            {% if owned_assets %}
+                <div class="assets-container">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead style="position: sticky; top: 0; background: var(--bg-secondary); z-index: 10;">
+                            <tr>
+                                <th style="padding: 0.5rem; text-align: left;">Item</th>
+                                <th style="padding: 0.5rem; text-align: center;">Qty</th>
+                                <th style="padding: 0.5rem; text-align: left;">Location</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% regroup owned_assets by character as character_list %}
+                            {% for character_group in character_list %}
+                                <tr style="background: var(--bg-secondary);">
+                                    <td colspan="3" style="padding: 0.5rem; font-weight: 600;">
+                                        {{ character_group.grouper.character_name }}
+                                    </td>
+                                </tr>
+                                {% for asset in character_group.list %}
+                                <tr style="border-bottom: 1px solid var(--border-color);">
+                                    <td style="padding: 0.5rem;">{{ asset.type_name }}</td>
+                                    <td style="padding: 0.5rem; text-align: center;">{{ asset.quantity|default:1 }}</td>
+                                    <td style="padding: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">
+                                        {{ asset.location_name }}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="shopping-list-output" style="color: var(--text-secondary); font-style: italic;">
+                    Generate a shopping list to see which items you already own.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</form>
+
+<script>
+function toggleAll(checkbox) {
+    const checkboxes = document.querySelectorAll('.asset-checkbox');
+    checkboxes.forEach(cb => cb.checked = checkbox.checked);
+}
+</script>
+{% endblock %}

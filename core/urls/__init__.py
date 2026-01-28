@@ -130,6 +130,7 @@ urlpatterns = [
     path('fittings/<int:fitting_id>/plans/', views.fitting_skill_plans, name='fitting_skill_plans'),
     path('fittings/<int:fitting_id>/adopt-plan/', views.fitting_adopt_plan, name='fitting_adopt_plan'),
     path('fittings/<int:fitting_id>/ignore-toggle/', views.fitting_ignore_toggle, name='fitting_ignore_toggle'),
+    path('fittings/<int:fitting_id>/readiness-browser/', views.fitting_readiness_browser, name='fitting_readiness_browser'),
     path('fittings/matches/', views.fitting_matches, name='fitting_matches'),
     path('character/<int:character_id>/fittings/matches/', views.fitting_matches, name='character_fitting_matches'),
     path('fittings/import/', views.fitting_import, name='fitting_import'),
