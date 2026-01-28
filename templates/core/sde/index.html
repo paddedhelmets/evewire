@@ -3,6 +3,68 @@
 {% block title %}SDE Browser - evewire{% endblock %}
 
 {% block content %}
+<style>
+.browse-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+.browse-item {
+    padding: 1rem;
+    background: var(--bg-primary);
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    transition: all 0.2s;
+}
+.browse-item:hover {
+    border-color: var(--link-color);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+.browse-item a {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    text-decoration: none;
+}
+.browse-item-name {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+.browse-item-count {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    background: var(--bg-secondary);
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
+}
+.quick-links {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-top: 1rem;
+}
+.quick-link {
+    padding: 0.75rem 1.25rem;
+    background: var(--btn-primary);
+    color: white;
+    border-radius: 6px;
+    text-decoration: none;
+    transition: background 0.2s;
+}
+.quick-link:hover {
+    background: var(--btn-primary-hover);
+    text-decoration: none;
+    color: white;
+}
+.section-title {
+    font-size: 1.3rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--border-color);
+}
+</style>
+
 <div class="card">
     <h1>SDE Browser</h1>
     <p>Explore EVE Online's Static Data Export</p>
@@ -10,7 +72,7 @@
 
 <div class="card">
     <h2>Statistics</h2>
-    <div style="display: flex; gap: 2rem;">
+    <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
         <div><strong>{{ stats.total_items }}</strong> Items</div>
         <div><strong>{{ stats.total_ships }}</strong> Ships</div>
         <div><strong>{{ stats.total_modules }}</strong> Modules</div>
@@ -22,20 +84,84 @@
 <div class="card">
     <h2>Search</h2>
     <form action="{% url 'core:sde_search' %}" method="get" style="display: flex; gap: 0.5rem;">
-        <input type="text" name="q" placeholder="Search items..." style="padding: 0.5rem; min-width: 300px;" required>
+        <input type="text" name="q" placeholder="Search items..." style="padding: 0.5rem; min-width: 300px; flex: 1;" required>
         <button type="submit" class="btn">Search</button>
     </form>
 </div>
 
 <div class="card">
-    <h2>Top Categories</h2>
-    <ul>
-        {% for cat in top_categories %}
-        <li>
-            <a href="{% url 'core:sde_category_detail' cat.category_id %}">{{ cat.category_name }}</a>
-            ({{ cat.item_count }} items)
-        </li>
+    <h2 class="section-title">Quick Links</h2>
+    <div class="quick-links">
+        <a href="{% url 'core:sde_category_detail' 16 %}" class="quick-link">
+            Skills ({{ skills_count }})
+        </a>
+        <a href="{% url 'core:sde_category_detail' 3 %}" class="quick-link">
+            Materials
+        </a>
+        <a href="{% url 'core:sde_category_detail' 6 %}" class="quick-link">
+            Ships
+        </a>
+        <a href="{% url 'core:sde_category_detail' 7 %}" class="quick-link">
+            Modules
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <h2 class="section-title">Browse by Market Group</h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">Market hierarchy for buy/sell orders</p>
+    <div class="browse-grid">
+        {% for group in top_market_groups %}
+        <div class="browse-item">
+            <a href="{% url 'core:sde_market_group_detail' group.market_group_id %}">
+                <span class="browse-item-name">{{ group.market_group_name }}</span>
+                <span class="browse-item-count">{{ group.item_count|default:0 }}</span>
+            </a>
+        </div>
         {% endfor %}
-    </ul>
+    </div>
+</div>
+
+<div class="card">
+    <h2 class="section-title">Browse by Category</h2>
+    <div class="browse-grid">
+        {% for cat in all_categories %}
+        <div class="browse-item">
+            <a href="{% url 'core:sde_category_detail' cat.category_id %}">
+                <span class="browse-item-name">{{ cat.category_name }}</span>
+                <span class="browse-item-count">{{ cat.item_count|default:0 }}</span>
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="card">
+    <h2 class="section-title">Browse by Meta Group</h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">Item variants organized by technology level</p>
+    <div class="browse-grid">
+        {% for meta in meta_groups %}
+        <div class="browse-item">
+            <span style="display: flex; justify-content: space-between; align-items: center;">
+                <span class="browse-item-name">{{ meta.meta_group_name }}</span>
+                <span class="browse-item-count">{{ meta.item_count|default:0 }}</span>
+            </span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="card">
+    <h2 class="section-title">Browse by Ship Class</h2>
+    <div class="browse-grid">
+        {% for group in ship_groups %}
+        <div class="browse-item">
+            <a href="{% url 'core:sde_group_detail' group.group_id %}">
+                <span class="browse-item-name">{{ group.group_name }}</span>
+                <span class="browse-item-count">{{ group.item_count|default:0 }}</span>
+            </a>
+        </div>
+        {% endfor %}
+    </div>
 </div>
 {% endblock %}

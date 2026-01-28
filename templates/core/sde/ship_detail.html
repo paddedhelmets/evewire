@@ -1,0 +1,349 @@
+{% extends "base.html" %}
+
+{% block title %}{{ ship.name }} - SDE Browser{% endblock %}
+
+{% block content %}
+<div class="card">
+    <nav style="margin-bottom: 1rem; font-size: 0.9rem;">
+        <a href="{% url 'core:sde_index' %}">SDE</a> &gt;
+        <a href="{% url 'core:sde_category_detail' 6 %}">Ships</a> &gt;
+        <a href="{% url 'core:sde_group_detail' ship.group_id %}">{{ ship.group.group_name }}</a> &gt;
+        <strong>{{ ship.name }}</strong>
+    </nav>
+
+    <div style="display: flex; justify-content: space-between; align-items: start; gap: 2rem;">
+        <div style="flex: 1;">
+            <h1 style="margin: 0;">{{ ship.name }}</h1>
+            {% if ship.description %}
+            <p style="color: var(--text-secondary); margin-top: 0.5rem; line-height: 1.6;">{{ ship.description }}</p>
+            {% endif %}
+        </div>
+        {% if ship.race %}
+        <div style="text-align: right;">
+            <span style="padding: 0.5rem 1rem; background: var(--bg-primary); border-radius: 4px; border: 1px solid var(--border-color); font-weight: 600;">
+                {{ ship.race.race_name }}
+            </span>
+        </div>
+        {% endif %}
+    </div>
+
+    <div style="margin-top: 1.5rem; display: flex; gap: 2rem; flex-wrap: wrap;">
+        <div><strong>Type ID:</strong> {{ ship.type_id }}</div>
+        <div><strong>Class:</strong> <a href="{% url 'core:sde_group_detail' ship.group_id %}">{{ ship.group.group_name }}</a></div>
+        {% if ship.mass %}<div><strong>Mass:</strong> {{ ship.mass|floatformat:0 }} kg</div>{% endif %}
+        {% if ship.volume %}<div><strong>Volume:</strong> {{ ship.volume|floatformat:0 }} m³</div>{% endif %}
+        {% if ship.capacity %}<div><strong>Cargo:</strong> {{ ship.capacity|floatformat:0 }} m³</div>{% endif %}
+        <div><strong>Base Price:</strong> {{ ship.base_price|default:"N/A"|floatformat:2 }} ISK</div>
+    </div>
+</div>
+
+{% if fitting %}
+<div class="card">
+    <h2>Fitting</h2>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-top: 1rem;">
+
+        <!-- Slots -->
+        <div>
+            <h3 style="font-size: 1.1rem; margin-bottom: 0.75rem; color: var(--link-color);">Slots</h3>
+            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                {% if fitting.hiSlots is not None %}
+                <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg-primary); border-radius: 4px;">
+                    <span>High Slots</span>
+                    <strong>{{ fitting.hiSlots }}</strong>
+                </div>
+                {% endif %}
+                {% if fitting.medSlots is not None %}
+                <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg-primary); border-radius: 4px;">
+                    <span>Med Slots</span>
+                    <strong>{{ fitting.medSlots }}</strong>
+                </div>
+                {% endif %}
+                {% if fitting.lowSlots is not None %}
+                <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg-primary); border-radius: 4px;">
+                    <span>Low Slots</span>
+                    <strong>{{ fitting.lowSlots }}</strong>
+                </div>
+                {% endif %}
+                {% if fitting.rigSlots is not None %}
+                <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg-primary); border-radius: 4px;">
+                    <span>Rig Slots</span>
+                    <strong>{{ fitting.rigSlots }}</strong>
+                </div>
+                {% endif %}
+                {% if fitting.subSystemSlot is not None %}
+                <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg-primary); border-radius: 4px;">
+                    <span>Subsystem Slots</span>
+                    <strong>{{ fitting.subSystemSlot }}</strong>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Resources -->
+        <div>
+            <h3 style="font-size: 1.1rem; margin-bottom: 0.75rem; color: var(--link-color);">Resources</h3>
+            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                {% if fitting.powerOutput is not None %}
+                <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg-primary); border-radius: 4px;">
+                    <span>Power Grid</span>
+                    <strong>{{ fitting.powerOutput|floatformat:0 }} MW</strong>
+                </div>
+                {% endif %}
+                {% if fitting.cpu is not None %}
+                <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg-primary); border-radius: 4px;">
+                    <span>CPU</span>
+                    <strong>{{ fitting.cpu|floatformat:0 }} tf</strong>
+                </div>
+                {% endif %}
+                {% if fitting.upgradeCapacity is not None %}
+                <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg-primary); border-radius: 4px;">
+                    <span>Calibration</span>
+                    <strong>{{ fitting.upgradeCapacity|floatformat:0 }}</strong>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Hardpoints -->
+        <div>
+            <h3 style="font-size: 1.1rem; margin-bottom: 0.75rem; color: var(--link-color);">Hardpoints</h3>
+            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                {% if fitting.turretSlotsLeft is not None %}
+                <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg-primary); border-radius: 4px;">
+                    <span>Turret Hardpoints</span>
+                    <strong>{{ fitting.turretSlotsLeft }}</strong>
+                </div>
+                {% endif %}
+                {% if fitting.launcherSlotsLeft is not None %}
+                <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg-primary); border-radius: 4px;">
+                    <span>Launcher Hardpoints</span>
+                    <strong>{{ fitting.launcherSlotsLeft }}</strong>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Drones -->
+        {% if fitting.droneBandwidth is not None or fitting.droneCapacity is not None %}
+        <div>
+            <h3 style="font-size: 1.1rem; margin-bottom: 0.75rem; color: var(--link-color);">Drones</h3>
+            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                {% if fitting.droneBandwidth is not None %}
+                <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg-primary); border-radius: 4px;">
+                    <span>Drone Bandwidth</span>
+                    <strong>{{ fitting.droneBandwidth|floatformat:0 }} Mbit/s</strong>
+                </div>
+                {% endif %}
+                {% if fitting.droneCapacity is not None %}
+                <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg-primary); border-radius: 4px;">
+                    <span>Drone Bay</span>
+                    <strong>{{ fitting.droneCapacity|floatformat:0 }} m³</strong>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+    </div>
+</div>
+{% endif %}
+
+{% if fitting and fitting.shieldCapacity is not None or fitting.armorHP is not None or fitting.structureHP is not None %}
+<div class="card">
+    <h2>Tank</h2>
+    <div style="margin-top: 1rem; display: flex; flex-direction: column; gap: 1rem;">
+
+        {% if fitting.shieldCapacity is not None %}
+        <div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                <span><strong>Shield HP:</strong> {{ fitting.shieldCapacity|floatformat:0 }}</span>
+            </div>
+            <div style="width: 100%; height: 24px; background: var(--bg-primary); border-radius: 4px; overflow: hidden; border: 1px solid var(--border-color);">
+                <div style="width: 100%; height: 100%; background: linear-gradient(90deg, #4a90d9 0%, #64b5f6 100%);"></div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if fitting.armorHP is not None %}
+        <div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                <span><strong>Armor HP:</strong> {{ fitting.armorHP|floatformat:0 }}</span>
+            </div>
+            <div style="width: 100%; height: 24px; background: var(--bg-primary); border-radius: 4px; overflow: hidden; border: 1px solid var(--border-color);">
+                <div style="width: 100%; height: 100%; background: linear-gradient(90deg, #d4a574 0%, #e6c9a8 100%);"></div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if fitting.structureHP is not None %}
+        <div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                <span><strong>Structure HP:</strong> {{ fitting.structureHP|floatformat:0 }}</span>
+            </div>
+            <div style="width: 100%; height: 24px; background: var(--bg-primary); border-radius: 4px; overflow: hidden; border: 1px solid var(--border-color);">
+                <div style="width: 100%; height: 100%; background: linear-gradient(90deg, #666 0%, #888 100%);"></div>
+            </div>
+        </div>
+        {% endif %}
+
+    </div>
+</div>
+{% endif %}
+
+{% if fitting and fitting.maxVelocity is not None or fitting.agility is not None or fitting.warpSpeedMultiplier is not None %}
+<div class="card">
+    <h2>Mobility</h2>
+    <div style="margin-top: 1rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+        {% if fitting.maxVelocity is not None %}
+        <div style="padding: 1rem; background: var(--bg-primary); border-radius: 4px; text-align: center;">
+            <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 0.25rem;">Max Velocity</div>
+            <div style="font-size: 1.5rem; font-weight: bold;">{{ fitting.maxVelocity|floatformat:0 }}</div>
+            <div style="color: var(--text-secondary); font-size: 0.85rem;">m/s</div>
+        </div>
+        {% endif %}
+
+        {% if fitting.agility is not None %}
+        <div style="padding: 1rem; background: var(--bg-primary); border-radius: 4px; text-align: center;">
+            <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 0.25rem;">Agility</div>
+            <div style="font-size: 1.5rem; font-weight: bold;">{{ fitting.agility|floatformat:3 }}</div>
+            <div style="color: var(--text-secondary); font-size: 0.85rem;">rad/s</div>
+        </div>
+        {% endif %}
+
+        {% if fitting.warpSpeedMultiplier is not None %}
+        <div style="padding: 1rem; background: var(--bg-primary); border-radius: 4px; text-align: center;">
+            <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 0.25rem;">Warp Speed</div>
+            <div style="font-size: 1.5rem; font-weight: bold;">{{ fitting.warpSpeedMultiplier|floatformat:2 }}</div>
+            <div style="color: var(--text-secondary); font-size: 0.85rem;">AU/s</div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{% if fitting and fitting.capacitorCapacity is not None or fitting.rechargeRate is not None %}
+<div class="card">
+    <h2>Capacitor</h2>
+    <div style="margin-top: 1rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+        {% if fitting.capacitorCapacity is not None %}
+        <div style="padding: 1rem; background: var(--bg-primary); border-radius: 4px; text-align: center;">
+            <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 0.25rem;">Capacity</div>
+            <div style="font-size: 1.5rem; font-weight: bold;">{{ fitting.capacitorCapacity|floatformat:0 }}</div>
+            <div style="color: var(--text-secondary); font-size: 0.85rem;">GJ</div>
+        </div>
+        {% endif %}
+
+        {% if fitting.rechargeRate is not None %}
+        <div style="padding: 1rem; background: var(--bg-primary); border-radius: 4px; text-align: center;">
+            <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 0.25rem;">Recharge Rate</div>
+            <div style="font-size: 1.5rem; font-weight: bold;">{{ fitting.rechargeRate|floatformat:2 }}</div>
+            <div style="color: var(--text-secondary); font-size: 0.85rem;">s</div>
+        </div>
+        {% endif %}
+
+        {% if fitting.capacitorCapacity is not None and fitting.rechargeRate is not None %}
+        {% with cap_regen=fitting.capacitorCapacity|divide:fitting.rechargeRate %}
+        <div style="padding: 1rem; background: var(--bg-primary); border-radius: 4px; text-align: center;">
+            <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 0.25rem;">Capacitor/s</div>
+            <div style="font-size: 1.5rem; font-weight: bold;">{{ cap_regen|floatformat:2 }}</div>
+            <div style="color: var(--text-secondary); font-size: 0.85rem;">GJ/s</div>
+        </div>
+        {% endwith %}
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{% if required_skills %}
+<div class="card">
+    <h2>Required Skills</h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">Skills required to fly this ship:</p>
+
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid var(--border-color);">
+                <th style="padding: 0.75rem; text-align: left;">Skill</th>
+                <th style="padding: 0.75rem; text-align: center;">Required Level</th>
+                <th style="padding: 0.75rem; text-align: left;">Group</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for skill in required_skills %}
+            <tr style="border-bottom: 1px solid var(--table-border);">
+                <td style="padding: 0.75rem;">
+                    <a href="{% url 'core:sde_skill_detail' skill.type_id %}" style="font-weight: 500;">
+                        {{ skill.name }}
+                    </a>
+                </td>
+                <td style="padding: 0.75rem; text-align: center;">
+                    <span style="padding: 0.25rem 0.75rem; background: var(--bg-primary); border-radius: 4px; font-weight: bold;">
+                        {{ skill.required_level }}
+                    </span>
+                </td>
+                <td style="padding: 0.75rem; color: var(--text-secondary);">{{ skill.group }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if variants %}
+<div class="card">
+    <h2>Variants</h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">Other versions of this ship:</p>
+
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid var(--border-color);">
+                <th style="padding: 0.75rem; text-align: left;">Variant</th>
+                <th style="padding: 0.75rem; text-align: left;">Meta Group</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for variant in variants %}
+            <tr style="border-bottom: 1px solid var(--table-border);">
+                <td style="padding: 0.75rem;">
+                    <a href="{% url 'core:sde_ship_detail' variant.type_id %}" style="font-weight: 500;">
+                        {{ variant.name }}
+                    </a>
+                </td>
+                <td style="padding: 0.75rem;">
+                    <span style="padding: 0.25rem 0.75rem; background: var(--bg-primary); border-radius: 4px; border: 1px solid var(--border-color);">
+                        {{ variant.meta_group }}
+                    </span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if related_ships %}
+<div class="card">
+    <h2>Related Ships ({{ ship.group.group_name }})</h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">Other ships in the same class:</p>
+
+    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+        {% for rel_ship in related_ships %}
+        <a href="{% url 'core:sde_ship_detail' rel_ship.type_id %}"
+           style="padding: 0.5rem 1rem; background: var(--bg-primary); border-radius: 4px; border: 1px solid var(--border-color); text-decoration: none;">
+            {{ rel_ship.name }}
+        </a>
+        {% endfor %}
+    </div>
+
+    <div style="margin-top: 1rem;">
+        <a href="{% url 'core:sde_group_detail' ship.group_id %}" class="btn">View all {{ ship.group.group_name }}</a>
+    </div>
+</div>
+{% endif %}
+
+<div class="card">
+    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+        <a href="{% url 'core:sde_category_detail' 6 %}" class="btn">&larr; Back to Ships</a>
+        <a href="{% url 'core:sde_group_detail' ship.group_id %}" class="btn">View {{ ship.group.group_name }}</a>
+    </div>
+</div>
+{% endblock %}

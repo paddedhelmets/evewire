@@ -56,6 +56,46 @@
 </div>
 {% endif %}
 
+{% if parent_meta or variants_by_group %}
+<div class="card">
+    <h2>Variants</h2>
+
+    {% if parent_meta %}
+    <div style="margin-bottom: 1rem;">
+        <strong>Variant Of:</strong>
+        <a href="{% url 'core:sde_item_detail' parent_meta.type.type_id %}" style="margin-left: 0.5rem;">
+            {{ parent_meta.type.name }}
+        </a>
+        <span style="margin-left: 0.5rem; padding: 0.25rem 0.5rem; background: var(--bg-primary); border-radius: 4px; font-size: 0.9rem;">
+            {{ parent_meta.meta_group.meta_group_name }}
+        </span>
+    </div>
+    {% endif %}
+
+    {% if variants_by_group %}
+    <div>
+        <strong>This item has {{ variants_by_group|length }} variant group{{ variants_by_group|length|pluralize }}:</strong>
+        <div style="margin-top: 1rem;">
+            {% for group_name, variants in variants_by_group.items %}
+            <div style="margin-bottom: 1rem;">
+                <div style="font-weight: 600; margin-bottom: 0.5rem; color: var(--text-secondary);">
+                    {{ group_name }} ({{ variants|length }})
+                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                    {% for variant in variants %}
+                    <a href="{% url 'core:sde_item_detail' variant.type_id %}" style="padding: 0.25rem 0.75rem; background: var(--bg-primary); border-radius: 4px; border: 1px solid var(--border-color); text-decoration: none;">
+                        {{ variant.name }}
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
 {% if related %}
 <div class="card">
     <h2>Related Items ({{ item.group.group_name }})</h2>
