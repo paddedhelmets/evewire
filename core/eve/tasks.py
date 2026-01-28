@@ -486,7 +486,8 @@ def refresh_all_lp_stores() -> dict:
         # ESI returns 404 for corps without LP stores, 200 with empty array for those with no offers
         response = client.get_loyalty_store_offers(corporation_id)
 
-        if response and response.status_code == 200:
+        # ESIResponse stores status in meta.response.status_code
+        if response and response.meta.response.status_code == 200:
             # This corporation has an LP store (even if empty)
             queue_esi_refresh(
                 'core.eve.tasks.refresh_corporation_lp_store',
