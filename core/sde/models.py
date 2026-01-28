@@ -195,14 +195,15 @@ class DgmTypeAttributes(models.Model):
 
     Actual attribute values for each item type
     """
-    id = models.AutoField(primary_key=True)  # Added for Django compatibility
+    # Primary key: Django requires one, using the id column from the database
+    id = models.AutoField(primary_key=True, db_column='id')
     type = models.ForeignKey('InvTypes', on_delete=models.DO_NOTHING, db_column='typeID', related_name='attributes')
     attribute = models.ForeignKey('DgmAttributeTypes', on_delete=models.DO_NOTHING, db_column='attributeID', related_name='type_attributes')
     value_int = models.IntegerField(null=True, blank=True, db_column='valueInt')
     value_float = models.FloatField(null=True, blank=True, db_column='valueFloat')
 
     class Meta:
-        db_table = 'evesde_dgmatypeattributes'
+        db_table = 'evesde_dgmtypeattributes'
         managed = False
         verbose_name = 'Type Attribute'
         verbose_name_plural = 'Type Attributes'
@@ -841,7 +842,7 @@ class CertSkills(models.Model):
 
     Certificate skill requirements
     """
-    id = models.AutoField(primary_key=True)  # Django requires a PK, using auto-increment
+    id = models.AutoField(primary_key=True, db_column='id')  # Django requires a PK, using auto-increment
     cert = models.ForeignKey('CertCerts', on_delete=models.DO_NOTHING, db_column='certID', related_name='skill_requirements')
     skill = models.ForeignKey('InvTypes', on_delete=models.DO_NOTHING, db_column='skillID', related_name='certificate_requirements')
     cert_level_int = models.IntegerField(null=True, blank=True, db_column='certLevelInt')
@@ -861,7 +862,7 @@ class CertMasteries(models.Model):
 
     Certificate mastery levels
     """
-    id = models.AutoField(primary_key=True)  # Django requires a PK, using auto-increment
+    id = models.AutoField(primary_key=True, db_column='id')  # Django requires a PK, using auto-increment
     type = models.ForeignKey('InvTypes', on_delete=models.DO_NOTHING, db_column='typeID', related_name='mastery_certificates')
     mastery_level = models.IntegerField(null=True, blank=True, db_column='masteryLevel')
     cert = models.ForeignKey('CertCerts', on_delete=models.DO_NOTHING, db_column='certID', related_name='masteries')

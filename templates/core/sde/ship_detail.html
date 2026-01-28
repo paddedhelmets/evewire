@@ -241,14 +241,12 @@
         </div>
         {% endif %}
 
-        {% if fitting.capacitorCapacity is not None and fitting.rechargeRate is not None %}
-        {% with cap_regen=fitting.capacitorCapacity|divide:fitting.rechargeRate %}
+        {% if fitting.capacitorRegen is not None %}
         <div style="padding: 1rem; background: var(--bg-primary); border-radius: 4px; text-align: center;">
             <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 0.25rem;">Capacitor/s</div>
-            <div style="font-size: 1.5rem; font-weight: bold;">{{ cap_regen|floatformat:2 }}</div>
+            <div style="font-size: 1.5rem; font-weight: bold;">{{ fitting.capacitorRegen|floatformat:2 }}</div>
             <div style="color: var(--text-secondary); font-size: 0.85rem;">GJ/s</div>
         </div>
-        {% endwith %}
         {% endif %}
     </div>
 </div>

@@ -211,28 +211,26 @@ def sde_item_detail(request: HttpRequest, type_id: int) -> HttpResponse:
             'message': f'Item {type_id} not found',
         }, status=404)
 
-    # Get attributes for this item
-    attributes = DgmTypeAttributes.objects.filter(
-        type_id=type_id
-    ).select_related('attribute')
+    # Get attributes for this item using raw SQL (ORM has issues with this table)
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT ta.attributeID, at.attributeName, at.displayName, ta.valueInt, ta.valueFloat
+            FROM evesde_dgmtypeattributes ta
+            JOIN evesde_dgmattributetypes at ON ta.attributeID = at.attributeID
+            WHERE ta.typeID = %s
+            ORDER BY at.attributeName
+        """, [type_id])
+        attr_rows = cursor.fetchall()
 
     # Format attributes with their display names
     formatted_attributes = []
-    for attr in attributes:
-        value = attr.value_float if attr.value_float is not None else attr.value_int
-        try:
-            attr_info = attr.attribute_id
-            formatted_attributes.append({
-                'name': attr_info.display_name or attr_info.attribute_name,
-                'value': value,
-                'unit': '',  # TODO: Add unit mapping if desired
-            })
-        except DgmAttributeTypes.DoesNotExist:
-            formatted_attributes.append({
-                'name': f'Attribute {attr.attribute_id}',
-                'value': value,
-                'unit': '',
-            })
+    for attr_id, attr_name, display_name, val_int, val_float in attr_rows:
+        value = val_float if val_float is not None else val_int
+        formatted_attributes.append({
+            'name': display_name or attr_name,
+            'value': value,
+            'unit': '',  # TODO: Add unit mapping if desired
+        })
 
     # Get related items (same group, excluding self)
     related = InvTypes.objects.filter(
@@ -245,11 +243,14 @@ def sde_item_detail(request: HttpRequest, type_id: int) -> HttpResponse:
     variants_by_group = {}  # If this item is a parent, these are its variants
 
     # Check if this item is a variant (has InvMetaTypes pointing to it as type)
-    if item.meta_type and item.meta_type.parent_type:
-        parent_meta = {
-            'type': item.meta_type.parent_type,
-            'meta_group': item.meta_type.meta_group,
-        }
+    try:
+        if item.meta_type and item.meta_type.parent_type:
+            parent_meta = {
+                'type': item.meta_type.parent_type,
+                'meta_group': item.meta_type.meta_group,
+            }
+    except InvMetaTypes.DoesNotExist:
+        pass  # Item has no meta_type
 
     # Check if this item has variants (is a parent_type in InvMetaTypes)
     variants = InvMetaTypes.objects.filter(
@@ -371,7 +372,7 @@ def get_skill_prereqs_sql(skill_id: int):
     prereqs = []
     current_id = skill_id
     visited = set()
-    
+
     with connection.cursor() as cursor:
         while current_id and current_id not in visited:
             visited.add(current_id)
@@ -379,16 +380,16 @@ def get_skill_prereqs_sql(skill_id: int):
                 SELECT t.typeID, t.typeName, g.groupName, t.description
                 FROM evesde_invtypes t
                 LEFT JOIN evesde_invgroups g ON t.groupID = g.groupID
-                WHERE t.typeID = ?
+                WHERE t.typeID = %s
             """, [current_id])
             skill_row = cursor.fetchone()
-            
+
             if not skill_row:
                 break
-            
+
             cursor.execute("""
-                SELECT valueInt FROM evesde_dgmattypeattributes
-                WHERE typeID = ? AND attributeID = 182
+                SELECT valueInt FROM evesde_dgmtypeattributes
+                WHERE typeID = %s AND attributeID = 182
             """, [current_id])
             prereq_row = cursor.fetchone()
             
@@ -419,16 +420,18 @@ def get_ship_fitting(ship_id: int) -> dict:
         212, 214, 6,           # Tank
         20, 40, 516,           # Mobility
     ]
-    
+
     with connection.cursor() as cursor:
         attr_ids_str = ','.join(map(str, fitting_attr_ids))
-        cursor.execute(f"""
+        # Use %s placeholders and format the query directly
+        query = """
             SELECT ta.attributeID, at.attributeName, ta.valueInt, ta.valueFloat
-            FROM evesde_dgmattypeattributes ta
+            FROM evesde_dgmtypeattributes ta
             JOIN evesde_dgmattributetypes at ON ta.attributeID = at.attributeID
-            WHERE ta.typeID = ? AND ta.attributeID IN ({attr_ids_str})
+            WHERE ta.typeID = %s AND ta.attributeID IN (%s)
             ORDER BY ta.attributeID
-        """, [ship_id])
+        """ % (ship_id, attr_ids_str)
+        cursor.execute(query)
         
         # Map to friendly names (correcting for SDE mislabeling)
         attr_map = {
@@ -567,7 +570,7 @@ def _get_module_attributes(type_id: int) -> dict:
         for name, attr_id in fitting_queries:
             cursor.execute("""
                 SELECT valueInt, valueFloat
-                FROM evesde_dgmattypeattributes
+                FROM evesde_dgmtypeattributes
                 WHERE typeID = ? AND attributeID = ?
             """, [type_id, attr_id])
             row = cursor.fetchone()
@@ -591,7 +594,7 @@ def _get_module_attributes(type_id: int) -> dict:
         for name, attr_id in combat_queries:
             cursor.execute("""
                 SELECT valueInt, valueFloat
-                FROM evesde_dgmattypeattributes
+                FROM evesde_dgmtypeattributes
                 WHERE typeID = ? AND attributeID = ?
             """, [type_id, attr_id])
             row = cursor.fetchone()
@@ -827,6 +830,13 @@ def sde_ship_detail(request: HttpRequest, ship_id: int) -> HttpResponse:
     # Get fitting attributes
     fitting = get_ship_fitting(ship_id)
 
+    # Calculate capacitor regeneration rate (capacity / rechargeRate * 5)
+    # EVE formula: (capacity / rechargeRate) * 5 = GJ/s
+    if fitting.get('capacitorCapacity') and fitting.get('rechargeRate'):
+        fitting['capacitorRegen'] = fitting['capacitorCapacity'] / fitting['rechargeRate'] * 5
+    else:
+        fitting['capacitorRegen'] = None
+
     # Get mastery certificate data
     mastery_data = get_ship_mastery_data(ship_id)
 
@@ -839,12 +849,12 @@ def sde_ship_detail(request: HttpRequest, ship_id: int) -> HttpResponse:
 
         cursor.execute("""
             SELECT ta.attributeID, ta.valueInt, t.typeName, t.typeID, g.groupName
-            FROM evesde_dgmattypeattributes ta
+            FROM evesde_dgmtypeattributes ta
             JOIN evesde_invtypes t ON ta.valueInt = t.typeID
             JOIN evesde_invgroups g ON t.groupID = g.groupID
-            WHERE ta.typeID = ? AND ta.attributeID IN (""" + placeholders + """)
+            WHERE ta.typeID = %s AND ta.attributeID IN (%s)
             ORDER BY ta.attributeID
-        """, [ship_id])
+        """ % (ship_id, placeholders))
 
         skill_attr_map = {
             182: 1, 183: 2, 184: 3, 277: 4, 278: 5, 279: 6,
@@ -1955,9 +1965,9 @@ def sde_skills_directory(request: HttpRequest) -> HttpResponse:
                     COALESCE(ta3.valueInt, 1) as skillRank
                 FROM evesde_invtypes t
                 JOIN evesde_invgroups g ON t.groupID = g.groupID
-                LEFT JOIN evesde_dgmattypeattributes ta1 ON t.typeID = ta1.typeID AND ta1.attributeID = 180
-                LEFT JOIN evesde_dgmattypeattributes ta2 ON t.typeID = ta2.typeID AND ta2.attributeID = 181
-                LEFT JOIN evesde_dgmattypeattributes ta3 ON t.typeID = ta3.typeID AND ta3.attributeID = 275
+                LEFT JOIN evesde_dgmtypeattributes ta1 ON t.typeID = ta1.typeID AND ta1.attributeID = 180
+                LEFT JOIN evesde_dgmtypeattributes ta2 ON t.typeID = ta2.typeID AND ta2.attributeID = 181
+                LEFT JOIN evesde_dgmtypeattributes ta3 ON t.typeID = ta3.typeID AND ta3.attributeID = 275
                 WHERE g.categoryID = 16 AND t.published = 1
             """
             params = []
@@ -2299,11 +2309,11 @@ def sde_ship_fittings(request: HttpRequest, ship_id: int) -> HttpResponse:
                 JOIN evesde_invgroups g ON t.groupID = g.groupID
                 JOIN evesde_invcategories c ON g.categoryID = c.categoryID
                 LEFT JOIN evesde_invmetatypes mt ON t.typeID = mt.typeID
-                LEFT JOIN evesde_dgmattypeattributes ta_cpu ON t.typeID = ta_cpu.typeID AND ta_cpu.attributeID = 50
-                LEFT JOIN evesde_dgmattypeattributes ta_pg ON t.typeID = ta_pg.typeID AND ta_pg.attributeID = 11
-                LEFT JOIN evesde_dgmattypeattributes ta_cap ON t.typeID = ta_cap.typeID AND ta_cap.attributeID = 856
-                LEFT JOIN evesde_dgmattypeattributes ta_cal ON t.typeID = ta_cal.typeID AND ta_cal.attributeID = 1132
-                LEFT JOIN evesde_dgmattypeattributes ta_slot ON t.typeID = ta_slot.typeID AND ta_slot.attributeID IN (12, 13, 14, 970)
+                LEFT JOIN evesde_dgmtypeattributes ta_cpu ON t.typeID = ta_cpu.typeID AND ta_cpu.attributeID = 50
+                LEFT JOIN evesde_dgmtypeattributes ta_pg ON t.typeID = ta_pg.typeID AND ta_pg.attributeID = 11
+                LEFT JOIN evesde_dgmtypeattributes ta_cap ON t.typeID = ta_cap.typeID AND ta_cap.attributeID = 856
+                LEFT JOIN evesde_dgmtypeattributes ta_cal ON t.typeID = ta_cal.typeID AND ta_cal.attributeID = 1132
+                LEFT JOIN evesde_dgmtypeattributes ta_slot ON t.typeID = ta_slot.typeID AND ta_slot.attributeID IN (12, 13, 14, 970)
                 WHERE c.categoryID IN (7, 8, 32)
                     AND t.published = 1
             """
