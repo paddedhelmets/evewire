@@ -981,8 +981,11 @@ def fitting_readiness_browser(request: HttpRequest, fitting_id: int) -> HttpResp
 
     Shows all hulls of this ship type across all characters with their
     readiness status in a proper asset tree structure.
+
+    Matches are calculated JIT (just-in-time) rather than cached.
     """
-    from core.doctrines.models import Fitting, FittingMatch
+    from core.doctrines.models import Fitting
+    from core.doctrines.services import AssetFitExtractor
     from core.character.models import CharacterAsset
     from core.models import Character
     from core.eve.models import ItemType, Station, SolarSystem
@@ -998,20 +1001,19 @@ def fitting_readiness_browser(request: HttpRequest, fitting_id: int) -> HttpResp
     # Get all user's characters
     characters = list(request.user.characters.all())
 
-    # Get fitting requirements
+    # Get fitting requirements (module type IDs)
     fitting_modules = set()
     for entry in fitting.entries.all():
         fitting_modules.add(entry.module_type_id)
 
-    # Load all matches for this fitting across all characters
-    all_matches = FittingMatch.objects.filter(
-        character__in=characters,
-        fitting=fitting
-    )
-    asset_match_map = {match.asset_id: match for match in all_matches}
+    # Extract all fitted ships for all characters (JIT)
+    extractor = AssetFitExtractor()
+    all_fitted_ships = {}
+    for character in characters:
+        ships = extractor.extract_ships(character)
+        all_fitted_ships.update({ship.asset_id: ship for ship in ships})
 
     # Build tree structure: character -> root_location -> location_tree
-    # location_tree contains nested dicts with assets at the leaves
     location_trees = defaultdict(lambda: defaultdict(list))
 
     # Get ALL assets of this ship type
@@ -1023,29 +1025,21 @@ def fitting_readiness_browser(request: HttpRequest, fitting_id: int) -> HttpResp
     # Group by character and build location chain for each ship
     for asset in ship_assets:
         char = asset.character
-        location_path = []
-        location_info = {'type': asset.location_type, 'id': asset.location_id}
 
         # Walk up the parent chain to build the full location path
-        # For ships in ship maintenance bay: Station -> Capital Ship -> Ship Maintenance Bay -> Sabre
         current = asset
         path_assets = []
-
         while current is not None:
             path_assets.append(current)
             current = current.parent
-
-        # Reverse to get top-down: Station -> Capital -> Sabre
         path_assets.reverse()
 
         # Build location path for display
         location_path = []
-        for i, path_asset in enumerate(path_assets[:-1]):  # All except the Sabre itself
+        for path_asset in path_assets[:-1]:  # All except the ship itself
             if path_asset.location_type == 'item':
-                # This is a ship/container
                 location_path.append(f"{path_asset.type_name}")
             else:
-                # This is a station/structure
                 try:
                     if path_asset.location_type == 'station':
                         loc = Station.objects.get(id=path_asset.location_id)
@@ -1060,18 +1054,20 @@ def fitting_readiness_browser(request: HttpRequest, fitting_id: int) -> HttpResp
 
         location_key = tuple(location_path) if location_path else ("Unknown",)
 
-        # Calculate readiness for this ship
-        match = asset_match_map.get(asset.item_id)
+        # Calculate readiness JIT
         if asset.is_singleton:
-            if match and match.match_score >= 1.0:
-                readiness = 'ready'
-                readiness_percent = 100
-                missing_modules = []
-            elif match and match.match_score > 0:
-                readiness = 'partial'
-                readiness_percent = int(match.match_score * 100)
-                missing_modules = match.missing_modules or []
+            fitted_ship = all_fitted_ships.get(asset.item_id)
+            if fitted_ship:
+                fitted_modules = fitted_ship.get_fitted_modules()
+                missing_modules = list(fitting_modules - fitted_modules)
+                if not missing_modules:
+                    readiness = 'ready'
+                    readiness_percent = 100
+                else:
+                    readiness = 'partial'
+                    readiness_percent = int((len(fitting_modules) - len(missing_modules)) / len(fitting_modules) * 100)
             else:
+                # Assembled ship but couldn't extract fit (empty or error)
                 readiness = 'empty'
                 readiness_percent = 0
                 missing_modules = list(fitting_modules)
@@ -1080,14 +1076,12 @@ def fitting_readiness_browser(request: HttpRequest, fitting_id: int) -> HttpResp
             readiness_percent = 0
             missing_modules = list(fitting_modules)
 
-        # Add to tree
         location_trees[char][location_key].append({
             'asset': asset,
             'readiness': readiness,
             'readiness_percent': readiness_percent,
             'missing_modules': missing_modules,
-            'match': match,
-            'path_assets': path_assets,  # Full parent chain
+            'path_assets': path_assets,
         })
 
     # Sort location keys for display
@@ -1148,14 +1142,31 @@ def fitting_readiness_browser(request: HttpRequest, fitting_id: int) -> HttpResp
                 type_id__in=module_type_ids
             ).select_related('character').order_by('character__character_name', 'type_id')
 
+    # Calculate summary stats from JIT data
+    ready_count = 0
+    partial_count = 0
+    zero_count = 0
+    packaged_count = 0
+
+    for ship_list in all_ships:
+        for ship_info in ship_list['ships']:
+            if ship_info['readiness'] == 'ready':
+                ready_count += 1
+            elif ship_info['readiness'] == 'partial':
+                partial_count += 1
+            elif ship_info['readiness'] == 'empty':
+                zero_count += 1
+            elif ship_info['readiness'] == 'packaged':
+                packaged_count += 1
+
     return render(request, 'core/fitting_readiness_browser.html', {
         'fitting': fitting,
         'location_trees': all_ships,
         'total_assets': ship_assets.count(),
-        'ready_count': sum(1 for s in ship_assets if asset_match_map.get(s.item_id) and asset_match_map.get(s.item_id).match_score >= 1.0),
-        'partial_count': sum(1 for s in ship_assets if asset_match_map.get(s.item_id) and 0 < asset_match_map.get(s.item_id).match_score < 1.0),
-        'zero_count': sum(1 for s in ship_assets if s.is_singleton and (not asset_match_map.get(s.item_id) or asset_match_map.get(s.item_id).match_score == 0)),
-        'packaged_count': sum(1 for s in ship_assets if not s.is_singleton),
+        'ready_count': ready_count,
+        'partial_count': partial_count,
+        'zero_count': zero_count,
+        'packaged_count': packaged_count,
         'shopping_list_text': shopping_list_text,
         'owned_assets': owned_assets,
     })
