@@ -240,14 +240,24 @@ def _sync_character_metadata(character_id: int) -> bool:
     """
     from core.models import Character
     from core.services import (
-        _sync_location, _sync_wallet, _sync_orders,
-        _sync_orders_history, _sync_industry_jobs, _sync_contracts
+        ESIClient, _sync_location, _sync_wallet, _sync_orders,
+        _sync_orders_history, _sync_industry_jobs, _sync_contracts,
+        update_character_corporation_info
     )
     from requests.exceptions import HTTPError
 
     try:
         character = Character.objects.get(id=character_id)
         logger.info(f'Syncing metadata for character {character_id}')
+
+        # Fetch basic character info (includes corporation_id)
+        char_info_response = ESIClient.get_character_info(character_id)
+        char_info = char_info_response.data
+        character.corporation_id = char_info.get('corporation_id')
+        character.save(update_fields=['corporation_id'])
+
+        # Update corporation/alliance names
+        update_character_corporation_info(character)
 
         # Location might fail with 401 if scope not granted
         try:
