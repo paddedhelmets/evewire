@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}{{ group.group_name }} - SDE Browser{% endblock %}
+
+{% block content %}
+<div class="card">
+    <nav style="margin-bottom: 1rem; font-size: 0.9rem;">
+        <a href="{% url 'core:sde_index' %}">SDE</a> &gt;
+        <a href="{% url 'core:sde_category_detail' group.category_id %}">{{ group.category.category_name }}</a> &gt;
+        <strong>{{ group.group_name }}</strong>
+    </nav>
+
+    <h1>{{ group.group_name }}</h1>
+    {% if group.description %}
+    <p style="color: var(--text-secondary); margin-top: 0.5rem;">{{ group.description }}</p>
+    {% endif %}
+
+    <div style="margin-top: 1rem; display: flex; gap: 2rem; flex-wrap: wrap;">
+        <div><strong>Group ID:</strong> {{ group.group_id }}</div>
+        <div><strong>Category:</strong> <a href="{% url 'core:sde_category_detail' group.category_id %}">{{ group.category.category_name }}</a></div>
+        <div><strong>Items:</strong> {{ items.paginator.count }}</div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Items in {{ group.group_name }}</h2>
+    {% if items %}
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 2px solid var(--border-color);">
+                    <th style="padding: 0.75rem; text-align: left;">Name</th>
+                    <th style="padding: 0.75rem; text-align: center;">Published</th>
+                    <th style="padding: 0.75rem; text-align: right;">Volume</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr style="border-bottom: 1px solid var(--table-border);">
+                    <td style="padding: 0.75rem;">
+                        <a href="{% url 'core:sde_item_detail' item.type_id %}">{{ item.name }}</a>
+                    </td>
+                    <td style="padding: 0.75rem; text-align: center;">
+                        {% if item.published %}<span style="color: var(--alert-success-text);">✓</span>{% else %}<span style="color: var(--text-secondary);">—</span>{% endif %}
+                    </td>
+                    <td style="padding: 0.75rem; text-align: right; font-family: monospace;">{{ item.volume }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% if items.has_other_pages %}
+        <div style="margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: center;">
+            {% if items.has_previous %}
+                <a href="?page={{ items.previous_page_number }}" class="btn">Previous</a>
+            {% endif %}
+            <span style="padding: 0.5rem 1rem;">Page {{ items.number }} of {{ items.paginator.num_pages }}</span>
+            {% if items.has_next %}
+                <a href="?page={{ items.next_page_number }}" class="btn">Next</a>
+            {% endif %}
+        </div>
+        {% endif %}
+    {% else %}
+        <p>No items found in this group.</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <a href="{% url 'core:sde_category_detail' group.category_id %}" class="btn">&larr; Back to {{ group.category.category_name }}</a>
+</div>
+{% endblock %}

@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}{{ system.solar_system_name }} - SDE Browser{% endblock %}
+
+{% block content %}
+<div class="card">
+    <nav style="margin-bottom: 1rem; font-size: 0.9rem;">
+        <a href="{% url 'core:sde_index' %}">SDE</a> &gt;
+        <a href="{% url 'core:sde_region_detail' system.region_id %}">{{ system.region.region_name }}</a> &gt;
+        <strong>{{ system.solar_system_name }}</strong>
+    </nav>
+
+    <h1>{{ system.solar_system_name }}</h1>
+
+    <div style="margin-top: 1rem; display: flex; gap: 2rem; flex-wrap: wrap;">
+        <div><strong>System ID:</strong> {{ system.system_id }}</div>
+        <div><strong>Security:</strong>
+            {% if system.security >= 0.45 %}
+                <span style="color: #2ecc71;">{{ system.security|floatformat:2 }}</span> (Highsec)
+            {% elif system.security >= 0.05 %}
+                <span style="color: #f39c12;">{{ system.security|floatformat:2 }}</span> (Lowsec)
+            {% elif system.security > 0 %}
+                <span style="color: #e74c3c;">{{ system.security|floatformat:2 }}</span> (Nullsec)
+            {% else %}
+                <span style="color: #9b59b6;">{{ system.security|floatformat:2 }}</span> (Wormhole)
+            {% endif %}
+        </div>
+        <div><strong>Constellation:</strong> {{ system.constellation.constellation_name }}</div>
+        <div><strong>Region:</strong> <a href="{% url 'core:sde_region_detail' system.region_id %}">{{ system.region.region_name }}</a></div>
+        {% if system.faction %}
+        <div><strong>Faction:</strong> {{ system.faction.faction_name }}</div>
+        {% endif %}
+        {% if system.x %}
+        <div><strong>Coordinates:</strong> X: {{ system.x|floatformat:0 }}, Y: {{ system.y|floatformat:0 }}, Z: {{ system.z|floatformat:0 }}</div>
+        {% endif %}
+    </div>
+</div>
+
+{% if stations %}
+<div class="card">
+    <h2>Stations ({{ stations|length }} shown, max 20)</h2>
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid var(--border-color);">
+                <th style="padding: 0.75rem; text-align: left;">Station Name</th>
+                <th style="padding: 0.75rem; text-align: right;">ID</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for station in stations %}
+            <tr style="border-bottom: 1px solid var(--table-border);">
+                <td style="padding: 0.75rem;">{{ station.station_name }}</td>
+                <td style="padding: 0.75rem; text-align: right; font-family: monospace;">{{ station.station_id }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<div class="card">
+    <a href="{% url 'core:sde_region_detail' system.region_id %}" class="btn">&larr; Back to {{ system.region.region_name }}</a>
+</div>
+{% endblock %}

@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}Variants: {{ base.name }} - SDE Browser{% endblock %}
+
+{% block content %}
+<div class="card">
+    <nav style="margin-bottom: 1rem; font-size: 0.9rem;">
+        <a href="{% url 'core:sde_index' %}">SDE</a> &gt;
+        <a href="{% url 'core:sde_item_detail' base.type_id %}">{{ base.name }}</a> &gt;
+        <strong>Variants</strong>
+    </nav>
+
+    <h1>{{ base.name }} - Variant Comparison</h1>
+    {% if base.description %}
+    <p style="color: var(--text-secondary); margin-top: 0.5rem;">{{ base.description }}</p>
+    {% endif %}
+
+    <div style="margin-top: 1rem;">
+        <strong>Base Item:</strong> {{ base.name }} (ID: {{ base.type_id }})
+        <span style="margin-left: 1rem;"><strong>Total Variants:</strong> {{ total_variants }}</span>
+    </div>
+</div>
+
+{% if tiers %}
+<div class="card">
+    <h2>Variant Tiers</h2>
+
+    {% for tier_name, tier_variants in tiers.items %}
+    <div style="margin-bottom: 2rem;">
+        <h3 style="color: var(--link-color); margin-bottom: 0.5rem;">
+            {{ tier_name }}
+            <span style="color: var(--text-secondary); font-size: 0.9rem;">({{ tier_variants|length }} variants)</span>
+        </h3>
+
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 2px solid var(--border-color);">
+                    <th style="padding: 0.75rem; text-align: left;">Variant Name</th>
+                    <th style="padding: 0.75rem; text-align: right;">Meta Level</th>
+                    <th style="padding: 0.75rem; text-align: center;">Published</th>
+                    <th style="padding: 0.75rem; text-align: right;">Volume</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for variant_data in tier_variants %}
+                {% with item=variant_data.item meta=variant_data.variant %}
+                <tr style="border-bottom: 1px solid var(--table-border);">
+                    <td style="padding: 0.75rem;">
+                        <a href="{% url 'core:sde_item_detail' item.type_id %}">{{ item.name }}</a>
+                    </td>
+                    <td style="padding: 0.75rem; text-align: right;">
+                        {% if meta.meta_group_id == 1 %}Tech I{% elif meta.meta_group_id == 2 %}Tech II{% elif meta.meta_group_id == 3 %}Storyline{% elif meta.meta_group_id == 4 %}Faction{% elif meta.meta_group_id == 5 %}Officer{% elif meta.meta_group_id == 6 %}Deadspace{% elif meta.meta_group_id == 14 %}Tech III{% endif %}
+                        ({{ meta.meta_group_id }})
+                    </td>
+                    <td style="padding: 0.75rem; text-align: center;">
+                        {% if item.published %}
+                        <span style="color: var(--alert-success-text);">✓</span>
+                        {% else %}
+                        <span style="color: var(--text-secondary);">—</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 0.75rem; text-align: right; font-family: monospace;">{{ item.volume }}</td>
+                </tr>
+                {% endwith %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card">
+    <p>No variants found for this item. Either this item has no variants, or it is itself a variant with no parent set.</p>
+
+    <div style="margin-top: 1rem;">
+        <h3>Note:</h3>
+        <p>Items that are variants (Tech II, Faction, etc.) have this item as their parent.
+        Base Tech I items typically have the most variants attached to them.</p>
+    </div>
+</div>
+{% endif %}
+
+<div class="card">
+    <h3>Base Item Attributes</h3>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">Key attributes for {{ base.name }} (for comparison):</p>
+
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid var(--border-color);">
+                <th style="padding: 0.75rem; text-align: left;">Attribute</th>
+                <th style="padding: 0.75rem; text-align: right;">Value</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for attr_name, attr_value in base_attributes.items %}
+            <tr style="border-bottom: 1px solid var(--table-border);">
+                <td style="padding: 0.5rem;">{{ attr_name|title:"attribute_name" }}</td>
+                <td style="padding: 0.5rem; text-align: right; font-family: monospace;">
+                    {% if attr_value >= 1000 or attr_value <= -1000 %}{{ attr_value|floatformat:2 }}{% else %}{{ attr_value }}{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="card">
+    <a href="{% url 'core:sde_item_detail' base.type_id %}" class="btn">&larr; Back to {{ base.name }}</a>
+</div>
+{% endblock %}

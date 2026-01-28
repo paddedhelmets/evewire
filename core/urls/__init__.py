@@ -142,6 +142,8 @@ urlpatterns = [
     path('sde/group/<int:group_id>/', sde_views.sde_group_detail, name='sde_group_detail'),
     path('sde/system/<int:system_id>/', sde_views.sde_system_detail, name='sde_system_detail'),
     path('sde/region/<int:region_id>/', sde_views.sde_region_detail, name='sde_region_detail'),
+    path('sde/skill/<int:skill_id>/', sde_views.sde_skill_detail, name='sde_skill_detail'),
+    path('sde/variants/<int:type_id>/', sde_views.sde_variant_comparison, name='sde_variant_comparison'),
 
     # API endpoints
     path('api/assets/locations/', api.api_asset_locations, name='api_asset_locations'),

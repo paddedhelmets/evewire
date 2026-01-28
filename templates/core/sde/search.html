@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}Search: {{ query }} - SDE Browser{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>SDE Search</h1>
+    <form action="{% url 'core:sde_search' %}" method="get" style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+        <input type="text" name="q" value="{{ query }}" placeholder="Search items..." style="padding: 0.5rem; min-width: 300px; flex-grow: 1;" required>
+        <button type="submit" class="btn">Search</button>
+        <a href="{% url 'core:sde_index' %}" class="btn" style="background: var(--text-secondary);">Clear</a>
+    </form>
+</div>
+
+{% if query %}
+<div class="card">
+    <h2>Results for "{{ query }}"</h2>
+    {% if results %}
+        <p><strong>{{ total_count }}</strong> items found</p>
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 2px solid var(--border-color);">
+                    <th style="padding: 0.75rem; text-align: left;">Name</th>
+                    <th style="padding: 0.75rem; text-align: left;">Group</th>
+                    <th style="padding: 0.75rem; text-align: left;">Category</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in results %}
+                <tr style="border-bottom: 1px solid var(--table-border);">
+                    <td style="padding: 0.75rem;">
+                        <a href="{% url 'core:sde_item_detail' item.type_id %}">{{ item.name }}</a>
+                        {% if not item.published %}<span style="color: var(--text-secondary); font-size: 0.85rem;"> (unpublished)</span>{% endif %}
+                    </td>
+                    <td style="padding: 0.75rem;"><a href="{% url 'core:sde_group_detail' item.group_id %}">{{ item.group.group_name }}</a></td>
+                    <td style="padding: 0.75rem;"><a href="{% url 'core:sde_category_detail' item.group.category_id %}">{{ item.group.category.category_name }}</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% if results.has_other_pages %}
+        <div style="margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: center;">
+            {% if results.has_previous %}
+                <a href="?q={{ query }}&page={{ results.previous_page_number }}" class="btn">Previous</a>
+            {% endif %}
+            <span style="padding: 0.5rem 1rem;">Page {{ results.number }} of {{ results.paginator.num_pages }}</span>
+            {% if results.has_next %}
+                <a href="?q={{ query }}&page={{ results.next_page_number }}" class="btn">Next</a>
+            {% endif %}
+        </div>
+        {% endif %}
+    {% else %}
+        <p>No results found. Try a different search term.</p>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

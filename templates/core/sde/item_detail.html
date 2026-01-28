@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}{{ item.name }} - SDE Browser{% endblock %}
+
+{% block content %}
+<div class="card">
+    <nav style="margin-bottom: 1rem; font-size: 0.9rem;">
+        <a href="{% url 'core:sde_index' %}">SDE</a> &gt;
+        <a href="{% url 'core:sde_category_detail' item.group.category_id %}">{{ item.group.category.category_name }}</a> &gt;
+        <a href="{% url 'core:sde_group_detail' item.group_id %}">{{ item.group.group_name }}</a> &gt;
+        <strong>{{ item.name }}</strong>
+    </nav>
+
+    <h1>{{ item.name }}</h1>
+    {% if item.description %}
+    <p style="color: var(--text-secondary); margin-top: 0.5rem;">{{ item.description }}</p>
+    {% endif %}
+
+    <div style="margin-top: 1rem; display: flex; gap: 2rem; flex-wrap: wrap;">
+        <div><strong>Type ID:</strong> {{ item.type_id }}</div>
+        <div><strong>Group:</strong> <a href="{% url 'core:sde_group_detail' item.group_id %}">{{ item.group.group_name }}</a></div>
+        <div><strong>Category:</strong> <a href="{% url 'core:sde_category_detail' item.group.category_id %}">{{ item.group.category.category_name }}</a></div>
+        {% if item.market_group_id %}
+        <div><strong>Market Group:</strong> <a href="#">{{ item.market_group.market_group_name }}</a></div>
+        {% endif %}
+        <div><strong>Volume:</strong> {{ item.volume }} m³</div>
+        {% if item.published %}
+        <div><strong>Published:</strong> <span style="color: var(--alert-success-text);">Yes</span></div>
+        {% else %}
+        <div><strong>Published:</strong> <span style="color: var(--alert-error-text);">No</span></div>
+        {% endif %}
+    </div>
+</div>
+
+{% if attributes %}
+<div class="card">
+    <h2>Attributes</h2>
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid var(--border-color);">
+                <th style="padding: 0.75rem; text-align: left;">Attribute</th>
+                <th style="padding: 0.75rem; text-align: right;">Value</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for attr in attributes %}
+            <tr style="border-bottom: 1px solid var(--table-border);">
+                <td style="padding: 0.5rem;">{{ attr.name }}</td>
+                <td style="padding: 0.5rem; text-align: right; font-family: monospace;">
+                    {% if attr.value >= 1000 or attr.value <= -1000 %}{{ attr.value|floatformat:2 }}{% else %}{{ attr.value }}{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if related %}
+<div class="card">
+    <h2>Related Items ({{ item.group.group_name }})</h2>
+    <p style="margin-bottom: 1rem;">Other items in the same group:</p>
+    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+        {% for rel in related %}
+        <a href="{% url 'core:sde_item_detail' rel.type_id %}" style="padding: 0.25rem 0.75rem; background: var(--bg-primary); border-radius: 4px; border: 1px solid var(--border-color); text-decoration: none;">
+            {{ rel.name }}
+        </a>
+        {% endfor %}
+    </div>
+    <div style="margin-top: 1rem;">
+        <a href="{% url 'core:sde_group_detail' item.group_id %}" class="btn">View all {{ item.group.group_name }}</a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

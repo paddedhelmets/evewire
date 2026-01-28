@@ -135,6 +135,7 @@
                     <a href="{% url 'core:market_orders' %}" class="tab {% if request.resolver_match.url_name == 'market_orders' or request.resolver_match.url_name == 'market_orders_history' %}active{% endif %}">Orders</a>
                     <a href="{% url 'core:trade_overview' %}" class="tab {% if request.resolver_match.url_name == 'trade_overview' or request.resolver_match.url_name == 'character_trade_overview' or request.resolver_match.url_name == 'trade_item_detail' or request.resolver_match.url_name == 'character_trade_item_detail' or request.resolver_match.url_name == 'campaign_list' or request.resolver_match.url_name == 'campaign_create' or request.resolver_match.url_name == 'campaign_detail' or request.resolver_match.url_name == 'campaign_edit' %}active{% endif %}">Trade</a>
                     <a href="{% url 'core:industry_summary' %}" class="tab {% if request.resolver_match.url_name == 'industry_summary' or request.resolver_match.url_name == 'industry_jobs_list' %}active{% endif %}">Industry</a>
+                    <a href="{% url 'core:sde_index' %}" class="tab {% if request.resolver_match.url_name|slice_start:4 == 'sde_' %}active{% endif %}">SDE Browser</a>
                 </div>
             </div>
         </div>

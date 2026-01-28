@@ -1006,7 +1006,9 @@ class InvControlTowerResources(models.Model):
 
     POS fuel and resource requirements
     """
-    control_tower_type_id = models.IntegerField(db_column='controlTowerTypeID')
+    # Composite key workaround: use controlTowerTypeID as primary key
+    # This allows queries but note that multiple rows may have the same PK
+    control_tower_type_id = models.IntegerField(primary_key=True, db_column='controlTowerTypeID')
     resource_type_id = models.IntegerField(db_column='resourceTypeID')
     purpose = models.IntegerField(null=True, blank=True, db_column='purpose')
     quantity = models.IntegerField(null=True, blank=True, db_column='quantity')

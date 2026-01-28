@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+
+{% block title %}{{ skill.name }} - SDE Browser{% endblock %}
+
+{% block content %}
+<div class="card">
+    <nav style="margin-bottom: 1rem; font-size: 0.9rem;">
+        <a href="{% url 'core:sde_index' %}">SDE</a> &gt;
+        <a href="{% url 'core:sde_category_detail' skill.group.category_id %}">{{ skill.group.category.category_name }}</a> &gt;
+        <strong>{{ skill.name }}</strong>
+    </nav>
+
+    <h1>{{ skill.name }}</h1>
+    {% if skill.description %}
+    <p style="color: var(--text-secondary); margin-top: 0.5rem;">{{ skill.description }}</p>
+    {% endif %}
+
+    <div style="margin-top: 1rem; display: flex; gap: 2rem; flex-wrap: wrap;">
+        <div><strong>Skill ID:</strong> {{ skill.type_id }}</div>
+        <div><strong>Group:</strong> <a href="#">{{ skill.group.group_name }}</a></div>
+        <div><strong>Base Price:</strong> {{ skill.base_price|default:"N/A" }} ISK</div>
+    </div>
+</div>
+
+{% if prerequisites %}
+<div class="card">
+    <h2>Prerequisites ({{ total_prereqs }} skills)</h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">Required to train this skill:</p>
+
+    <div class="prereq-tree">
+        {% for prereq in prerequisites %}
+        <div style="margin-left: {{ forloop.counter0 }}rem; padding: 0.25rem 0;">
+            {% if forloop.last %}
+            <strong>{{ prereq.name }}</strong> <span style="color: var(--text-secondary); font-size: 0.9rem;">({{ prereq.group }})</span>
+            {% else %}
+            <a href="{% url 'core:sde_skill_detail' prereq.type_id %}">{{ prereq.name }}</a>
+            <span style="color: var(--text-secondary); font-size: 0.9rem;">→</span>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% if required_by %}
+<div class="card">
+    <h2>Required By ({{ total_unlocks }} skills)</h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">Skills that require this skill as a prerequisite:</p>
+
+    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+        {% for item in required_by %}
+        <a href="{% url 'core:sde_skill_detail' item.skill.type_id %}"
+           style="padding: 0.25rem 0.75rem; background: var(--bg-primary); border-radius: 4px; border: 1px solid var(--border-color); text-decoration: none;">
+            {{ item.skill.name }}
+            <span style="color: var(--text-secondary); font-size: 0.85rem;">({{ item.group }})</span>
+        </a>
+        {% endfor %}
+    </div>
+
+    {% if total_unlocks > 50 %}
+    <p style="margin-top: 1rem; color: var(--text-secondary); font-size: 0.9rem;">
+        Showing 50 of {{ total_unlocks }} skills that require this skill.
+    </p>
+    {% endif %}
+</div>
+{% endif %}
+
+{% if certificates %}
+<div class="card">
+    <h2>Certificates ({{ total_certs }})</h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">Certificates that require this skill:</p>
+
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid var(--border-color);">
+                <th style="padding: 0.75rem; text-align: left;">Certificate</th>
+                <th style="padding: 0.75rem; text-align: center;">Required Level</th>
+                <th style="padding: 0.75rem; text-align: center;">Cert Level</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for cert in certificates %}
+            <tr style="border-bottom: 1px solid var(--table-border);">
+                <td style="padding: 0.75rem;">{{ cert.certificate.name }}</td>
+                <td style="padding: 0.75rem; text-align: center;">{{ cert.required_level }}</td>
+                <td style="padding: 0.75rem; text-align: center;">{{ cert.cert_level_text }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if attributes %}
+<div class="card">
+    <h2>Skill Attributes</h2>
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid var(--border-color);">
+                <th style="padding: 0.75rem; text-align: left;">Attribute</th>
+                <th style="padding: 0.75rem; text-align: right;">Value</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for attr_name, attr_value in attributes.items %}
+            <tr style="border-bottom: 1px solid var(--table-border);">
+                <td style="padding: 0.5rem;">{{ attr_name|title:"attribute_name" }}</td>
+                <td style="padding: 0.5rem; text-align: right; font-family: monospace;">{{ attr_value }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<div class="card">
+    <a href="{% url 'core:sde_category_detail' skill.group.category_id %}" class="btn">&larr; Back to {{ skill.group.category.category_name }}</a>
+</div>
+{% endblock %}

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}{{ category.category_name }} - SDE Browser{% endblock %}
+
+{% block content %}
+<div class="card">
+    <nav style="margin-bottom: 1rem; font-size: 0.9rem;">
+        <a href="{% url 'core:sde_index' %}">SDE</a> &gt;
+        <strong>{{ category.category_name }}</strong>
+    </nav>
+
+    <h1>{{ category.category_name }}</h1>
+    {% if category.description %}
+    <p style="color: var(--text-secondary); margin-top: 0.5rem;">{{ category.description }}</p>
+    {% endif %}
+
+    <div style="margin-top: 1rem;">
+        <strong>Category ID:</strong> {{ category.category_id }}
+    </div>
+</div>
+
+<div class="card">
+    <h2>Groups in this Category ({{ groups|length }})</h2>
+    {% if groups %}
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 2px solid var(--border-color);">
+                    <th style="padding: 0.75rem; text-align: left;">Group Name</th>
+                    <th style="padding: 0.75rem; text-align: right;">Items</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for group in groups %}
+                <tr style="border-bottom: 1px solid var(--table-border);">
+                    <td style="padding: 0.75rem;">
+                        <a href="{% url 'core:sde_group_detail' group.group_id %}">{{ group.group_name }}</a>
+                    </td>
+                    <td style="padding: 0.75rem; text-align: right;">{{ group.item_count }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No groups found in this category.</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <a href="{% url 'core:sde_index' %}" class="btn">&larr; Back to SDE Browser</a>
+</div>
+{% endblock %}
