@@ -91,14 +91,14 @@
     }
     .progress-fill {
         height: 100%;
-        background: linear-gradient(90deg, #1976d2, #42a5f5);
+        background: linear-gradient(90deg, var(--gradient-start), var(--gradient-end));
         transition: width 0.3s;
     }
     .queue-item.completed .progress-fill {
         background: #43a047;
     }
     [data-theme="dark"] .queue-item .progress-fill {
-        background: linear-gradient(90deg, #42a5f5, #64b5f6);
+        background: linear-gradient(90deg, var(--gradient-alt-start), var(--gradient-alt-end));
     }
     [data-theme="dark"] .queue-item.completed .progress-fill {
         background: #81c784;
