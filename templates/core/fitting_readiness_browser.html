@@ -96,6 +96,40 @@
     font-size: 0.8rem;
     color: var(--text-secondary);
 }
+.location-group {
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 1rem;
+}
+.location-group:last-child {
+    border-bottom: none;
+}
+.location-header {
+    font-weight: 600;
+    padding: 0.5rem;
+    background: var(--bg-secondary);
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+.ship-row {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem;
+    border-bottom: 1px solid var(--table-border);
+}
+.ship-row:last-child {
+    border-bottom: none;
+}
+.ship-info {
+    flex: 1;
+}
+.ship-path {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-top: 0.15rem;
+}
 </style>
 {% endblock %}
 
@@ -121,7 +155,7 @@
         <div class="summary-stat-label">Partial</div>
     </div>
     <div class="summary-stat">
-        <div class="summary-stat-value" style="color: #888;">{{ zero_count }}</div>
+        <div class="summary-stat-value" style="color: #888;">{{ zero_count|add:packaged_count }}</div>
         <div class="summary-stat-label">Need Full Fit</div>
     </div>
 </div>
@@ -131,62 +165,54 @@
     <div class="readiness-browser">
         <!-- Left Column: Hull Inventory -->
         <div class="readiness-column">
-            <h3>Hull Inventory</h3>
+            <h3>Hull Inventory ({{ total_assets }} ships)</h3>
             <div class="assets-container">
-                <table style="width: 100%; border-collapse: collapse;">
-                    <thead style="position: sticky; top: 0; background: var(--bg-secondary); z-index: 10;">
-                        <tr>
-                            <th style="padding: 0.5rem; text-align: left; width: 30px;">
-                                <input type="checkbox" id="select-all" onchange="toggleAll(this)">
-                            </th>
-                            <th style="padding: 0.5rem; text-align: left;">Pilot / Location</th>
-                            <th style="padding: 0.5rem; text-align: center;">State</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for asset_info in ship_assets %}
-                        <tr style="border-bottom: 1px solid var(--border-color);">
-                            <td style="padding: 0.5rem;">
-                                <input type="checkbox"
-                                       name="selected_assets"
-                                       value="{{ asset_info.asset.item_id }}"
-                                       class="asset-checkbox"
-                                       id="asset-{{ asset_info.asset.item_id }}">
-                            </td>
-                            <td style="padding: 0.5rem;">
-                                <div>
-                                    <a href="{% url 'core:character_overview' asset_info.asset.character.id %}"
-                                       style="color: var(--link-color); text-decoration: none; font-weight: 500;">
-                                        {{ asset_info.asset.character.character_name }}
-                                    </a>
+                {% regroup location_trees by character as char_groups %}
+                {% for char_group in char_groups %}
+                    <div class="location-group">
+                        <div class="location-header">
+                            {{ char_group.grouper.character_name }}
+                        </div>
+                        {% for loc in char_group.list %}
+                            <div style="margin-left: 1rem;">
+                                <div style="font-size: 0.85rem; color: var(--text-secondary); margin: 0.25rem 0 0.5rem 0;">
+                                    {{ loc.location_string }}
                                 </div>
-                                <div style="font-size: 0.85rem; color: var(--text-secondary);">
-                                    {{ asset_info.asset.location_name }}
-                                    {% if asset_info.asset.is_singleton %}
-                                        <span style="color: #0066cc;">(Assembled)</span>
-                                    {% else %}
-                                        <span style="color: #888;">(Packaged)</span>
-                                    {% endif %}
+                                {% for ship in loc.ships %}
+                                <div class="ship-row">
+                                    <input type="checkbox"
+                                           name="selected_assets"
+                                           value="{{ ship.asset.item_id }}"
+                                           class="asset-checkbox"
+                                           id="asset-{{ ship.asset.item_id }}">
+                                    <label for="asset-{{ ship.asset.item_id }}" style="flex: 1; cursor: pointer;">
+                                        <div class="ship-info">
+                                            <div>
+                                                {% if ship.readiness == 'ready' %}
+                                                    <span class="readiness-badge readiness-ready">100%</span>
+                                                {% elif ship.readiness == 'partial' %}
+                                                    <span class="readiness-badge readiness-partial">{{ ship.readiness_percent }}%</span>
+                                                {% else %}
+                                                    <span class="readiness-badge readiness-zero">0%</span>
+                                                {% endif %}
+                                                {{ ship.asset.type_name }}
+                                                {% if ship.asset.is_singleton %}
+                                                    <span style="color: #0066cc; font-size: 0.75rem;">(Assembled)</span>
+                                                {% else %}
+                                                    <span style="color: #888; font-size: 0.75rem;">(Packaged)</span>
+                                                {% endif %}
+                                            </div>
+                                            {% if ship.missing_modules %}
+                                                <div class="ship-path">{{ ship.missing_modules|length }} modules needed</div>
+                                            {% endif %}
+                                        </div>
+                                    </label>
                                 </div>
-                            </td>
-                            <td style="padding: 0.5rem; text-align: center;">
-                                {% if asset_info.readiness == 'ready' %}
-                                    <span class="readiness-badge readiness-ready">100%</span>
-                                {% elif asset_info.readiness == 'partial' %}
-                                    <span class="readiness-badge readiness-partial">{{ asset_info.readiness_percent }}%</span>
-                                {% else %}
-                                    <span class="readiness-badge readiness-zero">0%</span>
-                                {% endif %}
-                                {% if asset_info.missing_modules %}
-                                    <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
-                                        {{ asset_info.missing_modules|length }} missing
-                                    </div>
-                                {% endif %}
-                            </td>
-                        </tr>
+                                {% endfor %}
+                            </div>
                         {% endfor %}
-                    </tbody>
-                </table>
+                    </div>
+                {% endregroup %}
             </div>
         </div>
 
@@ -226,7 +252,7 @@
                                         {{ character_group.grouper.character_name }}
                                     </td>
                                 </tr>
-                                {% for asset in character_group.list %}
+                                {% for asset in character_group.list|dictsort:"type_name" %}
                                 <tr style="border-bottom: 1px solid var(--border-color);">
                                     <td style="padding: 0.5rem;">{{ asset.type_name }}</td>
                                     <td style="padding: 0.5rem; text-align: center;">{{ asset.quantity|default:1 }}</td>
@@ -249,6 +275,7 @@
 </form>
 
 <script>
+// Select-all functionality
 function toggleAll(checkbox) {
     const checkboxes = document.querySelectorAll('.asset-checkbox');
     checkboxes.forEach(cb => cb.checked = checkbox.checked);

@@ -980,12 +980,13 @@ def fitting_readiness_browser(request: HttpRequest, fitting_id: int) -> HttpResp
     Fleet readiness browser for a specific fitting.
 
     Shows all hulls of this ship type across all characters with their
-    readiness status, and generates shopping lists for selected ships.
+    readiness status in a proper asset tree structure.
     """
     from core.doctrines.models import Fitting, FittingMatch
     from core.character.models import CharacterAsset
     from core.models import Character
-    from core.eve.models import ItemType
+    from core.eve.models import ItemType, Station, SolarSystem
+    from collections import defaultdict
 
     try:
         fitting = Fitting.objects.get(id=fitting_id)
@@ -997,36 +998,71 @@ def fitting_readiness_browser(request: HttpRequest, fitting_id: int) -> HttpResp
     # Get all user's characters
     characters = list(request.user.characters.all())
 
-    # Get ALL assets of this ship type (packaged + assembled)
-    ship_assets = CharacterAsset.objects.filter(
-        character__in=characters,
-        type_id=fitting.ship_type_id
-    ).select_related('character').order_by('character__character_name', 'location_id', 'item_id')
-
-    # Get fitting requirements for shopping list generation
+    # Get fitting requirements
     fitting_modules = set()
     for entry in fitting.entries.all():
         fitting_modules.add(entry.module_type_id)
-
-    # Enrich assets with readiness info
-    assets_with_readiness = []
-    asset_match_map = {}  # {asset_id: FittingMatch}
 
     # Load all matches for this fitting across all characters
     all_matches = FittingMatch.objects.filter(
         character__in=characters,
         fitting=fitting
     )
+    asset_match_map = {match.asset_id: match for match in all_matches}
 
-    for match in all_matches:
-        asset_match_map[match.asset_id] = match
+    # Build tree structure: character -> root_location -> location_tree
+    # location_tree contains nested dicts with assets at the leaves
+    location_trees = defaultdict(lambda: defaultdict(list))
 
+    # Get ALL assets of this ship type
+    ship_assets = CharacterAsset.objects.filter(
+        character__in=characters,
+        type_id=fitting.ship_type_id
+    ).select_related('character')
+
+    # Group by character and build location chain for each ship
     for asset in ship_assets:
-        # Determine readiness state
-        match = asset_match_map.get(asset.item_id)
+        char = asset.character
+        location_path = []
+        location_info = {'type': asset.location_type, 'id': asset.location_id}
 
+        # Walk up the parent chain to build the full location path
+        # For ships in ship maintenance bay: Station -> Capital Ship -> Ship Maintenance Bay -> Sabre
+        current = asset
+        path_assets = []
+
+        while current is not None:
+            path_assets.append(current)
+            current = current.parent
+
+        # Reverse to get top-down: Station -> Capital -> Sabre
+        path_assets.reverse()
+
+        # Build location path for display
+        location_path = []
+        for i, path_asset in enumerate(path_assets[:-1]):  # All except the Sabre itself
+            if path_asset.location_type == 'item':
+                # This is a ship/container
+                location_path.append(f"{path_asset.type_name}")
+            else:
+                # This is a station/structure
+                try:
+                    if path_asset.location_type == 'station':
+                        loc = Station.objects.get(id=path_asset.location_id)
+                        location_path.append(loc.name)
+                    elif path_asset.location_type == 'solar_system':
+                        loc = SolarSystem.objects.get(id=path_asset.location_id)
+                        location_path.append(loc.name)
+                    else:
+                        location_path.append(f"{path_asset.location_type.title()} {path_asset.location_id}")
+                except:
+                    location_path.append(f"Location {path_asset.location_id}")
+
+        location_key = tuple(location_path) if location_path else ("Unknown",)
+
+        # Calculate readiness for this ship
+        match = asset_match_map.get(asset.item_id)
         if asset.is_singleton:
-            # Assembled ship
             if match and match.match_score >= 1.0:
                 readiness = 'ready'
                 readiness_percent = 100
@@ -1036,23 +1072,40 @@ def fitting_readiness_browser(request: HttpRequest, fitting_id: int) -> HttpResp
                 readiness_percent = int(match.match_score * 100)
                 missing_modules = match.missing_modules or []
             else:
-                # Assembled but empty or no match data
                 readiness = 'empty'
                 readiness_percent = 0
                 missing_modules = list(fitting_modules)
         else:
-            # Packaged ship
             readiness = 'packaged'
             readiness_percent = 0
             missing_modules = list(fitting_modules)
 
-        assets_with_readiness.append({
+        # Add to tree
+        location_trees[char][location_key].append({
             'asset': asset,
             'readiness': readiness,
             'readiness_percent': readiness_percent,
             'missing_modules': missing_modules,
             'match': match,
+            'path_assets': path_assets,  # Full parent chain
         })
+
+    # Sort location keys for display
+    def sort_key(char_loc_tuple):
+        char, loc_path = char_loc_tuple
+        loc_str = " → ".join(loc_path)
+        return (char.character_name, loc_str)
+
+    # Flatten for template rendering
+    all_ships = []
+    for char, locations in sorted(location_trees.items(), key=lambda x: x[0].character_name):
+        for location_path, ships in sorted(locations.items()):
+            all_ships.append({
+                'character': char,
+                'location_path': list(location_path),
+                'location_string': " → ".join(location_path),
+                'ships': ships,
+            })
 
     # Handle shopping list generation
     shopping_list_text = None
@@ -1067,19 +1120,17 @@ def fitting_readiness_browser(request: HttpRequest, fitting_id: int) -> HttpResp
             from collections import Counter
             shopping_modules = Counter()
 
-            for asset_info in assets_with_readiness:
-                if asset_info['asset'].item_id in selected_asset_ids:
-                    # Add missing modules for this ship
-                    for module_id in asset_info['missing_modules']:
-                        shopping_modules[module_id] += 1
+            # Re-query to get selected assets with readiness info
+            for ship_list in all_ships:
+                for ship_info in ship_list['ships']:
+                    if ship_info['asset'].item_id in selected_asset_ids:
+                        for module_id in ship_info['missing_modules']:
+                            shopping_modules[module_id] += 1
+                        # Add hull for packaged/empty ships
+                        if ship_info['readiness'] in ('packaged', 'empty'):
+                            shopping_modules[fitting.ship_type_id] += 1
 
-            # Also add the hull itself for packaged ships
-            for asset_info in assets_with_readiness:
-                if asset_info['asset'].item_id in selected_asset_ids:
-                    if asset_info['readiness'] in ('packaged', 'empty'):
-                        shopping_modules[fitting.ship_type_id] += 1
-
-            # Generate plain text shopping list
+            # Generate plain text
             shopping_list_lines = []
             for module_id, quantity in sorted(shopping_modules.items(), key=lambda x: x[1], reverse=True):
                 try:
@@ -1090,20 +1141,21 @@ def fitting_readiness_browser(request: HttpRequest, fitting_id: int) -> HttpResp
 
             shopping_list_text = '\n'.join(shopping_list_lines)
 
-            # Find owned assets matching shopping list
+            # Find owned assets
             module_type_ids = list(shopping_modules.keys())
             owned_assets = CharacterAsset.objects.filter(
                 character__in=characters,
                 type_id__in=module_type_ids
-            ).select_related('character').order_by('character__character_name', 'type_id', 'location_id')
+            ).select_related('character').order_by('character__character_name', 'type_id')
 
     return render(request, 'core/fitting_readiness_browser.html', {
         'fitting': fitting,
-        'ship_assets': assets_with_readiness,
-        'total_assets': len(assets_with_readiness),
-        'ready_count': sum(1 for a in assets_with_readiness if a['readiness'] == 'ready'),
-        'partial_count': sum(1 for a in assets_with_readiness if a['readiness'] == 'partial'),
-        'zero_count': sum(1 for a in assets_with_readiness if a['readiness'] in ('packaged', 'empty')),
+        'location_trees': all_ships,
+        'total_assets': ship_assets.count(),
+        'ready_count': sum(1 for s in ship_assets if asset_match_map.get(s.item_id) and asset_match_map.get(s.item_id).match_score >= 1.0),
+        'partial_count': sum(1 for s in ship_assets if asset_match_map.get(s.item_id) and 0 < asset_match_map.get(s.item_id).match_score < 1.0),
+        'zero_count': sum(1 for s in ship_assets if s.is_singleton and (not asset_match_map.get(s.item_id) or asset_match_map.get(s.item_id).match_score == 0)),
+        'packaged_count': sum(1 for s in ship_assets if not s.is_singleton),
         'shopping_list_text': shopping_list_text,
         'owned_assets': owned_assets,
     })
