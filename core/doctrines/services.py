@@ -35,6 +35,14 @@ for slot_type, flags in SLOT_FLAGS.items():
     for flag in flags:
         FLAG_TO_SLOT[flag] = slot_type
 
+# String flag mapping (ESI v2+ returns string flags like 'HiSlot0')
+STRING_FLAG_TO_SLOT = {}
+STRING_FLAG_TO_SLOT.update({f'HiSlot{i}': ('high', i) for i in range(8)})
+STRING_FLAG_TO_SLOT.update({f'MedSlot{i}': ('med', i) for i in range(8)})
+STRING_FLAG_TO_SLOT.update({f'LoSlot{i}': ('low', i) for i in range(8)})
+STRING_FLAG_TO_SLOT.update({f'RigSlot{i}': ('rig', i) for i in range(4)})
+STRING_FLAG_TO_SLOT.update({f'SubSlot{i}': ('subsystem', i) for i in range(5)})
+
 
 @dataclass
 class FittedShip:
@@ -139,45 +147,62 @@ class AssetFitExtractor:
 
         for child in children:
             # Parse location_flag to get slot position
-            # ESI returns flags as integers or strings
+            # ESI returns flags as integers (legacy) or strings (v2+)
             flag = child.location_flag
 
-            # Handle both integer and string flags
+            # Try integer flag first (legacy ESI)
+            slot_type = None
+            slot_index = None
+
             try:
                 flag_int = int(flag)
+                # Integer flag handling
+                if flag_int in FLAG_TO_SLOT:
+                    slot_type = FLAG_TO_SLOT[flag_int]
+
+                    if slot_type == 'high' and flag_int - 27 < 8:
+                        high_slots[flag_int - 27] = child.type_id
+                    elif slot_type == 'med' and flag_int - 19 < 8:
+                        med_slots[flag_int - 19] = child.type_id
+                    elif slot_type == 'low' and flag_int - 11 < 8:
+                        low_slots[flag_int - 11] = child.type_id
+                    elif slot_type == 'rig':
+                        if flag_int == 92:
+                            rig_slots[0] = child.type_id
+                        elif flag_int == 93:
+                            rig_slots[1] = child.type_id
+                        elif flag_int == 94:
+                            rig_slots[2] = child.type_id
+                        elif flag_int == 266:
+                            rig_slots[3] = child.type_id
+                    elif slot_type == 'subsystem':
+                        subsystem_slots[flag_int - 125] = child.type_id
+                elif flag_int == 4:  # Cargo
+                    cargo.append((child.type_id, child.quantity))
+                elif flag_int == 87:  # DroneBay
+                    drone_bay.append((child.type_id, child.quantity))
+                elif flag_int == 158:  # FighterBay
+                    fighter_bay.append((child.type_id, child.quantity))
             except (ValueError, TypeError):
-                # Skip if we can't parse the flag
-                continue
-
-            # Slot modules
-            if flag_int in FLAG_TO_SLOT:
-                slot_type = FLAG_TO_SLOT[flag_int]
-
-                if slot_type == 'high' and flag_int - 27 < 8:
-                    high_slots[flag_int - 27] = child.type_id
-                elif slot_type == 'med' and flag_int - 19 < 8:
-                    med_slots[flag_int - 19] = child.type_id
-                elif slot_type == 'low' and flag_int - 11 < 8:
-                    low_slots[flag_int - 11] = child.type_id
-                elif slot_type == 'rig':
-                    if flag_int == 92:
-                        rig_slots[0] = child.type_id
-                    elif flag_int == 93:
-                        rig_slots[1] = child.type_id
-                    elif flag_int == 94:
-                        rig_slots[2] = child.type_id
-                    elif flag_int == 266:
-                        rig_slots[3] = child.type_id
-                elif slot_type == 'subsystem':
-                    subsystem_slots[flag_int - 125] = child.type_id
-
-            # Storage bays
-            elif flag_int == 4:  # Cargo
-                cargo.append((child.type_id, child.quantity))
-            elif flag_int == 87:  # DroneBay
-                drone_bay.append((child.type_id, child.quantity))
-            elif flag_int == 158:  # FighterBay
-                fighter_bay.append((child.type_id, child.quantity))
+                # String flag handling (ESI v2+)
+                if flag in STRING_FLAG_TO_SLOT:
+                    slot_type, slot_index = STRING_FLAG_TO_SLOT[flag]
+                    if slot_type == 'high' and slot_index < 8:
+                        high_slots[slot_index] = child.type_id
+                    elif slot_type == 'med' and slot_index < 8:
+                        med_slots[slot_index] = child.type_id
+                    elif slot_type == 'low' and slot_index < 8:
+                        low_slots[slot_index] = child.type_id
+                    elif slot_type == 'rig' and slot_index < 4:
+                        rig_slots[slot_index] = child.type_id
+                    elif slot_type == 'subsystem' and slot_index < 5:
+                        subsystem_slots[slot_index] = child.type_id
+                elif flag == 'Cargo':
+                    cargo.append((child.type_id, child.quantity))
+                elif flag == 'DroneBay':
+                    drone_bay.append((child.type_id, child.quantity))
+                elif flag == 'FighterBay':
+                    fighter_bay.append((child.type_id, child.quantity))
 
         # Get ship type name
         try:
