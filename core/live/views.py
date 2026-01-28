@@ -54,7 +54,7 @@ def live_lp_stores(request):
     Shows all corporations with LP stores, grouped by their faction.
     """
     from core.eve.models import CorporationLPStoreInfo
-    from core.eve.models import Corporation, Faction
+    from core.sde.models import CrpNPCCorporations, ChrFactions
 
     # Get corps with stores
     corps = CorporationLPStoreInfo.objects.filter(
@@ -65,20 +65,17 @@ def live_lp_stores(request):
     corps_with_factions = []
     for lp_info in corps:
         try:
-            corp = Corporation.objects.get(id=lp_info.corporation_id)
+            corp = CrpNPCCorporations.objects.get(corporation_id=lp_info.corporation_id)
             faction = None
-            if corp.faction_id:
-                try:
-                    faction = Faction.objects.get(id=corp.faction_id)
-                except Faction.DoesNotExist:
-                    pass
+            if corp.faction:
+                faction = corp.faction  # FK from CrpNPCCorporations to ChrFactions
 
             corps_with_factions.append({
                 'lp_info': lp_info,
                 'corporation': corp,
                 'faction': faction,
             })
-        except Corporation.DoesNotExist:
+        except CrpNPCCorporations.DoesNotExist:
             pass
 
     # Group by faction
@@ -91,7 +88,7 @@ def live_lp_stores(request):
     # Sort factions
     sorted_factions = sorted(
         factions_dict.items(),
-        key=lambda x: x[0].name if x[0] else ''
+        key=lambda x: x[0].faction_name if x[0] else ''
     )
 
     return render(request, 'core/live/lp_stores.html', {
@@ -109,10 +106,10 @@ def live_lp_store_detail(request, corporation_id):
         corporation_id: The corporation ID to show offers for
     """
     from core.eve.models import CorporationLPStoreInfo, LoyaltyStoreOffer
-    from core.eve.models import Corporation, ItemType
+    from core.sde.models import CrpNPCCorporations, InvTypes
 
     lp_info = get_object_or_404(CorporationLPStoreInfo, corporation_id=corporation_id)
-    corporation = get_object_or_404(Corporation, id=corporation_id)
+    corporation = get_object_or_404(CrpNPCCorporations, corporation_id=corporation_id)
 
     # Get offers with type names from SDE
     offers = LoyaltyStoreOffer.objects.filter(
@@ -122,8 +119,8 @@ def live_lp_store_detail(request, corporation_id):
     # Enrich with SDE type data
     type_ids = [o.type_id for o in offers]
     types_map = {
-        t.id: t
-        for t in ItemType.objects.filter(id__in=type_ids).select_related('group')
+        t.type_id: t
+        for t in InvTypes.objects.filter(type_id__in=type_ids).select_related('group')
     }
 
     offers_with_types = []
@@ -146,7 +143,7 @@ def live_markets(request):
     Shows regions with market data and order counts.
     """
     from core.eve.models import RegionMarketSummary
-    from core.eve.models import Region
+    from core.sde.models import MapRegions
 
     # Get regions with market data
     summaries = RegionMarketSummary.objects.filter(
@@ -156,12 +153,12 @@ def live_markets(request):
     regions_with_data = []
     for summary in summaries:
         try:
-            region = Region.objects.get(id=summary.region_id)
+            region = MapRegions.objects.get(region_id=summary.region_id)
             regions_with_data.append({
                 'region': region,
                 'summary': summary,
             })
-        except Region.DoesNotExist:
+        except MapRegions.DoesNotExist:
             pass
 
     return render(request, 'core/live/markets.html', {
@@ -175,24 +172,34 @@ def live_incursions(request):
 
     Displays all active incursions with their state, faction, and location.
     """
-    from core.eve.models import ActiveIncursion, Faction
+    from core.eve.models import ActiveIncursion
+    from core.sde.models import MapConstellations, ChrFactions
 
     incursions = ActiveIncursion.objects.filter(
         last_sync_status='ok'
     ).order_by('-last_updated')
 
-    # Enrich with faction names from SDE
+    # Enrich with SDE data
+    constellation_ids = [i.constellation_id for i in incursions]
+    constellations_map = {
+        c.constellation_id: c
+        for c in MapConstellations.objects.filter(
+            constellation_id__in=constellation_ids
+        ).select_related('region')
+    }
+
     faction_ids = [i.faction_id for i in incursions]
     factions_map = {
-        f.id: f
-        for f in Faction.objects.filter(id__in=faction_ids)
+        f.faction_id: f
+        for f in ChrFactions.objects.filter(faction_id__in=faction_ids)
     }
 
     enriched_incursions = []
     for inc in incursions:
+        inc.constellation = constellations_map.get(inc.constellation_id)
         inc.faction = factions_map.get(inc.faction_id)
-        # constellation_name is already stored in the model
-        enriched_incursions.append(inc)
+        if inc.constellation:
+            enriched_incursions.append(inc)
 
     # Group by state
     from collections import defaultdict
@@ -309,7 +316,7 @@ def live_faction_warfare(request):
     Displays FW stats and system ownership.
     """
     from core.eve.models import FactionWarfareStats, FactionWarfareSystem
-    from core.eve.models import Faction, SolarSystem
+    from core.sde.models import ChrFactions
 
     # Get FW stats
     stats = FactionWarfareStats.objects.all().order_by('-victory_points_last_week')
@@ -317,8 +324,8 @@ def live_faction_warfare(request):
     # Enrich with faction names
     faction_ids = [s.faction_id for s in stats]
     factions_map = {
-        f.id: f
-        for f in Faction.objects.filter(id__in=faction_ids)
+        f.faction_id: f
+        for f in ChrFactions.objects.filter(faction_id__in=faction_ids)
     }
 
     stats_with_factions = []

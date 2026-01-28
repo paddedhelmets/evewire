@@ -65,8 +65,9 @@ class Command(BaseCommand):
             help='Initialize the SDE database (download full SDE to shared location)',
         )
         parser.add_argument(
-            '--version',
+            '--sde-version',
             type=str,
+            dest='sde_version',
             help='Specific SDE version tag (e.g., 3171578-01ec212). Default: latest from GitHub.',
         )
 
@@ -88,14 +89,14 @@ class Command(BaseCommand):
             table_map = self.REQUIRED_TABLES
 
         # Get SDE download URL
-        version = options.get('version')
+        version = options.get('sde_version')
         if version:
             sde_url = f"https://github.com/garveen/eve-sde-converter/releases/download/sde-{version}/sde.sqlite.bz2"
             self.stdout.write(f'Using SDE version: {version}')
         else:
             sde_url = self._get_latest_sde_url()
             if not sde_url:
-                self.stdout.write(self.style.ERROR('Failed to fetch latest SDE release. Use --version to specify a version.'))
+                self.stdout.write(self.style.ERROR('Failed to fetch latest SDE release. Use --sde-version to specify a version.'))
                 return
 
         self.stdout.write(f'Importing {len(table_map)} tables from garveen eve-sde-converter')
