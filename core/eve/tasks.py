@@ -452,58 +452,45 @@ def queue_esi_refresh(task_path: str, *args, jitter_range: tuple = (0, 30), **kw
 
 def refresh_all_lp_stores() -> dict:
     """
-    Discover all loyalty stores by checking corporations with mission agents.
+    Refresh all loyalty stores from a known whitelist.
 
-    ESI Endpoint: GET /loyalty/{corporation_id}/offers/
-    Returns list of offers for a specific corporation if they have an LP store.
+    ESI Endpoint: GET /loyalty/stores/{corporation_id}/offers/
+    Returns list of offers for a specific corporation.
 
     This should be called periodically (e.g., daily via cron).
 
-    The function queries corporations that have agents from SDE and checks which
-    ones have LP stores by attempting to fetch their offers. Corporations with
-    404 responses are skipped (no LP store).
+    Uses a static whitelist of corporation IDs known to have LP stores,
+    derived from SDE station services data. This includes corporations
+    without agents (e.g., Triglavian).
 
     Returns:
         Dict with status and count of queued refreshes
     """
     from core.services import ESIClient
-    from core.sde.models import AgtAgents
+    import os
 
-    client = ESIClient()
+    # Load whitelist from file
+    whitelist_path = os.path.join(
+        os.path.dirname(__file__),
+        'lp_store_whitelist.txt'
+    )
+
+    with open(whitelist_path) as f:
+        content = f.read().strip()
+        corp_ids = [int(x.strip()) for x in content.split(',') if x.strip()]
+
+    logger.info(f'Queuing LP store refresh for {len(corp_ids)} whitelisted corporations')
+
     count = 0
-    checked = 0
+    for corporation_id in corp_ids:
+        queue_esi_refresh(
+            'core.eve.tasks.refresh_corporation_lp_store',
+            corporation_id,
+            jitter_range=(0, 60)
+        )
+        count += 1
 
-    # Get distinct corporation IDs that have agents (corps with mission agents likely have LP stores)
-    # Use set() to ensure deduplication
-    agent_corp_ids = set(AgtAgents.objects.values_list('corporation_id', flat=True))
-
-    logger.info(f'Checking {len(agent_corp_ids)} corporations with agents for LP stores')
-
-    for corporation_id in agent_corp_ids:
-        checked += 1
-
-        # Try to fetch offers for this corporation
-        # ESI returns 404 for corps without LP stores, 200 with empty array for those with no offers
-        response = client.get_loyalty_store_offers(corporation_id)
-
-        # ESIResponse stores status in meta.response.status_code
-        if response and response.meta.response.status_code == 200:
-            # This corporation has an LP store (even if empty)
-            queue_esi_refresh(
-                'core.eve.tasks.refresh_corporation_lp_store',
-                corporation_id,
-                jitter_range=(0, 60)
-            )
-            count += 1
-
-            if count % 50 == 0:
-                logger.info(f'Found {count} LP stores so far (checked {checked}/{len(agent_corp_ids)})')
-
-        # Rate limiting - brief sleep between checks
-        if checked % 50 == 0:
-            time.sleep(1)
-
-    logger.info(f'Queued {count} LP store refresh tasks from {checked} corporations checked')
+    logger.info(f'Queued {count} LP store refresh tasks')
     return {'status': 'queued', 'count': count}
 
 
