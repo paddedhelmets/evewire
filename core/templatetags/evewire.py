@@ -283,3 +283,12 @@ def highlight(text, query):
     # Wrap matches in a span with highlight class
     highlighted = pattern.sub(r'<span class="highlight">\1</span>', str(text))
     return mark_safe(highlighted)
+
+
+@register.filter
+def slice_start(value, length):
+    """Get first N characters of a string."""
+    try:
+        return str(value)[:int(length)]
+    except (ValueError, TypeError):
+        return value

@@ -39,7 +39,7 @@ def sde_index(request: HttpRequest) -> HttpResponse:
     all_categories = InvCategories.objects.filter(
         published=True
     ).annotate(
-        item_count=Count('invgroups__invtypes')
+        item_count=Count('groups__types', filter=Q(groups__types__published=True))
     ).order_by('-item_count')
 
     # Get top-level market groups
@@ -59,7 +59,7 @@ def sde_index(request: HttpRequest) -> HttpResponse:
         category_id=6,  # Ships
         published=True
     ).annotate(
-        item_count=Count('invtypes', filter=Q(invtypes__published=True))
+        item_count=Count('types', filter=Q(types__published=True))
     ).filter(item_count__gt=0).order_by('group_name')
 
     # Quick link counts
@@ -171,7 +171,7 @@ def sde_search(request: HttpRequest) -> HttpResponse:
     categories = InvCategories.objects.filter(
         published=True
     ).annotate(
-        item_count=Count('invgroups__invtypes', filter=Q(invgroups__invtypes__published=True))
+        item_count=Count('groups__types', filter=Q(groups__types__published=True))
     ).filter(item_count__gt=0).order_by('-item_count')[:20]
 
     # All meta groups
@@ -286,7 +286,7 @@ def sde_category_detail(request: HttpRequest, category_id: int) -> HttpResponse:
         category_id=category_id,
         published=True
     ).annotate(
-        item_count=Count('invtypes')
+        item_count=Count('types')
     ).order_by('group_name')
 
     return render(request, 'core/sde/category_detail.html', {
