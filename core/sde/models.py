@@ -348,7 +348,7 @@ class StaStations(models.Model):
     z = models.FloatField(null=True, blank=True, db_column='z')
     reprocessing_efficiency = models.FloatField(null=True, blank=True, db_column='reprocessingEfficiency')
     reprocessing_stations_take = models.FloatField(null=True, blank=True, db_column='reprocessingStationsTake')
-    reprocessing_hanger_flag = models.IntegerField(null=True, blank=True, db_column='reprocessingHangerFlag')
+    reprocessing_hanger_flag = models.IntegerField(null=True, blank=True, db_column='reprocessingHangarFlag')
 
     class Meta:
         db_table = 'evesde_stastations'

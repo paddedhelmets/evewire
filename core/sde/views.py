@@ -421,13 +421,14 @@ def get_ship_fitting(ship_id: int) -> dict:
     ]
     
     with connection.cursor() as cursor:
-        cursor.execute("""
+        attr_ids_str = ','.join(map(str, fitting_attr_ids))
+        cursor.execute(f"""
             SELECT ta.attributeID, at.attributeName, ta.valueInt, ta.valueFloat
             FROM evesde_dgmattypeattributes ta
             JOIN evesde_dgmattributetypes at ON ta.attributeID = at.attributeID
-            WHERE ta.typeID = ? AND ta.attributeID IN (%s)
+            WHERE ta.typeID = ? AND ta.attributeID IN ({attr_ids_str})
             ORDER BY ta.attributeID
-        """ % (ship_id, ','.join(map(str, fitting_attr_ids))), [ship_id])
+        """, [ship_id])
         
         # Map to friendly names (correcting for SDE mislabeling)
         attr_map = {

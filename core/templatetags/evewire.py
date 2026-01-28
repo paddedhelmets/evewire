@@ -292,3 +292,12 @@ def slice_start(value, length):
         return str(value)[:int(length)]
     except (ValueError, TypeError):
         return value
+
+
+@register.filter
+def to_int(value):
+    """Convert value to integer."""
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return 0

@@ -142,7 +142,7 @@
                 <select id="category-select" name="category">
                     <option value="">All Categories</option>
                     {% for cat in categories %}
-                    <option value="{{ cat.category_id }}" {% if cat.category_id == selected_category|int %}selected{% endif %}>
+                    <option value="{{ cat.category_id }}" {% if cat.category_id == selected_category %}selected{% endif %}>
                         {{ cat.category_name }} ({{ cat.item_count }})
                     </option>
                     {% endfor %}
@@ -154,7 +154,7 @@
                 <select id="meta-group-select" name="meta_group">
                     <option value="">All Meta Groups</option>
                     {% for mg in meta_groups %}
-                    <option value="{{ mg.meta_group_id }}" {% if mg.meta_group_id == selected_meta_group|int %}selected{% endif %}>
+                    <option value="{{ mg.meta_group_id }}" {% if mg.meta_group_id == selected_meta_group %}selected{% endif %}>
                         {{ mg.meta_group_name }} ({{ mg.item_count }})
                     </option>
                     {% endfor %}
