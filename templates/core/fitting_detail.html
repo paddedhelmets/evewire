@@ -172,33 +172,70 @@
         {% endfor %}
     </div>
 
-    {% if matching_assets %}
-    <div class="card" style="flex: 1; min-width: 300px;">
-        <h2>Matching Ships ({{ matching_assets.count }})</h2>
-        <table style="width: 100%; border-collapse: collapse;">
-            <thead>
-                <tr style="border-bottom: 2px solid var(--border-color);">
-                    <th style="padding: 0.5rem; text-align: left;">Character</th>
-                    <th style="padding: 0.5rem; text-align: left;">Asset ID</th>
-                    <th style="padding: 0.5rem; text-align: center;">Match</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for match in matching_assets %}
-                <tr style="border-bottom: 1px solid var(--table-border);">
-                    <td style="padding: 0.5rem;">{{ match.character.character_name }}</td>
-                    <td style="padding: 0.5rem; font-family: monospace;">{{ match.asset_id }}</td>
-                    <td style="padding: 0.5rem; text-align: center;">
-                        {% if match.is_match %}
-                            <span style="color: #080; font-weight: bold;">✓ MATCH</span>
-                        {% else %}
-                            <span style="color: #c60;">{{ match.match_score|floatformat:0 }}%</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    {% if matching_assets or readiness_summary.total > 0 %}
+    <div class="card" style="flex: 1; min-width: 400px;">
+        <h2>Fleet Readiness</h2>
+
+        <!-- Readiness Summary -->
+        <div style="background: var(--bg-secondary); padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem;">
+            <p style="margin: 0;">
+                <strong>Ready Pilots:</strong>
+                <span style="color: #080; font-weight: bold;">{{ readiness_summary.ready }}</span> / {{ readiness_summary.total }}
+                ({{ readiness_summary.ready_percent|floatformat:0 }}%)
+            </p>
+            {% if readiness_summary.partial > 0 %}
+            <p style="margin: 0.25rem 0 0 0; color: #c60;">
+                <small>{{ readiness_summary.partial }} partial ({{ readiness_summary.partial|add:readiness_summary.ready }} close)</small>
+            </p>
+            {% endif %}
+            {% if readiness_summary.none > 0 %}
+            <p style="margin: 0.25rem 0 0 0; color: #c00;">
+                <small>{{ readiness_summary.none }} without matching ship</small>
+            </p>
+            {% endif %}
+        </div>
+
+        <!-- All Matches -->
+        {% if matching_assets %}
+        <h3>All Ships ({{ matching_assets|length }})</h3>
+        <div style="max-height: 400px; overflow-y: auto;">
+            {% for match in matching_assets %}
+            <div style="padding: 0.5rem 0; border-bottom: 1px solid var(--table-border);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                    <span>
+                        <a href="{% url 'core:character_overview' match.match.character.id %}" style="text-decoration: none; color: inherit; font-weight: 500;">
+                            {{ match.match.character.character_name }}
+                        </a>
+                        <span style="color: #888; font-size: 0.85rem;">({{ match.asset_location }})</span>
+                    </span>
+                    {% if match.match.is_match %}
+                        <span style="color: #080; font-weight: bold;">✓ Ready</span>
+                    {% else %}
+                        <span style="color: {% if match.match.match_score >= 0.8 %}#cc0{% else %}#c00{% endif %}; font-weight: bold;">
+                            {{ match.match.match_score|mul:100|floatformat:0 }}%
+                        </span>
+                    {% endif %}
+                </div>
+
+                <!-- Match Score Bar -->
+                <div style="width: 100%; height: 6px; background: var(--border-color); border-radius: 3px; margin-bottom: 0.25rem;">
+                    <div style="width: {{ match.match.match_score|mul:100 }}%; height: 100%; background: {% if match.match.is_match %}#080{% elif match.match.match_score >= 0.8 %}#cc0{% else %}#c00{% endif %}; border-radius: 3px; transition: width 0.3s ease;"></div>
+                </div>
+
+                <!-- Missing Modules -->
+                {% if match.missing_module_names %}
+                <div style="font-size: 0.85rem; color: #888;">
+                    Missing: {{ match.missing_module_names|join:", " }}
+                </div>
+                {% endif %}
+            </div>
+            {% empty %}
+            <p style="color: #888; font-style: italic;">No matching ships found.</p>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p style="color: #888; font-style: italic;">No matching ships found.</p>
+        {% endif %}
     </div>
     {% endif %}
 </div>

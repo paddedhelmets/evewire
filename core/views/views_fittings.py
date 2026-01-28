@@ -133,9 +133,10 @@ def fittings_list(request: HttpRequest, character_id: int = None) -> HttpRespons
 
 @login_required
 def fitting_detail(request: HttpRequest, fitting_id: int) -> HttpResponse:
-    """View fitting details with module layout."""
+    """View fitting details with module layout and fleet readiness."""
     from core.doctrines.models import Fitting, FittingMatch
     from core.models import Character
+    from core.eve.models import ItemType, Station, SolarSystem
 
     try:
         fitting = Fitting.objects.get(id=fitting_id)
@@ -147,21 +148,83 @@ def fitting_detail(request: HttpRequest, fitting_id: int) -> HttpResponse:
     # Get slots
     slots = fitting.get_slots()
 
-    # Get matching assets for current user's characters
+    # Get ALL matching assets for current user's characters (not just perfect matches)
     matching_assets = []
+    character_readiness = []  # For readiness summary
+
     if request.user.is_authenticated:
         for character in request.user.characters.all():
+            # Get all matches for this character (partial + perfect)
             matches = FittingMatch.objects.filter(
                 character=character,
-                fitting=fitting,
-                is_match=True
-            ).select_related('character')
-            matching_assets.extend(matches)
+                fitting=fitting
+            ).select_related('character').order_by('-match_score')
+
+            # Get character's current location
+            char_location = character.location_name if hasattr(character, 'location_name') else "Unknown"
+
+            # Build readiness info for this character
+            best_match = matches.first() if matches.exists() else None
+            if best_match and best_match.match_score >= 1.0:
+                readiness_status = "ready"
+            elif best_match and best_match.match_score > 0:
+                readiness_status = "partial"
+            else:
+                readiness_status = "none"
+
+            character_readiness.append({
+                'character': character,
+                'readiness_status': readiness_status,
+                'best_match': best_match,
+            })
+
+            # Enrich each match with location info and module names
+            for match in matches:
+                # Get asset location from CharacterAsset
+                try:
+                    from core.character.models import CharacterAsset
+                    asset = CharacterAsset.objects.get(item_id=match.asset_id)
+                    asset_location = asset.location_name if hasattr(asset, 'location_name') else "Unknown"
+                    asset_location_type = asset.location_type
+                except CharacterAsset.DoesNotExist:
+                    asset_location = "Unknown"
+                    asset_location_type = "unknown"
+
+                # Resolve missing module IDs to names
+                missing_module_names = []
+                if match.missing_modules:
+                    for module_id in match.missing_modules:
+                        try:
+                            module = ItemType.objects.get(id=module_id)
+                            missing_module_names.append(module.name)
+                        except ItemType.DoesNotExist:
+                            missing_module_names.append(f"Module {module_id}")
+
+                matching_assets.append({
+                    'match': match,
+                    'asset_location': asset_location,
+                    'asset_location_type': asset_location_type,
+                    'missing_module_names': missing_module_names,
+                })
+
+    # Calculate readiness summary
+    total_characters = len(character_readiness)
+    ready_characters = sum(1 for cr in character_readiness if cr['readiness_status'] == 'ready')
+    partial_characters = sum(1 for cr in character_readiness if cr['readiness_status'] == 'partial')
+    none_characters = total_characters - ready_characters - partial_characters
 
     return render(request, 'core/fitting_detail.html', {
         'fitting': fitting,
         'slots': slots,
         'matching_assets': matching_assets,
+        'character_readiness': character_readiness,
+        'readiness_summary': {
+            'total': total_characters,
+            'ready': ready_characters,
+            'partial': partial_characters,
+            'none': none_characters,
+            'ready_percent': (ready_characters / total_characters * 100) if total_characters > 0 else 0,
+        },
     })
 
 
