@@ -41,6 +41,13 @@
 .item-name {
     font-weight: 500;
 }
+.item-name a {
+    color: var(--link-color);
+    text-decoration: none;
+}
+.item-name a:hover {
+    text-decoration: underline;
+}
 .item-group {
     font-size: 0.8rem;
     color: var(--text-secondary);
@@ -61,6 +68,12 @@
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: 1rem;
     margin-bottom: 1.5rem;
+    width: 100%;
+}
+.info-item {
+    padding: 1rem;
+    background: var(--bg-secondary);
+    border-radius: 6px;
 }
 .info-item {
     padding: 1rem;
@@ -133,10 +146,9 @@
 </div>
 
 {% if offers %}
-    <div class="card">
+    <div class="card" style="width: 100%; overflow-x: auto;">
         <h2>Loyalty Store Offers</h2>
-        <div style="overflow-x: auto;">
-            <table class="offers-table">
+        <table class="offers-table">
                 <thead>
                     <tr>
                         <th>Item</th>
