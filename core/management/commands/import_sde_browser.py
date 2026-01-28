@@ -498,8 +498,9 @@ class Command(BaseCommand):
         create_sql = create_sql.replace('ON UPDATE CURRENT_TIMESTAMP', '')
 
         # Replace table name with evesde_ prefixed name
+        # Handle both `tablename` and tablename formats
         create_sql = re.sub(
-            r'CREATE TABLE (?:IF NOT EXISTS )?\w+ \(',
+            r'CREATE TABLE (?:IF NOT EXISTS )?`?\w+`? \(',
             f'CREATE TABLE {evesde_table} (',
             create_sql
         )
