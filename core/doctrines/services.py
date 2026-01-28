@@ -319,41 +319,6 @@ class FittingMatcher:
             modules.add(entry.module_type_id)
         return modules
 
-    @transaction.atomic
-    def cache_matches(self, character, fitting=None) -> int:
-        """
-        Cache match results in AssetMatch model.
-
-        Returns:
-            Number of matches cached
-        """
-        from core.doctrines.models import FittingMatch
-
-        matches = self.match_character_assets(character, fitting)
-
-        # Clear old cached matches
-        if fitting:
-            FittingMatch.objects.filter(character=character, fitting=fitting).delete()
-        else:
-            FittingMatch.objects.filter(character=character).delete()
-
-        # Create new cached matches
-        cached = []
-        for match in matches:
-            cached.append(FittingMatch(
-                character=character,
-                fitting=match['fitting'],
-                asset_id=match['asset_id'],
-                is_match=match['is_match'],
-                match_score=match['score'],
-                missing_modules=match['missing_modules'],
-            ))
-
-        FittingMatch.objects.bulk_create(cached, batch_size=500)
-
-        logger.info(f"Cached {len(cached)} matches for character {character.id}")
-        return len(cached)
-
 
 class ShoppingListGenerator:
     """

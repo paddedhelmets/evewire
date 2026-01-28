@@ -225,52 +225,6 @@ class FittingEntry(models.Model):
             return f"Module {self.module_type_id}"
 
 
-class FittingMatch(models.Model):
-    """
-    Cached match results for assets against fittings.
-
-    This acts as a materialized view for "which ships match which fittings"
-    queries that would otherwise require complex tree traversal.
-    """
-
-    character = models.ForeignKey(
-        'core.Character',
-        on_delete=models.CASCADE,
-        related_name='fitting_matches',
-    )
-
-    fitting = models.ForeignKey(
-        Fitting,
-        on_delete=models.CASCADE,
-        related_name='asset_matches',
-    )
-
-    # The asset being matched
-    asset_id = models.BigIntegerField(db_index=True, help_text="CharacterAsset.item_id")
-
-    # Match quality
-    is_match = models.BooleanField(default=False, help_text="True if asset matches fitting")
-    match_score = models.FloatField(default=0.0, help_text="Match percentage (0-1)")
-    missing_modules = models.JSONField(default=list, help_text="List of missing module type_ids")
-
-    # Cache metadata
-    calculated_at = models.DateTimeField(auto_now_add=True, db_index=True)
-
-    class Meta:
-        verbose_name = _('fitting match')
-        verbose_name_plural = _('fitting matches')
-        ordering = ['-match_score', 'fitting']
-        unique_together = [['character', 'fitting', 'asset_id']]
-        indexes = [
-            models.Index(fields=['character', 'is_match', 'match_score']),
-            models.Index(fields=['calculated_at']),
-        ]
-
-    def __str__(self) -> str:
-        status = "MATCH" if self.is_match else "PARTIAL"
-        return f"{self.character.name}: {self.fitting.name} - {status} ({self.match_score:.1%})"
-
-
 class ShoppingList(models.Model):
     """
     A shopping list for fitting fulfillment.

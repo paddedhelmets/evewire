@@ -8,7 +8,6 @@ from django.utils.html import format_html
 from core.doctrines.models import (
     Fitting,
     FittingEntry,
-    FittingMatch,
     FittingCharge,
     FittingDrone,
     FittingCargoItem,
@@ -78,26 +77,6 @@ class FittingAdmin(admin.ModelAdmin):
             'classes': ('collapse',),
         }),
     )
-
-
-@admin.register(FittingMatch)
-class FittingMatchAdmin(admin.ModelAdmin):
-    list_display = ('character', 'fitting', 'asset_link', 'is_match', 'match_score', 'calculated_at')
-    list_filter = ('is_match', 'calculated_at')
-    search_fields = ('character__name', 'fitting__name')
-    readonly_fields = ('character', 'fitting', 'asset_id', 'is_match', 'match_score',
-                       'missing_modules', 'calculated_at')
-
-    def asset_link(self, obj):
-        """Link to asset in admin."""
-        from core.character.models import CharacterAsset
-        try:
-            asset = CharacterAsset.objects.get(item_id=obj.asset_id)
-            url = f"/admin/core/characterasset/{asset.pk}/change/"
-            return format_html('<a href="{}">Asset {}</a>', url, obj.asset_id)
-        except CharacterAsset.DoesNotExist:
-            return f"Asset {obj.asset_id} (deleted)"
-    asset_link.short_description = 'Asset'
 
 
 @admin.register(ShoppingList)
