@@ -217,6 +217,23 @@ def fitting_skill_plans(request: HttpRequest, fitting_id: int) -> HttpResponse:
     global_plans = SkillPlan.objects.filter(owner__isnull=True, is_active=True)
     all_plans = list(user_plans) + list(global_plans)
 
+    # Calculate total SP for the fitting's skill set
+    def get_sp_for_level(skill_id: int, level: int) -> int:
+        """Get total SP needed for a skill level."""
+        import math
+        from core.eve.models import TypeAttribute
+
+        try:
+            rank_attr = TypeAttribute.objects.get(type_id=skill_id, attribute_id=275)
+            rank = rank_attr.value_int if rank_attr.value_int else int(rank_attr.value_float or 1)
+        except TypeAttribute.DoesNotExist:
+            rank = 1
+
+        return int(math.pow(2, (2.5 * level) - 2) * 32 * rank)
+
+    # Calculate total SP needed for fitting
+    fitting_total_sp = sum(get_sp_for_level(sid, lvl) for sid, lvl in all_skills)
+
     # Calculate overlap for each plan
     plan_overlaps = []
     for plan in all_plans:
@@ -227,24 +244,29 @@ def fitting_skill_plans(request: HttpRequest, fitting_id: int) -> HttpResponse:
             if entry.level
         )
 
-        # Calculate overlap
+        # Calculate skill count overlap
         covered = all_skills & plan_skills
         total = len(all_skills)
         covered_count = len(covered)
-        coverage_percent = (covered_count / total * 100) if total > 0 else 0
+
+        # Calculate SP overlap
+        covered_sp = sum(get_sp_for_level(sid, lvl) for sid, lvl in covered)
+        sp_coverage_percent = (covered_sp / fitting_total_sp * 100) if fitting_total_sp > 0 else 0
 
         # Only show plans with meaningful coverage (>0%)
-        if coverage_percent > 0:
+        if sp_coverage_percent > 0:
             plan_overlaps.append({
                 'plan': plan,
-                'coverage_percent': coverage_percent,
+                'sp_coverage_percent': sp_coverage_percent,
+                'covered_sp': covered_sp,
+                'total_sp': fitting_total_sp,
                 'covered_count': covered_count,
                 'total_count': total,
                 'missing': all_skills - plan_skills,
             })
 
-    # Sort by coverage percent (highest first)
-    plan_overlaps.sort(key=lambda x: x['coverage_percent'], reverse=True)
+    # Sort by SP coverage percent (highest first)
+    plan_overlaps.sort(key=lambda x: x['sp_coverage_percent'], reverse=True)
 
     # Build skill list for template (similar to skill_plan_detail entries)
     skill_list = []

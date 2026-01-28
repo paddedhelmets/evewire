@@ -171,7 +171,7 @@
 {% endblock %}
 
 {% block content %}
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+<div style="display: flex; justify-content: space-between; align-items: center; margin-top: 2rem; margin-bottom: 1rem;">
     <div>
         <h1>Skill Plans for {{ fitting.name }}</h1>
         <p style="color: #666; margin-top: 0.25rem;">
@@ -282,10 +282,13 @@
                     {% endif %}
                 </div>
                 <div class="coverage-bar">
-                    <div class="coverage-fill" style="width: {{ overlap.coverage_percent }}%;"></div>
+                    <div class="coverage-fill" style="width: {{ overlap.sp_coverage_percent }}%;"></div>
                 </div>
                 <div class="coverage-text">
-                    {{ overlap.coverage_percent|floatformat:0 }}% coverage ({{ overlap.covered_count }}/{{ overlap.total_count }} skills)
+                    {{ overlap.sp_coverage_percent|floatformat:0 }}% coverage ({{ overlap.covered_sp|commas }} / {{ overlap.total_sp|commas }} SP)
+                </div>
+                <div class="coverage-text" style="margin-top: 0.25rem;">
+                    {{ overlap.covered_count }} / {{ overlap.total_count }} skills
                 </div>
             </div>
             {% endfor %}
