@@ -105,6 +105,14 @@
                 <span class="browse-item-count">{{ agents_count }}</span>
             </a>
         </div>
+        <div class="browse-item">
+            <a href="{% url 'core:sde_route_planner' %}" style="background: linear-gradient(135deg, #667eea, #764ba2); border: none;">
+                <span style="color: white;">Route Planner</span>
+                <span class="browse-item-count" style="background: rgba(255,255,255,0.2); color: white;">
+                    <i class="fas fa-route"></i>
+                </span>
+            </a>
+        </div>
     </div>
 </div>
 
@@ -117,10 +125,54 @@
 </div>
 
 <div class="card">
+    <h2 class="section-title">Skills</h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+        Comprehensive browser for {{ skills_count }} skills across all skill groups.
+        Filter by attributes, rank, and explore skill prerequisites.
+    </p>
+    <div class="browse-grid">
+        <div class="browse-item">
+            <a href="{% url 'core:sde_skills_directory' %}" style="background: linear-gradient(135deg, var(--link-color), var(--btn-primary)); border: none;">
+                <span style="color: white;">Skills Directory</span>
+                <span class="browse-item-count" style="background: rgba(255,255,255,0.2); color: white;">{{ skills_count }}</span>
+            </a>
+        </div>
+        <div class="browse-item">
+            <a href="{% url 'core:sde_skills_directory' %}?primary=intelligence">
+                <span class="browse-item-name">Intelligence Skills</span>
+            </a>
+        </div>
+        <div class="browse-item">
+            <a href="{% url 'core:sde_skills_directory' %}?primary=perception">
+                <span class="browse-item-name">Perception Skills</span>
+            </a>
+        </div>
+        <div class="browse-item">
+            <a href="{% url 'core:sde_skills_directory' %}?primary=willpower">
+                <span class="browse-item-name">Willpower Skills</span>
+            </a>
+        </div>
+        <div class="browse-item">
+            <a href="{% url 'core:sde_skills_directory' %}?primary=memory">
+                <span class="browse-item-name">Memory Skills</span>
+            </a>
+        </div>
+        <div class="browse-item">
+            <a href="{% url 'core:sde_skills_directory' %}?primary=charisma">
+                <span class="browse-item-name">Charisma Skills</span>
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="card">
     <h2 class="section-title">Quick Links</h2>
     <div class="quick-links">
+        <a href="{% url 'core:sde_skills_directory' %}" class="quick-link" style="background: var(--link-color);">
+            Skills Directory ({{ skills_count }})
+        </a>
         <a href="{% url 'core:sde_category_detail' 16 %}" class="quick-link">
-            Skills ({{ skills_count }})
+            Skills by Category
         </a>
         <a href="{% url 'core:sde_category_detail' 3 %}" class="quick-link">
             Materials

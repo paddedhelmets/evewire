@@ -137,6 +137,7 @@ urlpatterns = [
     # SDE Browser (read-only SDE exploration)
     path('sde/', sde_views.sde_index, name='sde_index'),
     path('sde/search', sde_views.sde_search, name='sde_search'),
+    path('sde/route/', sde_views.sde_route_planner, name='sde_route_planner'),
     path('sde/item/<int:type_id>/', sde_views.sde_item_detail, name='sde_item_detail'),
     path('sde/ship/<int:ship_id>/', sde_views.sde_ship_detail, name='sde_ship_detail'),
     path('sde/category/<int:category_id>/', sde_views.sde_category_detail, name='sde_category_detail'),
@@ -149,6 +150,7 @@ urlpatterns = [
     path('sde/variants/<int:type_id>/', sde_views.sde_variant_comparison, name='sde_variant_comparison'),
     path('sde/certificate/<int:cert_id>/', sde_views.sde_certificate_detail, name='sde_certificate_detail'),
     path('sde/industry/', sde_views.sde_industry_activities, name='sde_industry_activities'),
+    path('sde/skills/', sde_views.sde_skills_directory, name='sde_skills_directory'),
     path('sde/factions/', sde_views.sde_faction_list, name='sde_faction_list'),
     path('sde/faction/<int:faction_id>/', sde_views.sde_faction_detail, name='sde_faction_detail'),
     path('sde/corporation/<int:corporation_id>/', sde_views.sde_corporation_detail, name='sde_corporation_detail'),

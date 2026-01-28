@@ -13,7 +13,7 @@ from django.db import connection
 from core.sde.models import (
     InvTypes, InvGroups, InvCategories, InvMarketGroups, InvMetaGroups, InvMetaTypes,
     DgmAttributeTypes, DgmTypeAttributes,
-    MapRegions, MapSolarSystems, MapConstellations,
+    MapRegions, MapSolarSystems, MapConstellations, MapSolarSystemJumps,
     ChrFactions, ChrRaces, CrpNPCCorporations,
     StaStations,
     CertCerts, CertSkills, CertMasteries,
@@ -1581,4 +1581,444 @@ def sde_industry_activities(request: HttpRequest) -> HttpResponse:
         'blueprints': blueprints_with_activity,
         'activity_counts': activity_counts,
         'total_blueprints': len(blueprints_with_activity),
+    })
+
+
+# ============================================================================
+# Route Planner
+# ============================================================================
+
+def sde_route_planner(request: HttpRequest) -> HttpResponse:
+    """
+    Route planner for finding paths between solar systems.
+
+    Supports three route types:
+    - shortest: Minimum number of jumps (BFS)
+    - safest: Prefers highsec, penalizes lowsec/nullsec (weighted Dijkstra)
+    - fastest: Considers security and avoids dangerous space (weighted Dijkstra)
+
+    Uses raw SQL for efficient graph traversal.
+    """
+    origin_id = request.GET.get('origin_id')
+    destination_id = request.GET.get('destination_id')
+    route_type = request.GET.get('route_type', 'shortest')
+
+    route = []
+    error = None
+    origin_system = None
+    destination_system = None
+    total_jumps = 0
+    estimated_time = None
+    route_stats = {}
+
+    if origin_id and destination_id:
+        try:
+            origin_id = int(origin_id)
+            destination_id = int(destination_id)
+
+            # Get origin and destination systems
+            origin_system = MapSolarSystems.objects.select_related(
+                'region', 'constellation'
+            ).get(system_id=origin_id)
+
+            destination_system = MapSolarSystems.objects.select_related(
+                'region', 'constellation'
+            ).get(system_id=destination_id)
+
+            # Calculate route
+            if origin_id == destination_id:
+                route = [origin_system]
+                total_jumps = 0
+            else:
+                route = find_route(origin_id, destination_id, route_type)
+                if route:
+                    total_jumps = len(route) - 1
+                    # Estimated time: ~1 minute per jump in highsec, ~2 min in lowsec, ~3 min in nullsec
+                    base_time = sum(1 if sys.security >= 0.45 else 2 if sys.security >= 0.05 else 3 for sys in route)
+                    estimated_time = f"{base_time} minutes"
+
+                    # Calculate route statistics
+                    security_counts = {'highsec': 0, 'lowsec': 0, 'nullsec': 0, 'wormhole': 0}
+                    region_changes = 0
+                    constellation_changes = 0
+                    last_region = route[0].region_id
+                    last_constellation = route[0].constellation_id
+
+                    for sys in route:
+                        if sys.security >= 0.45:
+                            security_counts['highsec'] += 1
+                        elif sys.security >= 0.05:
+                            security_counts['lowsec'] += 1
+                        elif sys.security >= 0:
+                            security_counts['nullsec'] += 1
+                        else:
+                            security_counts['wormhole'] += 1
+
+                        if sys.region_id != last_region:
+                            region_changes += 1
+                            last_region = sys.region_id
+                        if sys.constellation_id != last_constellation:
+                            constellation_changes += 1
+                            last_constellation = sys.constellation_id
+
+                    route_stats = {
+                        'security_counts': security_counts,
+                        'region_changes': region_changes,
+                        'constellation_changes': constellation_changes,
+                    }
+                else:
+                    error = "No route found between these systems. They may be in disconnected areas of space (e.g., wormhole space)."
+
+        except MapSolarSystems.DoesNotExist:
+            error = "One or both systems not found."
+        except ValueError:
+            error = "Invalid system ID."
+        except Exception as e:
+            error = f"Error calculating route: {str(e)}"
+
+    return render(request, 'core/sde/route_planner.html', {
+        'origin_system': origin_system,
+        'destination_system': destination_system,
+        'route': route,
+        'route_type': route_type,
+        'total_jumps': total_jumps,
+        'estimated_time': estimated_time,
+        'error': error,
+        'route_stats': route_stats,
+    })
+
+
+def find_route(origin_id: int, destination_id: int, route_type: str) -> list:
+    """
+    Find a route between two solar systems using graph traversal.
+
+    Args:
+        origin_id: Starting system ID
+        destination_id: Target system ID
+        route_type: 'shortest', 'safest', or 'fastest'
+
+    Returns:
+        List of MapSolarSystems objects representing the route, or empty list if no route found.
+    """
+    # Security weights for different route types
+    # Returns weight multiplier based on security status
+    def get_weight(security: float) -> float:
+        if route_type == 'shortest':
+            return 1.0  # All jumps equal weight
+        elif route_type == 'safest':
+            # Heavily penalize dangerous space
+            if security >= 0.45:  # Highsec
+                return 1.0
+            elif security >= 0.05:  # Lowsec
+                return 5.0
+            elif security >= 0:  # Nullsec
+                return 10.0
+            else:  # Wormhole
+                return 20.0
+        else:  # fastest
+            # Moderate penalty for dangerous space (assumes cautious travel)
+            if security >= 0.45:  # Highsec
+                return 1.0
+            elif security >= 0.05:  # Lowsec
+                return 2.0
+            elif security >= 0:  # Nullsec
+                return 3.0
+            else:  # Wormhole
+                return 5.0
+
+    # Use raw SQL for efficient graph traversal
+    # Dijkstra's algorithm with weighted edges
+    from django.conf import settings
+    original_debug = settings.DEBUG
+    settings.DEBUG = False
+
+    try:
+        with connection.cursor() as cursor:
+            # First, check if the jump table exists
+            cursor.execute("""
+                SELECT name FROM sqlite_master
+                WHERE type='table' AND name='evesde_mapsolarsystemjumps'
+            """)
+            jump_table_exists = cursor.fetchone() is not None
+
+            if not jump_table_exists:
+                # Fallback: Create a simple mock graph based on region/constellation adjacency
+                # This is a simplified version that doesn't use actual stargate connections
+                cursor.execute("""
+                    SELECT
+                        s1.solarSystemID,
+                        s2.solarSystemID,
+                        s2.security
+                    FROM evesde_mapsolarsystems s1
+                    CROSS JOIN evesde_mapsolarsystems s2
+                    WHERE s1.solarSystemID != s2.solarSystemID
+                        AND (
+                            -- Same constellation (likely connected)
+                            (s1.constellationID = s2.constellationID AND s1.solarSystemID < s2.solarSystemID)
+                            OR
+                            -- Adjacent constellations in same region
+                            (s1.regionID = s2.regionID AND s1.constellationID != s2.constellationID
+                             AND s1.solarSystemID < s2.solarSystemID
+                             AND ABS(s1.security - s2.security) < 0.5)
+                        )
+                    LIMIT 10000
+                """)
+
+                # Build graph: {system_id: [(neighbor_id, weight), ...]}
+                graph = {}
+
+                for from_id, to_id, security in cursor.fetchall():
+                    if from_id not in graph:
+                        graph[from_id] = []
+                    weight = get_weight(security or 0.0)
+                    graph[from_id].append((to_id, weight))
+            else:
+                # Build adjacency list with security weights from actual jump table
+                cursor.execute("""
+                    SELECT
+                        fromSolarSystemID,
+                        toSolarSystemID,
+                        s.security
+                    FROM evesde_mapsolarsystemjumps j
+                    JOIN evesde_mapsolarsystems s ON j.toSolarSystemID = s.solarSystemID
+                """)
+
+                # Build graph: {system_id: [(neighbor_id, weight), ...]}
+                graph = {}
+                system_security = {}
+
+                for from_id, to_id, security in cursor.fetchall():
+                    if from_id not in graph:
+                        graph[from_id] = []
+                    weight = get_weight(security or 0.0)
+                    graph[from_id].append((to_id, weight))
+                    system_security[to_id] = security or 0.0
+
+            # Dijkstra's algorithm
+            import heapq
+
+            # Priority queue: (total_weight, current_system, path)
+            pq = [(0, origin_id, [origin_id])]
+            visited = set()
+            max_iterations = 10000  # Prevent infinite loops
+            iterations = 0
+
+            while pq and iterations < max_iterations:
+                iterations += 1
+                total_weight, current, path = heapq.heappop(pq)
+
+                if current in visited:
+                    continue
+                visited.add(current)
+
+                if current == destination_id:
+                    # Found destination! Build the route
+                    route_systems = MapSolarSystems.objects.filter(
+                        system_id__in=path
+                    ).select_related('region', 'constellation')
+
+                    # Maintain path order
+                    system_map = {sys.system_id: sys for sys in route_systems}
+                    return [system_map[sid] for sid in path if sid in system_map]
+
+                if current not in graph:
+                    continue
+
+                for neighbor, weight in graph[current]:
+                    if neighbor not in visited and len(path) < 50:  # Limit route depth
+                        heapq.heappush(pq, (total_weight + weight, neighbor, path + [neighbor]))
+
+            # No route found
+            return []
+
+    finally:
+        settings.DEBUG = original_debug
+
+
+def sde_skills_directory(request: HttpRequest) -> HttpResponse:
+    """
+    Comprehensive skills directory and overview page.
+
+    Shows:
+    - All skill groups with item counts
+    - Attribute breakdown (primary/secondary attribute distribution)
+    - Skill rank distribution (how many rank 1, rank 2, etc.)
+    - Search/filter by name, attribute, rank
+    - Sort options
+    """
+    # Get filter parameters
+    search_query = request.GET.get('q', '').strip()
+    primary_attr = request.GET.get('primary', '')
+    secondary_attr = request.GET.get('secondary', '')
+    rank_filter = request.GET.get('rank', '')
+    sort_by = request.GET.get('sort', 'group')
+
+    # EVE attribute IDs and names
+    ATTRIBUTE_IDS = {
+        'intelligence': 180,
+        'perception': 181,
+        'charisma': 182,
+        'willpower': 183,
+        'memory': 184,
+    }
+
+    ATTRIBUTE_NAMES = {
+        'intelligence': 'Intelligence',
+        'perception': 'Perception',
+        'charisma': 'Charisma',
+        'willpower': 'Willpower',
+        'memory': 'Memory',
+    }
+
+    # Base queryset for skills (category 16)
+    skills_queryset = InvTypes.objects.filter(
+        group__category_id=16,
+        published=True
+    ).select_related('group')
+
+    # Apply search filter
+    if search_query and len(search_query) >= 2:
+        skills_queryset = skills_queryset.filter(
+            Q(name__icontains=search_query) |
+            Q(description__icontains=search_query)
+        )
+
+    # Get skill data with attributes using raw SQL for performance
+    skills_data = []
+    from django.conf import settings
+    original_debug = settings.DEBUG
+    settings.DEBUG = False
+
+    try:
+        with connection.cursor() as cursor:
+            # Build the query with filters
+            sql_query = """
+                SELECT
+                    t.typeID, t.typeName, t.description,
+                    g.groupID, g.groupName,
+                    COALESCE(ta1.valueInt, 0) as primaryAttribute,
+                    COALESCE(ta2.valueInt, 0) as secondaryAttribute,
+                    COALESCE(ta3.valueInt, 1) as skillRank
+                FROM evesde_invtypes t
+                JOIN evesde_invgroups g ON t.groupID = g.groupID
+                LEFT JOIN evesde_dgmattypeattributes ta1 ON t.typeID = ta1.typeID AND ta1.attributeID = 180
+                LEFT JOIN evesde_dgmattypeattributes ta2 ON t.typeID = ta2.typeID AND ta2.attributeID = 181
+                LEFT JOIN evesde_dgmattypeattributes ta3 ON t.typeID = ta3.typeID AND ta3.attributeID = 275
+                WHERE g.categoryID = 16 AND t.published = 1
+            """
+            params = []
+
+            # Apply search filter in SQL
+            if search_query and len(search_query) >= 2:
+                sql_query += " AND (t.typeName LIKE ? OR t.description LIKE ?)"
+                params.extend([f'%{search_query}%', f'%{search_query}%'])
+
+            # Apply attribute filters
+            if primary_attr and primary_attr in ATTRIBUTE_IDS:
+                sql_query += " AND ta1.valueInt = ?"
+                params.append(ATTRIBUTE_IDS[primary_attr])
+
+            if secondary_attr and secondary_attr in ATTRIBUTE_IDS:
+                sql_query += " AND ta2.valueInt = ?"
+                params.append(ATTRIBUTE_IDS[secondary_attr])
+
+            if rank_filter:
+                try:
+                    rank_val = int(rank_filter)
+                    sql_query += " AND ta3.valueInt = ?"
+                    params.append(rank_val)
+                except ValueError:
+                    pass
+
+            # Apply sorting
+            sort_options = {
+                'name': 't.typeName ASC',
+                'name_desc': 't.typeName DESC',
+                'group': 'g.groupName, t.typeName',
+                'rank': 'ta3.valueInt, t.typeName',
+                'rank_desc': 'ta3.valueInt DESC, t.typeName',
+            }
+
+            order_by = sort_options.get(sort_by, 'g.groupName, t.typeName')
+            sql_query += f" ORDER BY {order_by}"
+
+            cursor.execute(sql_query, params)
+
+            for row in cursor.fetchall():
+                (type_id, name, description, group_id, group_name,
+                 primary_val, secondary_val, rank_val) = row
+
+                # Map attribute values to names
+                attr_map = {
+                    180: 'intelligence',
+                    181: 'perception',
+                    182: 'charisma',
+                    183: 'willpower',
+                    184: 'memory',
+                }
+
+                primary = attr_map.get(primary_val, 'intelligence')
+                secondary = attr_map.get(secondary_val, 'memory')
+                rank = int(rank_val) if rank_val else 1
+
+                skills_data.append({
+                    'type_id': type_id,
+                    'name': name,
+                    'description': description,
+                    'group_id': group_id,
+                    'group_name': group_name,
+                    'primary': primary,
+                    'secondary': secondary,
+                    'rank': rank,
+                })
+    finally:
+        settings.DEBUG = original_debug
+
+    # Get all skill groups with counts (for group filter/sidebar)
+    all_skill_groups = InvGroups.objects.filter(
+        category_id=16,
+        published=True
+    ).annotate(
+        skill_count=Count('types', filter=Q(types__published=True))
+    ).filter(skill_count__gt=0).order_by('group_name')
+
+    # Calculate attribute distributions
+    primary_dist = {}
+    secondary_dist = {}
+
+    for skill in skills_data:
+        p = skill['primary']
+        s = skill['secondary']
+        primary_dist[p] = primary_dist.get(p, 0) + 1
+        secondary_dist[s] = secondary_dist.get(s, 0) + 1
+
+    # Calculate rank distribution
+    rank_dist = {}
+    for skill in skills_data:
+        r = skill['rank']
+        rank_dist[r] = rank_dist.get(r, 0) + 1
+
+    # Group skills by group for display
+    skills_by_group = {}
+    for skill in skills_data:
+        group = skill['group_name']
+        if group not in skills_by_group:
+            skills_by_group[group] = []
+        skills_by_group[group].append(skill)
+
+    return render(request, 'core/sde/skills_directory.html', {
+        'skills_by_group': skills_by_group,
+        'all_skill_groups': all_skill_groups,
+        'total_skills': len(skills_data),
+        'total_groups': len(skills_by_group),
+        'primary_distribution': primary_dist,
+        'secondary_distribution': secondary_dist,
+        'rank_distribution': rank_dist,
+        'attribute_names': ATTRIBUTE_NAMES,
+        'search_query': search_query,
+        'primary_attr': primary_attr,
+        'secondary_attr': secondary_attr,
+        'rank_filter': rank_filter,
+        'sort_by': sort_by,
+        'has_filters': bool(search_query or primary_attr or secondary_attr or rank_filter),
     })

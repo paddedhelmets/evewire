@@ -1370,3 +1370,31 @@ class RamTypeRequirements(models.Model):
     def __str__(self):
         return f'Type {self.type_id} - Activity {self.activity_id} - Required {self.required_type_id}'
 
+
+# ============================================================================
+# System Connections (Level 1)
+# ============================================================================
+
+class MapSolarSystemJumps(models.Model):
+    """
+    EVE SDE: mapSolarSystemJumps table
+
+    Stargate connections between solar systems.
+    Each row represents a direct connection from one system to another.
+    """
+    from_region = models.ForeignKey('MapRegions', on_delete=models.DO_NOTHING, db_column='fromRegionID', related_name='outgoing_jumps')
+    from_constellation = models.ForeignKey('MapConstellations', on_delete=models.DO_NOTHING, db_column='fromConstellationID', related_name='outgoing_jumps')
+    from_system = models.ForeignKey('MapSolarSystems', on_delete=models.DO_NOTHING, db_column='fromSolarSystemID', related_name='outgoing_jumps')
+    to_region = models.ForeignKey('MapRegions', on_delete=models.DO_NOTHING, db_column='toRegionID', related_name='incoming_jumps')
+    to_constellation = models.ForeignKey('MapConstellations', on_delete=models.DO_NOTHING, db_column='toConstellationID', related_name='incoming_jumps')
+    to_system = models.ForeignKey('MapSolarSystems', on_delete=models.DO_NOTHING, db_column='toSolarSystemID', related_name='incoming_jumps')
+
+    class Meta:
+        db_table = 'evesde_mapsolarsystemjumps'
+        managed = False
+        verbose_name = 'System Jump'
+        verbose_name_plural = 'System Jumps'
+
+    def __str__(self):
+        return f'{self.from_system.system_name} -> {self.to_system.system_name}'
+
