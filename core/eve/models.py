@@ -476,8 +476,13 @@ class LoyaltyStoreOffer(models.Model):
 
     ESI Endpoint: GET /loyalty/stores/{corporation_id}/offers/
     Cached to avoid repeated ESI calls for store browsing.
+
+    Note: offer_id is NOT globally unique - it's unique per corporation.
+    The primary key is an auto-increment id, with a unique constraint on
+    (corporation_id, offer_id) together.
     """
-    offer_id = models.BigIntegerField(primary_key=True)
+    id = models.BigAutoField(primary_key=True)
+    offer_id = models.BigIntegerField()
     corporation = models.ForeignKey(
         CorporationLPStoreInfo,
         on_delete=models.CASCADE,
@@ -499,6 +504,12 @@ class LoyaltyStoreOffer(models.Model):
         db_table = 'eve_loyalty_store_offers'
         verbose_name = _('LP Store Offer')
         verbose_name_plural = _('LP Store Offers')
+        constraints = [
+            models.UniqueConstraint(
+                fields=['corporation', 'offer_id'],
+                name='unique_corp_offer'
+            )
+        ]
         indexes = [
             models.Index(fields=['corporation', 'cached_at']),
             models.Index(fields=['type_id']),
@@ -506,7 +517,7 @@ class LoyaltyStoreOffer(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"Offer {self.offer_id}: {self.loyalty_points} LP"
+        return f"Offer {self.offer_id} (corp {self.corporation_id}): {self.loyalty_points} LP"
 
     @classmethod
     def from_esi(cls, corporation_id: int, offer_data: dict) -> 'LoyaltyStoreOffer':

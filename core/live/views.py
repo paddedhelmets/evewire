@@ -91,6 +91,10 @@ def live_lp_stores(request):
         key=lambda x: x[0].faction_name if x[0] else ''
     )
 
+    # Debug: check total_offers values
+    non_zero_count = sum(1 for item in corps_with_factions if item['lp_info'].total_offers > 0)
+    print(f"DEBUG VIEW: corps_with_factions={len(corps_with_factions)}, non_zero_count={non_zero_count}")
+
     return render(request, 'core/live/lp_stores.html', {
         'factions': sorted_factions,
         'total_corps': len(corps),
