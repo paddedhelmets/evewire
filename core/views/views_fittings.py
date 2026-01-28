@@ -205,6 +205,7 @@ def fitting_detail(request: HttpRequest, fitting_id: int) -> HttpResponse:
                     'asset_location': asset_location,
                     'asset_location_type': asset_location_type,
                     'missing_module_names': missing_module_names,
+                    'match_percent': match.match_score * 100,
                 })
 
     # Calculate readiness summary
@@ -932,6 +933,7 @@ def fleet_readiness(request: HttpRequest) -> HttpResponse:
             matches_data.append({
                 'character': character,
                 'best_match': best_match,
+                'match_percent': (best_match.match_score * 100) if best_match else 0,
             })
 
         # Calculate readiness percentage
