@@ -251,6 +251,7 @@
         <div class="fitting-header">
             <div>
                 <div class="fitting-name">
+                    {% if item.fitting.is_pinned %}<span style="color: #f57c00;">★</span>{% endif %}
                     <a href="{% url 'core:fitting_detail' item.fitting.id %}">{{ item.fitting.name }}</a>
                 </div>
                 <div class="fitting-ship">{{ item.fitting.ship_type_name }}</div>

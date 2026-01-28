@@ -106,6 +106,9 @@ def fittings_list(request: HttpRequest, character_id: int = None) -> HttpRespons
             'is_ignored': fitting.id in ignored_ids,
         })
 
+    # Sort: pinned first, then by name
+    fittings_with_matches.sort(key=lambda x: (not x['fitting'].is_pinned, x['fitting'].name))
+
     return render(request, 'core/fittings_list.html', {
         'character': character,
         'fittings_with_matches': fittings_with_matches,
@@ -492,6 +495,26 @@ def fitting_ignore_toggle(request: HttpRequest, fitting_id: int) -> HttpResponse
         return JsonResponse({'status': 'unignored', 'message': f'Unignored {fitting.name}'})
 
     return JsonResponse({'status': 'ignored', 'message': f'Ignored {fitting.name}'})
+
+
+@login_required
+@require_http_methods(["POST"])
+def fitting_pin_toggle(request: HttpRequest, fitting_id: int) -> HttpResponse:
+    """Toggle pinned status for a fitting."""
+    from core.doctrines.models import Fitting
+    from django.http import JsonResponse
+
+    try:
+        fitting = Fitting.objects.get(id=fitting_id)
+    except Fitting.DoesNotExist:
+        return JsonResponse({'error': 'Fitting not found'}, status=404)
+
+    # Toggle pinned status
+    fitting.is_pinned = not fitting.is_pinned
+    fitting.save()
+
+    status = 'pinned' if fitting.is_pinned else 'unpinned'
+    return JsonResponse({'status': status, 'is_pinned': fitting.is_pinned, 'message': f'{status.capitalize()} {fitting.name}'})
 
 
 @login_required
@@ -924,129 +947,6 @@ def fitting_bulk_import(request: HttpRequest) -> HttpResponse:
             {'name': 'XML', 'description': 'CCP official XML format'},
             {'name': 'MD', 'description': 'Markdown format with embedded EFT fit and metadata'},
         ],
-    })
-
-
-@login_required
-def fleet_readiness(request: HttpRequest) -> HttpResponse:
-    """Show fleet readiness dashboard for all tracked fittings.
-
-    Matches are calculated JIT (just-in-time) rather than cached.
-    """
-    from core.doctrines.models import Fitting
-    from core.doctrines.services import AssetFitExtractor
-    from core.character.models import CharacterAsset
-    from core.models import Character
-    from core.eve.models import ItemType
-
-    # Get all tracked fittings (or all active if none tracked)
-    tracked_fittings = Fitting.objects.filter(is_tracked=True)
-    if not tracked_fittings.exists():
-        # Fallback to active fittings if nothing is tracked
-        tracked_fittings = Fitting.objects.filter(is_active=True)
-
-    # Extract fitted ships for all characters once (JIT)
-    extractor = AssetFitExtractor()
-    all_fitted_ships = {}
-    for character in request.user.characters.all():
-        ships = extractor.extract_ships(character)
-        all_fitted_ships[character.id] = {ship.asset_id: ship for ship in ships}
-
-    # Calculate readiness for each fitting
-    fitting_readiness = []
-    for fitting in tracked_fittings:
-        # Get fitting requirements
-        fitting_modules = set()
-        for entry in fitting.entries.all():
-            fitting_modules.add(entry.module_type_id)
-
-        characters_ready = 0
-        characters_partial = 0
-        characters_total = 0
-        matches_data = []
-        missing_modules_counts = {}
-
-        for character in request.user.characters.all():
-            characters_total += 1
-
-            # Get ship assets of this fitting's type for this character
-            ship_assets = CharacterAsset.objects.filter(
-                character=character,
-                type_id=fitting.ship_type_id
-            )
-
-            # Find best match for this character
-            best_score = 0.0
-            best_missing = []
-            character_missing = []
-
-            for asset in ship_assets:
-                if asset.is_singleton:
-                    fitted_ship = all_fitted_ships.get(character.id, {}).get(asset.item_id)
-                    if fitted_ship:
-                        fitted_modules = fitted_ship.get_fitted_modules()
-                        missing = fitting_modules - fitted_modules
-                        if not missing:
-                            score = 1.0
-                        else:
-                            score = (len(fitting_modules) - len(missing)) / len(fitting_modules)
-                        if score > best_score:
-                            best_score = score
-                            best_missing = list(missing)
-                        character_missing.extend(missing)
-
-            if best_score >= 1.0:
-                characters_ready += 1
-            elif best_score > 0:
-                characters_partial += 1
-
-            # Count missing modules for common gaps analysis
-            for module_id in character_missing:
-                missing_modules_counts[module_id] = missing_modules_counts.get(module_id, 0) + 1
-
-            matches_data.append({
-                'character': character,
-                'best_match': type('Match', (), {
-                    'match_score': best_score,
-                })(),
-                'match_percent': best_score * 100,
-            })
-
-        # Calculate readiness percentage
-        readiness_percent = (characters_ready / characters_total * 100) if characters_total > 0 else 0
-
-        # Get top 5 most common missing modules
-        sorted_missing = sorted(missing_modules_counts.items(), key=lambda x: x[1], reverse=True)[:5]
-        top_missing = []
-        for module_id, count in sorted_missing:
-            try:
-                module = ItemType.objects.get(id=module_id)
-                top_missing.append({
-                    'name': module.name,
-                    'count': count,
-                })
-            except ItemType.DoesNotExist:
-                top_missing.append({
-                    'name': f"Module {module_id}",
-                    'count': count,
-                })
-
-        fitting_readiness.append({
-            'fitting': fitting,
-            'characters_ready': characters_ready,
-            'characters_partial': characters_partial,
-            'characters_total': characters_total,
-            'readiness_percent': readiness_percent,
-            'matches_data': matches_data,
-            'top_missing': top_missing,
-        })
-
-    # Sort by readiness percent (highest first), then by name
-    fitting_readiness.sort(key=lambda x: (-x['readiness_percent'], x['fitting'].name))
-
-    return render(request, 'core/fleet_readiness.html', {
-        'fitting_readiness': fitting_readiness,
-        'total_fittings': len(fitting_readiness),
     })
 
 
