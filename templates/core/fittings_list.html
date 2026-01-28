@@ -163,6 +163,33 @@
         border-color: #ff5722;
     }
 
+    /* Pin button */
+    .pin-btn {
+        padding: 0.2rem 0.5rem;
+        font-size: 0.9rem;
+        border: 1px solid var(--border-color);
+        background: var(--bg-primary);
+        color: var(--text-secondary);
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+
+    .pin-btn:hover {
+        background: var(--bg-secondary);
+    }
+
+    .pin-btn[data-is-pinned="true"] {
+        background: #f57c00;
+        color: white;
+        border-color: #f57c00;
+    }
+
+    .pin-icon {
+        font-size: 1rem;
+    }
+
+
     /* Hidden fittings banner */
     .hidden-banner {
         background: #fff3e0;
@@ -256,6 +283,13 @@
                 <div class="fitting-ship">{{ item.fitting.ship_type_name }}</div>
             </div>
             <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <button class="pin-btn btn-sm" data-fitting-id="{{ item.fitting.id }}" data-is-pinned="{{ item.fitting.is_pinned|yesno:'true,false' }}" title="{% if item.fitting.is_pinned %}Unpin{% else %}Pin{% endif %} this fitting">
+                    {% if item.fitting.is_pinned %}
+                    <span class="pin-icon">★</span>
+                    {% else %}
+                    <span class="pin-icon">☆</span>
+                    {% endif %}
+                </button>
                 <div class="fitting-status {% if item.fitting.is_active %}active{% else %}inactive{% endif %}">
                     {% if item.fitting.is_active %}Active{% else %}Inactive{% endif %}
                 </div>
@@ -278,21 +312,6 @@
             {% endfor %}
         </div>
         {% endif %}
-
-        <div class="fitting-matches">
-            {% if item.match_count > 0 %}
-                <strong style="font-size: 0.9rem;">{{ item.match_count }} match{{ item.match_count|pluralize }}:</strong>
-                {% for char_id, count in item.matches_by_character.items %}
-                    {% for char in all_characters %}
-                        {% if char.id == char_id %}
-                        <span class="match-chip">{{ char.character_name }}: {{ count }}</span>
-                        {% endif %}
-                    {% endfor %}
-                {% endfor %}
-            {% else %}
-                <span class="match-chip none">No matching ships</span>
-            {% endif %}
-        </div>
     </div>
     {% endfor %}
 </div>
@@ -350,6 +369,59 @@ document.addEventListener('DOMContentLoaded', function() {
             } catch (error) {
                 console.error('Error toggling ignore:', error);
                 alert('Failed to toggle ignore status');
+            }
+        });
+    });
+
+    // Handle pin button clicks
+    const pinButtons = document.querySelectorAll('.pin-btn');
+
+    pinButtons.forEach(button => {
+        button.addEventListener('click', async function(e) {
+            e.preventDefault();
+            const fittingId = this.dataset.fittingId;
+            const isPinned = this.dataset.isPinned === 'true';
+            const url = `/fittings/${fittingId}/pin-toggle/`;
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '',
+                        'Content-Type': 'application/json',
+                    },
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+
+                    // Update button appearance
+                    if (data.is_pinned) {
+                        this.dataset.isPinned = 'true';
+                        this.querySelector('.pin-icon').textContent = '★';
+                        this.style.background = '#f57c00';
+                        this.style.color = 'white';
+                        this.style.borderColor = '#f57c00';
+                    } else {
+                        this.dataset.isPinned = 'false';
+                        this.querySelector('.pin-icon').textContent = '☆';
+                        this.style.background = '';
+                        this.style.color = '';
+                        this.style.borderColor = '';
+                    }
+
+                    // Update title attribute
+                    this.title = data.is_pinned ? 'Unpin this fitting' : 'Pin this fitting';
+
+                    // Reload page to show updated sort order (pinned items float to top)
+                    window.location.reload();
+                } else {
+                    console.error('Failed to toggle pin');
+                    alert('Failed to toggle pin status');
+                }
+            } catch (error) {
+                console.error('Error toggling pin:', error);
+                alert('Failed to toggle pin status');
             }
         });
     });
