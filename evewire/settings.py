@@ -68,7 +68,7 @@ WSGI_APPLICATION = 'evewire.wsgi.application'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 # Single database for both app data and SDE reference data
 # SDE tables use core_ prefix (e.g., core_itemtype) to avoid conflicts
-DATABASE_PATH = Path('~/data/evewire/eve_sde.sqlite3').expanduser()
+DATABASE_PATH = Path('~/data/evewire/evewire_app.sqlite3').expanduser()
 
 DATABASES = {
     'default': {
@@ -137,6 +137,17 @@ OAUTH2_PROVIDER = {
 }
 
 # django-q2 Configuration
+#
+# Worker Configuration Guide:
+# - Q_WORKERS: Number of worker processes (default: 1)
+#   - For development: 1-2 workers
+#   - For small deployments (1-10 users): 2-4 workers
+#   - For medium deployments (10-50 users): 4-8 workers
+#   - For large deployments (50+ users): 8+ workers, monitor ESI rate limits
+#
+# Note: With ESI rate limit awareness and jitter, multiple workers can safely
+# run concurrently. The rate limiter will automatically add backoff when
+# approaching the ESI error limit (starts at 20 remaining).
 Q_CLUSTER = {
     'name': 'evewire',
     'workers': config('Q_WORKERS', default=1, cast=int),

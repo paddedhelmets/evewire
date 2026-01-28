@@ -6,15 +6,103 @@ and token management.
 """
 
 import logging
+import random
 import requests
 from datetime import timedelta, datetime
-from typing import Optional, Any
+from typing import Optional, Any, Callable
 from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
 from django.db import transaction
 
 logger = logging.getLogger('evewire')
+
+
+def retry_with_exponential_backoff(
+    func: Callable,
+    max_retries: int = 3,
+    initial_backoff: float = 1.0,
+    max_backoff: float = 60.0,
+    retriable_statuses: set[int] = None,
+) -> Any:
+    """
+    Execute a function with retry logic and exponential backoff.
+
+    Args:
+        func: The function to execute (should be a callable that makes the ESI request)
+        max_retries: Maximum number of retry attempts
+        initial_backoff: Initial backoff time in seconds
+        max_backoff: Maximum backoff time in seconds
+        retriable_statuses: HTTP status codes that trigger a retry
+
+    Returns:
+        The result of the function call
+
+    Raises:
+        The last exception if all retries are exhausted
+    """
+    if retriable_statuses is None:
+        retriable_statuses = {408, 500, 502, 503, 504, 520, 521, 522, 524}
+
+    last_exception = None
+
+    for attempt in range(max_retries + 1):  # +1 for initial attempt
+        try:
+            return func()
+        except requests.HTTPError as e:
+            last_exception = e
+
+            # Don't retry certain error types
+            if e.response is not None:
+                status = e.response.status_code
+
+                # 420 (rate limit) is handled separately by ESIRateLimiter
+                # Don't retry here, let the rate limiter handle it
+                if status == 420:
+                    raise
+
+                # 4xx errors (except 408 Request Timeout) are not retriable
+                if 400 <= status < 500 and status not in retriable_statuses:
+                    raise
+
+                # 5xx errors and 408 are retriable
+                if status in retriable_statuses or 500 <= status < 600:
+                    if attempt < max_retries:
+                        # Calculate exponential backoff with jitter
+                        backoff = min(initial_backoff * (2 ** attempt), max_backoff)
+                        jitter = random.uniform(0, backoff * 0.1)  # Add 0-10% jitter
+                        wait_time = backoff + jitter
+
+                        logger.warning(
+                            f'ESI request failed with {status}, retrying in {wait_time:.1f}s '
+                            f'(attempt {attempt + 1}/{max_retries})'
+                        )
+                        import time
+                        time.sleep(wait_time)
+                        continue
+
+            # If we get here, re-raise the exception
+            raise
+
+        except (requests.ConnectionError, requests.Timeout) as e:
+            last_exception = e
+            if attempt < max_retries:
+                backoff = min(initial_backoff * (2 ** attempt), max_backoff)
+                jitter = random.uniform(0, backoff * 0.1)
+                wait_time = backoff + jitter
+
+                logger.warning(
+                    f'ESI request failed with {type(e).__name__}, retrying in {wait_time:.1f}s '
+                    f'(attempt {attempt + 1}/{max_retries})'
+                )
+                import time
+                time.sleep(wait_time)
+                continue
+            raise
+
+    # If we exhausted all retries, raise the last exception
+    if last_exception:
+        raise last_exception
 
 
 class ESIMeta:
@@ -183,6 +271,106 @@ class TokenManager:
         return f'{settings.EVE_SSO_LOGIN_URL}?{urllib.parse.urlencode(params)}'
 
 
+class ESIRateLimiter:
+    """
+    ESI Rate Limiter to prevent hitting ESI error limits.
+
+    Tracks error limit across all requests using Django cache.
+    Implements backoff when approaching the limit.
+    """
+
+    # ESI error limit is per 50 second window
+    ERROR_LIMIT_WARNING_THRESHOLD = 20  # Start backing off at 20 remaining
+    ERROR_LIMIT_CACHE_KEY = 'esi_error_limit_remaining'
+    ERROR_LIMIT_RESET_KEY = 'esi_error_limit_reset'
+    BACKOFF_SECONDS_PER_ERROR = 2  # 2 seconds delay per error consumed (max 100s at threshold)
+
+    @classmethod
+    def _get_cached_limit(cls) -> tuple[int, Optional[str]]:
+        """Get (remaining, reset_time) from cache, or (100, None) if not set."""
+        from django.core.cache import cache
+
+        remaining = cache.get(cls.ERROR_LIMIT_CACHE_KEY)
+        if remaining is None:
+            return 100, None
+        return int(remaining), cache.get(cls.ERROR_LIMIT_RESET_KEY)
+
+    @classmethod
+    def _update_cached_limit(cls, remaining: int, reset_time: Optional[str] = None) -> None:
+        """Update the cached rate limit."""
+        from django.core.cache import cache
+
+        cache.set(cls.ERROR_LIMIT_CACHE_KEY, remaining, timeout=60)  # Cache for 1 min
+        if reset_time:
+            cache.set(cls.ERROR_LIMIT_RESET_KEY, reset_time, timeout=60)
+
+    @classmethod
+    def check_and_wait(cls, remaining: int) -> None:
+        """
+        Check rate limit and wait if necessary before making ESI requests.
+
+        Args:
+            remaining: The X-Esi-Error-Limit-Remain value from response
+        """
+        import time
+
+        # Update cached value
+        cls._update_cached_limit(remaining)
+
+        # If we're below threshold, add backoff delay
+        if remaining < cls.ERROR_LIMIT_WARNING_THRESHOLD:
+            # Calculate backoff: more errors consumed = longer delay
+            errors_consumed = 100 - remaining
+            backoff_seconds = min(
+                errors_consumed * cls.BACKOFF_SECONDS_PER_ERROR,
+                60  # Max 1 minute backoff
+            )
+            logger.info(f'ESI rate limit low ({remaining} remaining), backing off for {backoff_seconds}s')
+            time.sleep(backoff_seconds)
+
+    @classmethod
+    def handle_rate_limit(cls, reset_time: str) -> None:
+        """
+        Handle a 420 rate limit error - wait until reset.
+
+        Args:
+            reset_time: The X-Esi-Error-Limit-Reset header value
+        """
+        import time
+        from datetime import datetime
+
+        cls._update_cached_limit(0, reset_time)
+
+        # Parse reset time (Unix timestamp)
+        try:
+            reset_timestamp = int(reset_time)
+            reset_datetime = datetime.fromtimestamp(reset_timestamp, tz=timezone.utc)
+            now = timezone.now()
+
+            if reset_datetime > now:
+                wait_seconds = (reset_datetime - now).total_seconds() + 1  # Add 1s buffer
+                logger.warning(f'ESI rate limit hit, waiting {wait_seconds}s until reset')
+                time.sleep(wait_seconds)
+            else:
+                # Reset time is in the past, brief pause to be safe
+                logger.warning('ESI rate limit recently reset, waiting 5s')
+                time.sleep(5)
+        except Exception as e:
+            logger.error(f'Failed to parse ESI reset time {reset_time}: {e}')
+            logger.warning('ESI rate limit hit, waiting 60s as fallback')
+            time.sleep(60)
+
+    @classmethod
+    def get_status(cls) -> dict:
+        """Get current rate limit status for monitoring."""
+        remaining, reset = cls._get_cached_limit()
+        return {
+            'remaining': remaining,
+            'reset_time': reset,
+            'status': 'ok' if remaining >= cls.ERROR_LIMIT_WARNING_THRESHOLD else 'low',
+        }
+
+
 class ESIClient:
     """
     Client for EVE Swagger Interface (ESI) API.
@@ -210,7 +398,7 @@ class ESIClient:
 
     @classmethod
     def get(cls, endpoint: str, character, **kwargs) -> ESIResponse:
-        """Make an authenticated GET request to ESI."""
+        """Make an authenticated GET request to ESI with rate limit awareness and retry logic."""
         access_token = character.get_access_token()
         if not access_token:
             raise ValueError('No access token available')
@@ -219,30 +407,72 @@ class ESIClient:
         params = {'datasource': cls.DEFAULT_DATASOURCE, **kwargs}
         headers = cls._get_headers(access_token)
 
-        response = requests.get(url, params=params, headers=headers, timeout=30)
-        response.raise_for_status()
+        def _make_request():
+            """Inner function to make the actual request (used by retry logic)."""
+            response = requests.get(url, params=params, headers=headers, timeout=30)
 
-        meta = ESIMeta(response)
-        data = response.json()
+            # Check for rate limit error (420) - handle specially
+            if response.status_code == 420:
+                reset_time = response.headers.get('X-Esi-Error-Limit-Reset', '')
+                logger.warning(f'ESI rate limit hit (420) on {endpoint}, handling...')
+                ESIRateLimiter.handle_rate_limit(reset_time)
+                # Retry immediately after waiting for reset
+                response = requests.get(url, params=params, headers=headers, timeout=30)
 
-        logger.debug(f'ESI GET {endpoint}: rate limit remaining={meta.remaining_error_limit}')
+            response.raise_for_status()
 
-        return ESIResponse(data, meta)
+            meta = ESIMeta(response)
+            data = response.json()
+
+            logger.debug(f'ESI GET {endpoint}: rate limit remaining={meta.remaining_error_limit}')
+
+            # Check rate limit and add backoff if needed
+            ESIRateLimiter.check_and_wait(meta.remaining_error_limit)
+
+            return ESIResponse(data, meta)
+
+        return retry_with_exponential_backoff(
+            _make_request,
+            max_retries=3,
+            initial_backoff=1.0,
+            max_backoff=60.0,
+        )
 
     @classmethod
     def get_public(cls, endpoint: str, **kwargs) -> ESIResponse:
-        """Make an unauthenticated GET request to ESI."""
+        """Make an unauthenticated GET request to ESI with rate limit awareness and retry logic."""
         url = f'{cls.BASE_URL}{endpoint}'
         params = {'datasource': cls.DEFAULT_DATASOURCE, **kwargs}
         headers = cls._get_headers()
 
-        response = requests.get(url, params=params, headers=headers, timeout=30)
-        response.raise_for_status()
+        def _make_request():
+            """Inner function to make the actual request (used by retry logic)."""
+            response = requests.get(url, params=params, headers=headers, timeout=30)
 
-        meta = ESIMeta(response)
-        data = response.json()
+            # Check for rate limit error (420) - handle specially
+            if response.status_code == 420:
+                reset_time = response.headers.get('X-Esi-Error-Limit-Reset', '')
+                logger.warning(f'ESI rate limit hit (420) on {endpoint}, handling...')
+                ESIRateLimiter.handle_rate_limit(reset_time)
+                # Retry immediately after waiting for reset
+                response = requests.get(url, params=params, headers=headers, timeout=30)
 
-        return ESIResponse(data, meta)
+            response.raise_for_status()
+
+            meta = ESIMeta(response)
+            data = response.json()
+
+            # Check rate limit and add backoff if needed
+            ESIRateLimiter.check_and_wait(meta.remaining_error_limit)
+
+            return ESIResponse(data, meta)
+
+        return retry_with_exponential_backoff(
+            _make_request,
+            max_retries=3,
+            initial_backoff=1.0,
+            max_backoff=60.0,
+        )
 
     # Character endpoints
 

@@ -7,7 +7,7 @@ refreshing various EVE data (structures, market prices, etc.).
 
 import logging
 import random
-import time
+from datetime import timedelta
 from django.db import models
 from django.utils import timezone
 from django_q.tasks import async_task, schedule
@@ -221,10 +221,11 @@ def refresh_stale_characters() -> dict:
         # Add jitter: spread tasks over 0-30 seconds randomly
         # This prevents all characters from hitting ESI simultaneously
         jitter_seconds = random.randint(0, 30)
+        scheduled_time = timezone.now() + timedelta(seconds=jitter_seconds)
         async_task(
             'core.eve.tasks._sync_character_metadata',
             character.id,
-            schedule=schedule('now').later(seconds=jitter_seconds)
+            schedule=schedule(scheduled_time)
         )
         queued += 1
 
@@ -325,10 +326,11 @@ def refresh_stale_assets() -> dict:
     for character in stale_characters:
         # Assets are heavier, spread over 0-60 seconds
         jitter_seconds = random.randint(0, 60)
+        scheduled_time = timezone.now() + timedelta(seconds=jitter_seconds)
         async_task(
             'core.eve.tasks._sync_character_assets',
             character.id,
-            schedule=schedule('now').later(seconds=jitter_seconds)
+            schedule=schedule(scheduled_time)
         )
         queued += 1
 
@@ -386,10 +388,11 @@ def refresh_stale_skills() -> dict:
         if needs_refresh:
             # Skills are light, spread over 0-20 seconds
             jitter_seconds = random.randint(0, 20)
+            scheduled_time = timezone.now() + timedelta(seconds=jitter_seconds)
             async_task(
                 'core.eve.tasks._sync_character_skills',
                 character.id,
-                schedule=schedule('now').later(seconds=jitter_seconds)
+                schedule=schedule(scheduled_time)
             )
             queued += 1
 
