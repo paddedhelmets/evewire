@@ -815,7 +815,7 @@ def order_skills_by_prerequisites(skills: Set[tuple[int, int]]) -> list[tuple[in
     return sorted_order
 
 
-def calculate_fitting_plan_progress(character, all_skills: Set[tuple[int, int]]) -> dict:
+def calculate_fitting_plan_progress(character, primary_skills: Set[tuple[int, int]], all_skills: Set[tuple[int, int]]) -> dict:
     """
     Calculate character progress against a set of skills.
 
@@ -824,7 +824,8 @@ def calculate_fitting_plan_progress(character, all_skills: Set[tuple[int, int]])
 
     Args:
         character: Character object
-        all_skills: Set of (skill_id, level) tuples to check against
+        primary_skills: Set of (skill_id, level) tuples for primary goals (from fitting)
+        all_skills: Set of (skill_id, level) tuples including all prerequisites
 
     Returns:
         Dict with progress metrics:
@@ -861,16 +862,15 @@ def calculate_fitting_plan_progress(character, all_skills: Set[tuple[int, int]])
         # SP formula: 2^((2.5 * level) - 2) * 32 * rank
         return int(math.pow(2, (2.5 * level) - 2) * 32 * rank)
 
-    # Calculate progress
+    # Calculate prerequisite skills (all_skills minus primary_skills)
+    prereq_skills = all_skills - primary_skills
+
+    # Calculate progress for primary skills
     primary_sp_completed = 0
     primary_sp_total = 0
-    prereq_sp_completed = 0
-    prereq_sp_total = 0
     total_training_seconds = 0
 
-    # For now, treat all skills as prerequisites (primary/prereq distinction
-    # would require passing which are primary vs expanded)
-    for skill_id, level in all_skills:
+    for skill_id, level in primary_skills:
         sp_needed = get_sp_for_level(skill_id, level)
 
         # Check what character has
@@ -882,8 +882,8 @@ def calculate_fitting_plan_progress(character, all_skills: Set[tuple[int, int]])
             sp_completed = 0
             current_level = 0
 
-        prereq_sp_completed += sp_completed
-        prereq_sp_total += sp_needed
+        primary_sp_completed += sp_completed
+        primary_sp_total += sp_needed
 
         # Calculate remaining training time (simplified - assumes avg attributes)
         if current_level < level:
@@ -891,13 +891,34 @@ def calculate_fitting_plan_progress(character, all_skills: Set[tuple[int, int]])
             sp_remaining = sp_needed - sp_completed
             total_training_seconds += (sp_remaining / 1000) * 60
 
+    primary_percent_complete = (primary_sp_completed / primary_sp_total * 100) if primary_sp_total > 0 else 0
+
+    # Calculate progress for prerequisite skills
+    prereq_sp_completed = 0
+    prereq_sp_total = 0
+
+    for skill_id, level in prereq_skills:
+        sp_needed = get_sp_for_level(skill_id, level)
+
+        # Check what character has
+        char_skill = char_skills.get(skill_id)
+        if char_skill:
+            sp_completed = min(char_skill.skillpoints_in_skill, sp_needed)
+        else:
+            sp_completed = 0
+
+        prereq_sp_completed += sp_completed
+        prereq_sp_total += sp_needed
+
+        # Add training time for prereqs too
+        if char_skill and char_skill.skill_level < level:
+            sp_remaining = sp_needed - sp_completed
+            total_training_seconds += (sp_remaining / 1000) * 60
+        elif not char_skill:
+            total_training_seconds += (sp_needed / 1000) * 60
+
     prereq_percent_complete = (prereq_sp_completed / prereq_sp_total * 100) if prereq_sp_total > 0 else 0
     prereq_complete = prereq_percent_complete >= 99.9  # Allow for rounding
-
-    # For now, primary = prereq (since we're treating all as prereqs)
-    primary_sp_completed = prereq_sp_completed
-    primary_sp_total = prereq_sp_total
-    primary_percent_complete = prereq_percent_complete
 
     return {
         'primary_sp_completed': primary_sp_completed,

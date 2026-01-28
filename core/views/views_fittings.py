@@ -205,7 +205,7 @@ def fitting_skill_plans(request: HttpRequest, fitting_id: int) -> HttpResponse:
     pilot_progress = []
 
     for character in characters:
-        progress = calculate_fitting_plan_progress(character, all_skills)
+        progress = calculate_fitting_plan_progress(character, primary_skills, all_skills)
         pilot_progress.append({
             'character': character,
             'progress': progress,
