@@ -83,9 +83,9 @@
         <a href="{% url 'core:fitting_readiness_browser' fitting.id %}" class="btn">Readiness Browser</a>
         <a href="{% url 'core:fitting_skill_plans' fitting.id %}" class="btn">Skill Plans</a>
         <span style="color: #888;">Export:</span>
-        <a href="{% url 'core:fitting_export' fitting.id 'eft' %}" style="color: #0066cc;">EFT</a>
-        <a href="{% url 'core:fitting_export' fitting.id 'dna' %}" style="color: #0066cc;">DNA</a>
-        <a href="{% url 'core:fitting_export' fitting.id 'xml' %}" style="color: #0066cc;">XML</a>
+        <a href="{% url 'core:fitting_export' fitting.id 'eft' %}" style="color: var(--link-color);">EFT</a>
+        <a href="{% url 'core:fitting_export' fitting.id 'dna' %}" style="color: var(--link-color);">DNA</a>
+        <a href="{% url 'core:fitting_export' fitting.id 'xml' %}" style="color: var(--link-color);">XML</a>
         <a href="{% url 'core:fittings_list' %}">Back to Fittings</a>
     </div>
 </div>
@@ -121,7 +121,7 @@
 
         <!-- Low Slots -->
         <div style="flex: 1; min-width: 200px;">
-            <h3 style="color: #0066cc; border-bottom: 1px solid var(--border-color); padding-bottom: 0.25rem;">Low Slots</h3>
+            <h3 style="color: var(--link-color); border-bottom: 1px solid var(--border-color); padding-bottom: 0.25rem;">Low Slots</h3>
             {% for module_id in slots.low_slots %}
                 <p style="padding: 0.25rem 0; border-bottom: 1px solid var(--table-border);">
                     {{ module_id|module_name }}

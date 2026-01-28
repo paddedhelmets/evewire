@@ -149,7 +149,7 @@
         }
 
         // Draw the line
-        ctx.strokeStyle = isDark ? '#4da6ff' : '#0066cc';
+        ctx.strokeStyle = isDark ? 'var(--link-color)' : '#0066cc';
         ctx.lineWidth = 2;
         ctx.beginPath();
 
@@ -166,7 +166,7 @@
         ctx.stroke();
 
         // Draw points
-        ctx.fillStyle = isDark ? '#4da6ff' : '#0066cc';
+        ctx.fillStyle = isDark ? 'var(--link-color)' : '#0066cc';
         data.forEach((point, i) => {
             const x = xScale(i);
             const y = yScale(point.balance);

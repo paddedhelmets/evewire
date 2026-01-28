@@ -584,7 +584,7 @@ function renderAssetRows(assets) {
         ` : '';
 
         const singletonIndicator = asset.is_singleton
-            ? '<span style="color: #0066cc;">&#10003;</span>'
+            ? '<span style="color: var(--link-color);">&#10003;</span>'
             : '<span style="color: var(--text-secondary);">&mdash;</span>';
         const blueprintBadge = asset.is_blueprint_copy
             ? '<span class="blueprint-badge blueprint-bpc">BPC</span>' : '';
@@ -755,7 +755,7 @@ function renderChildRows(children, nestingLevel = 0) {
             : '<span style="width: 16px; display: inline-block;"></span>';
         const childCountBadge = hasChildren ? `<span class="child-count-badge">(${child.child_count})</span>` : '';
         const singletonIndicator = child.is_singleton
-            ? '<span style="color: #0066cc;">&#10003;</span>'
+            ? '<span style="color: var(--link-color);">&#10003;</span>'
             : '<span style="color: var(--text-secondary);">&mdash;</span>';
         const blueprintBadge = child.is_blueprint_copy
             ? '<span class="blueprint-badge blueprint-bpc">BPC</span>' : '';
@@ -804,7 +804,7 @@ function renderShipSections(sections, nestingLevel = 0) {
                 : '<span style="width: 16px; display: inline-block;"></span>';
             const childCountBadge = hasChildren ? `<span class="child-count-badge">(${item.child_count})</span>` : '';
             const singletonIndicator = item.is_singleton
-                ? '<span style="color: #0066cc;">&#10003;</span>'
+                ? '<span style="color: var(--link-color);">&#10003;</span>'
                 : '<span style="color: var(--text-secondary);">&mdash;</span>';
 
             // Check if fitted (in a slot)

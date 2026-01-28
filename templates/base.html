@@ -23,11 +23,16 @@
             --alert-error-text: #c00;
             --alert-success-bg: #efe;
             --alert-success-text: #080;
-            --btn-primary: #0066cc;
+            --btn-primary: #1976d2;
             --btn-primary-hover: #0052a3;
+            --btn-text: white;
             --table-border: #eee;
             --tab-active-bg: rgba(255,255,255,0.15);
             --tab-active-border: #4da6ff;
+            --gradient-start: #1976d2;
+            --gradient-end: #42a5f5;
+            --gradient-alt-start: #42a5f5;
+            --gradient-alt-end: #64b5f6;
         }
 
         [data-theme="dark"] {
@@ -49,59 +54,74 @@
             --alert-success-text: #6bff6b;
             --btn-primary: #4da6ff;
             --btn-primary-hover: #66b3ff;
+            --btn-text: white;
             --table-border: #444;
             --tab-active-bg: rgba(255,255,255,0.1);
             --tab-active-border: #64b5f6;
+            --gradient-start: #3b82f6;
+            --gradient-end: #60a5fa;
+            --gradient-alt-start: #42a5f5;
+            --gradient-alt-end: #64b5f6;
         }
 
-        /* Solarized Light - inspired by Ethan Schoonover's famous palette */
+        /* Solarized Light - Ethan Schoonover's palette with improved contrast */
         [data-theme="solarized-light"] {
             --bg-primary: #fdf6e3;
-            --bg-secondary: #eee8d5;
-            --text-primary: #657b83;
+            --bg-secondary: #f0e6d2;
+            --text-primary: #4b4a47;
             --text-secondary: #586e75;
-            --border-color: #93a1a1;
+            --border-color: #839496;
             --link-color: #268bd2;
             --link-hover: #2aa198;
-            --header-bg: #eee8d5;
-            --header-text: #657b83;
+            --header-bg: #d3c2b0;
+            --header-text: #4b4a47;
             --footer-bg: #93a1a1;
             --footer-text: #586e75;
-            --card-shadow: 0 2px 4px rgba(38, 139, 210, 0.1);
-            --alert-error-bg: #fdf6e3;
+            --card-shadow: 0 2px 4px rgba(38, 139, 210, 0.15);
+            --alert-error-bg: #fce8dc;
             --alert-error-text: #dc322f;
-            --alert-success-bg: #eee8d5;
+            --alert-success-bg: #e8e8cc;
             --alert-success-text: #859900;
             --btn-primary: #268bd2;
             --btn-primary-hover: #2aa198;
-            --table-border: #93a1a1;
-            --tab-active-bg: rgba(38, 139, 210, 0.1);
+            --btn-text: white;
+            --table-border: #839496;
+            --tab-active-bg: rgba(38, 139, 210, 0.15);
             --tab-active-border: #268bd2;
+            --gradient-start: #268bd2;
+            --gradient-end: #2aa198;
+            --gradient-alt-start: #859900;
+            --gradient-alt-end: #b58900;
         }
 
-        /* Solarized Dark - the famous terminal color scheme */
+        /* Solarized Dark - Ethan Schoonover's palette with improved contrast */
         [data-theme="solarized-dark"] {
             --bg-primary: #002b36;
-            --bg-secondary: #073642;
-            --text-primary: #839496;
-            --text-secondary: #586e75;
-            --border-color: #586e75;
+            --bg-secondary: #094552;
+            --text-primary: #93a1a1;
+            --text-secondary: #839496;
+            --border-color: #657b83;
             --link-color: #268bd2;
             --link-hover: #2aa198;
-            --header-bg: #073642;
-            --header-text: #839496;
+            --header-bg: #094552;
+            --header-text: #93a1a1;
             --footer-bg: #002b36;
             --footer-text: #586e75;
-            --card-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-            --alert-error-bg: #073642;
+            --card-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+            --alert-error-bg: #3c2a2a;
             --alert-error-text: #dc322f;
-            --alert-success-bg: #073642;
+            --alert-success-bg: #2a3c2a;
             --alert-success-text: #859900;
             --btn-primary: #268bd2;
             --btn-primary-hover: #2aa198;
-            --table-border: #586e75;
-            --tab-active-bg: rgba(38, 139, 210, 0.1);
+            --btn-text: white;
+            --table-border: #657b83;
+            --tab-active-bg: rgba(38, 139, 210, 0.15);
             --tab-active-border: #268bd2;
+            --gradient-start: #268bd2;
+            --gradient-end: #2aa198;
+            --gradient-alt-start: #859900;
+            --gradient-alt-end: #b58900;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -136,7 +156,7 @@
         }
         main { padding: 2rem 0; min-height: calc(100vh - 120px); }
         footer { background: var(--footer-bg); color: var(--footer-text); text-align: center; padding: 1rem 0; font-size: 0.9rem; }
-        .btn { display: inline-block; padding: 0.5rem 1rem; background: var(--btn-primary); color: white; border-radius: 4px; }
+        .btn { display: inline-block; padding: 0.5rem 1rem; background: var(--btn-primary); color: var(--btn-text, white); border-radius: 4px; border: none; cursor: pointer; text-decoration: none; }
         .btn:hover { background: var(--btn-primary-hover); text-decoration: none; }
         .card { background: var(--bg-secondary); border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; box-shadow: var(--card-shadow); }
         .alert { padding: 1rem; border-radius: 4px; margin-bottom: 1rem; }

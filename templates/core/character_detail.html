@@ -280,7 +280,7 @@
                 <div style="border: 1px solid #ddd; border-radius: 4px; padding: 0.75rem;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
                         <span style="font-size: 0.9rem; color: #666;">Outstanding</span>
-                        <span style="font-weight: bold; color: #0066cc;">{{ character.contracts.all|selectattr:"status"|equal:"outstanding"|list|length }}</span>
+                        <span style="font-weight: bold; color: var(--link-color);">{{ character.contracts.all|selectattr:"status"|equal:"outstanding"|list|length }}</span>
                     </div>
                 </div>
                 <div style="border: 1px solid #ddd; border-radius: 4px; padding: 0.75rem;">

@@ -99,7 +99,7 @@
         {% endif %}
         {% if match.extra_modules %}
             <div style="margin-top: 0.5rem;">
-                <span style="color: #0066cc;">Extra:</span>
+                <span style="color: var(--link-color);">Extra:</span>
                 <ul style="margin-left: 1.5rem; margin-top: 0.25rem;">
                     {% for module_id in match.extra_modules %}
                         <li>{{ module_id|module_name }} ({{ module_id }})</li>
