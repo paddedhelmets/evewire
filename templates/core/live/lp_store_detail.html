@@ -134,6 +134,7 @@
                         <th>Item</th>
                         <th style="text-align: right;">LP Cost</th>
                         <th style="text-align: right;">ISK Cost</th>
+                        <th style="text-align: center;">Required Items</th>
                         <th style="text-align: center;">Standing</th>
                         <th style="text-align: center;">Quantity</th>
                     </tr>
@@ -153,6 +154,17 @@
                                 <span class="isk-cost">{{ offer.isk_cost|floatformat:0 }} ISK</span>
                             {% else %}
                                 <span style="color: var(--text-secondary);">-</span>
+                            {% endif %}
+                        </td>
+                        <td style="text-align: center;">
+                            {% if offer.required_items_enriched %}
+                                <div style="font-size: 0.85rem;">
+                                    {% for item in offer.required_items_enriched %}
+                                        <div>{{ item.quantity }}× {{ item.name }}</div>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <span style="color: var(--text-secondary);">None</span>
                             {% endif %}
                         </td>
                         <td style="text-align: center;">

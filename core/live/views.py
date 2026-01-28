@@ -127,9 +127,30 @@ def live_lp_store_detail(request, corporation_id):
         for t in InvTypes.objects.filter(type_id__in=type_ids).select_related('group')
     }
 
+    # Also fetch required item types
+    required_type_ids = set()
+    for offer in offers:
+        for item in offer.required_items or []:
+            required_type_ids.add(item['type_id'])
+
+    required_types_map = {
+        t.type_id: t
+        for t in InvTypes.objects.filter(type_id__in=required_type_ids)
+    }
+
     offers_with_types = []
     for offer in offers:
         offer.item_type = types_map.get(offer.type_id)
+        # Enrich required items with type names
+        offer.required_items_enriched = []
+        for item in offer.required_items or []:
+            item_type = required_types_map.get(item['type_id'])
+            offer.required_items_enriched.append({
+                'type_id': item['type_id'],
+                'quantity': item['quantity'],
+                'name': item_type.name if item_type else f"Type {item['type_id']}",
+            })
+
         if offer.item_type:
             offers_with_types.append(offer)
 
