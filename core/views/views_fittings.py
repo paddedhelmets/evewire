@@ -86,8 +86,8 @@ def fittings_list(request: HttpRequest, character_id: int = None) -> HttpRespons
     # Get all user's characters for match display
     all_characters = list(request.user.characters.all()) if request.user.is_authenticated else []
 
-    # Build fittings_with_matches list
-    from core.doctrines.models import FittingMatch, FittingIgnore
+    # Build fittings list with metadata
+    from core.doctrines.models import FittingIgnore
     fittings_with_matches = []
 
     # Get IDs of fittings ignored by this user
@@ -98,23 +98,11 @@ def fittings_list(request: HttpRequest, character_id: int = None) -> HttpRespons
     ) if request.user.is_authenticated else set()
 
     for fitting in fittings_qs:
-        # Get match counts for this fitting across all user's characters
-        matches = FittingMatch.objects.filter(
-            fitting=fitting,
-            character__in=all_characters,
-            is_match=True
-        ) if all_characters else []
-
-        match_count = matches.count()
-        matches_by_character = {}
-        for match in matches:
-            matches_by_character[match.character_id] = matches_by_character.get(match.character_id, 0) + 1
-
         fittings_with_matches.append({
             'fitting': fitting,
-            'match_count': match_count,
-            'matches_by_character': matches_by_character,
-            'is_global': fitting.owner is None,  # Global fittings can be ignored
+            'match_count': 0,  # Removed: use JIT on detail page instead
+            'matches_by_character': {},
+            'is_global': fitting.owner is None,
             'is_ignored': fitting.id in ignored_ids,
         })
 
@@ -941,8 +929,13 @@ def fitting_bulk_import(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def fleet_readiness(request: HttpRequest) -> HttpResponse:
-    """Show fleet readiness dashboard for all tracked fittings."""
-    from core.doctrines.models import Fitting, FittingMatch
+    """Show fleet readiness dashboard for all tracked fittings.
+
+    Matches are calculated JIT (just-in-time) rather than cached.
+    """
+    from core.doctrines.models import Fitting
+    from core.doctrines.services import AssetFitExtractor
+    from core.character.models import CharacterAsset
     from core.models import Character
     from core.eve.models import ItemType
 
@@ -952,40 +945,71 @@ def fleet_readiness(request: HttpRequest) -> HttpResponse:
         # Fallback to active fittings if nothing is tracked
         tracked_fittings = Fitting.objects.filter(is_active=True)
 
+    # Extract fitted ships for all characters once (JIT)
+    extractor = AssetFitExtractor()
+    all_fitted_ships = {}
+    for character in request.user.characters.all():
+        ships = extractor.extract_ships(character)
+        all_fitted_ships[character.id] = {ship.asset_id: ship for ship in ships}
+
     # Calculate readiness for each fitting
     fitting_readiness = []
     for fitting in tracked_fittings:
-        # Get readiness summary across all user's characters
+        # Get fitting requirements
+        fitting_modules = set()
+        for entry in fitting.entries.all():
+            fitting_modules.add(entry.module_type_id)
+
         characters_ready = 0
         characters_partial = 0
         characters_total = 0
         matches_data = []
-        missing_modules_counts = {}  # {module_id: count} for common gaps
+        missing_modules_counts = {}
 
         for character in request.user.characters.all():
             characters_total += 1
 
-            # Get all matches for this character/fitting
-            matches = FittingMatch.objects.filter(
+            # Get ship assets of this fitting's type for this character
+            ship_assets = CharacterAsset.objects.filter(
                 character=character,
-                fitting=fitting
-            ).order_by('-match_score')
+                type_id=fitting.ship_type_id
+            )
 
-            best_match = matches.first()
-            if best_match and best_match.match_score >= 1.0:
+            # Find best match for this character
+            best_score = 0.0
+            best_missing = []
+            character_missing = []
+
+            for asset in ship_assets:
+                if asset.is_singleton:
+                    fitted_ship = all_fitted_ships.get(character.id, {}).get(asset.item_id)
+                    if fitted_ship:
+                        fitted_modules = fitted_ship.get_fitted_modules()
+                        missing = fitting_modules - fitted_modules
+                        if not missing:
+                            score = 1.0
+                        else:
+                            score = (len(fitting_modules) - len(missing)) / len(fitting_modules)
+                        if score > best_score:
+                            best_score = score
+                            best_missing = list(missing)
+                        character_missing.extend(missing)
+
+            if best_score >= 1.0:
                 characters_ready += 1
-            elif best_match and best_match.match_score > 0:
+            elif best_score > 0:
                 characters_partial += 1
 
             # Count missing modules for common gaps analysis
-            for match in matches:
-                for module_id in match.missing_modules:
-                    missing_modules_counts[module_id] = missing_modules_counts.get(module_id, 0) + 1
+            for module_id in character_missing:
+                missing_modules_counts[module_id] = missing_modules_counts.get(module_id, 0) + 1
 
             matches_data.append({
                 'character': character,
-                'best_match': best_match,
-                'match_percent': (best_match.match_score * 100) if best_match else 0,
+                'best_match': type('Match', (), {
+                    'match_score': best_score,
+                })(),
+                'match_percent': best_score * 100,
             })
 
         # Calculate readiness percentage
