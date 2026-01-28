@@ -136,6 +136,7 @@ urlpatterns = [
 
     # SDE Browser (read-only SDE exploration)
     path('sde/', sde_views.sde_index, name='sde_index'),
+    path('sde/sitemap/', sde_views.sde_sitemap, name='sde_sitemap'),
     path('sde/search', sde_views.sde_search, name='sde_search'),
     path('sde/route/', sde_views.sde_route_planner, name='sde_route_planner'),
     path('sde/item/<int:type_id>/', sde_views.sde_item_detail, name='sde_item_detail'),
@@ -155,6 +156,7 @@ urlpatterns = [
     path('sde/faction/<int:faction_id>/', sde_views.sde_faction_detail, name='sde_faction_detail'),
     path('sde/corporation/<int:corporation_id>/', sde_views.sde_corporation_detail, name='sde_corporation_detail'),
     path('sde/agent/<int:agent_id>/', sde_views.sde_agent_detail, name='sde_agent_detail'),
+    path('sde/ship/<int:ship_id>/fittings/', sde_views.sde_ship_fittings, name='sde_ship_fittings'),
 
     # API endpoints
     path('api/assets/locations/', api.api_asset_locations, name='api_asset_locations'),

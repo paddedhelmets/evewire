@@ -156,7 +156,13 @@
 
     <footer>
         <div class="container">
-            evewire - EVE Online Pilot Management Tool
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                <div>evewire - EVE Online Pilot Management Tool</div>
+                <div>
+                    <a href="{% url 'core:sde_index' %}" style="color: inherit; text-decoration: none; margin-left: 1rem;">SDE Browser</a>
+                    <a href="{% url 'core:sde_sitemap' %}" style="color: inherit; text-decoration: none; margin-left: 1rem;">Sitemap</a>
+                </div>
+            </div>
         </div>
     </footer>
 </body>

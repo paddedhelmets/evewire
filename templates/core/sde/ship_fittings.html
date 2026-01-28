@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+
+{% block title %}What Can Fit - {{ ship.name }} - SDE Browser{% endblock %}
+
+{% block content %}
+<div class="card">
+    <nav style="margin-bottom: 1rem; font-size: 0.9rem;">
+        <a href="{% url 'core:sde_index' %}">SDE</a> &gt;
+        <a href="{% url 'core:sde_category_detail' 6 %}">Ships</a> &gt;
+        <a href="{% url 'core:sde_group_detail' ship.group_id %}">{{ ship.group.group_name }}</a> &gt;
+        <a href="{% url 'core:sde_ship_detail' ship.type_id %}">{{ ship.name }}</a> &gt;
+        <strong>What Can Fit</strong>
+    </nav>
+
+    <h1 style="margin: 0;">What Can Fit on {{ ship.name }}</h1>
+    <p style="color: var(--text-secondary); margin-top: 0.5rem;">
+        Browse all modules that can fit on this ship, organized by slot type.
+    </p>
+</div>
+
+<div class="card">
+    <h2>Ship Fitting Limits</h2>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 1rem;">
+        {% if fitting.hiSlots is not None %}
+        <div style="padding: 1rem; background: var(--bg-primary); border-radius: 4px; text-align: center;">
+            <div style="color: var(--text-secondary); font-size: 0.9rem;">High Slots</div>
+            <div style="font-size: 2rem; font-weight: bold; color: var(--link-color);">{{ fitting.hiSlots }}</div>
+        </div>
+        {% endif %}
+        {% if fitting.medSlots is not None %}
+        <div style="padding: 1rem; background: var(--bg-primary); border-radius: 4px; text-align: center;">
+            <div style="color: var(--text-secondary); font-size: 0.9rem;">Medium Slots</div>
+            <div style="font-size: 2rem; font-weight: bold; color: var(--link-color);">{{ fitting.medSlots }}</div>
+        </div>
+        {% endif %}
+        {% if fitting.lowSlots is not None %}
+        <div style="padding: 1rem; background: var(--bg-primary); border-radius: 4px; text-align: center;">
+            <div style="color: var(--text-secondary); font-size: 0.9rem;">Low Slots</div>
+            <div style="font-size: 2rem; font-weight: bold; color: var(--link-color);">{{ fitting.lowSlots }}</div>
+        </div>
+        {% endif %}
+        {% if fitting.rigSlots is not None %}
+        <div style="padding: 1rem; background: var(--bg-primary); border-radius: 4px; text-align: center;">
+            <div style="color: var(--text-secondary); font-size: 0.9rem;">Rig Slots</div>
+            <div style="font-size: 2rem; font-weight: bold; color: var(--link-color);">{{ fitting.rigSlots }}</div>
+        </div>
+        {% endif %}
+        {% if fitting.powerOutput is not None %}
+        <div style="padding: 1rem; background: var(--bg-primary); border-radius: 4px; text-align: center;">
+            <div style="color: var(--text-secondary); font-size: 0.9rem;">Power Grid</div>
+            <div style="font-size: 1.5rem; font-weight: bold;">{{ fitting.powerOutput|floatformat:0 }} MW</div>
+        </div>
+        {% endif %}
+        {% if fitting.cpu is not None %}
+        <div style="padding: 1rem; background: var(--bg-primary); border-radius: 4px; text-align: center;">
+            <div style="color: var(--text-secondary); font-size: 0.9rem;">CPU</div>
+            <div style="font-size: 1.5rem; font-weight: bold;">{{ fitting.cpu|floatformat:0 }} tf</div>
+        </div>
+        {% endif %}
+        {% if fitting.upgradeCapacity is not None %}
+        <div style="padding: 1rem; background: var(--bg-primary); border-radius: 4px; text-align: center;">
+            <div style="color: var(--text-secondary); font-size: 0.9rem;">Calibration</div>
+            <div style="font-size: 1.5rem; font-weight: bold;">{{ fitting.upgradeCapacity|floatformat:0 }}</div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <h2>Filters</h2>
+    <form method="get" style="margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end;">
+        <div>
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Slot Type</label>
+            <select name="slot" style="padding: 0.5rem; min-width: 150px; border-radius: 4px; border: 1px solid var(--border-color);">
+                <option value="all" {% if slot_type == 'all' %}selected{% endif %}>All Slots</option>
+                <option value="hi" {% if slot_type == 'hi' %}selected{% endif %}>High Slots</option>
+                <option value="med" {% if slot_type == 'med' %}selected{% endif %}>Medium Slots</option>
+                <option value="low" {% if slot_type == 'low' %}selected{% endif %}>Low Slots</option>
+                <option value="rig" {% if slot_type == 'rig' %}selected{% endif %}>Rig Slots</option>
+            </select>
+        </div>
+
+        <div>
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Meta Group</label>
+            <select name="meta" style="padding: 0.5rem; min-width: 150px; border-radius: 4px; border: 1px solid var(--border-color);">
+                <option value="" {% if not meta_group_id %}selected{% endif %}>All Meta Groups</option>
+                {% for mg in meta_groups %}
+                <option value="{{ mg.meta_group_id }}" {% if meta_group_id == mg.meta_group_id|stringformat:"s" %}selected{% endif %}>
+                    {{ mg.meta_group_name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div>
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Max Power Grid (MW)</label>
+            <input type="number" name="max_pg" value="{{ max_pg }}" placeholder="e.g. {{ fitting.powerOutput|floatformat:0 }}"
+                   style="padding: 0.5rem; min-width: 120px; border-radius: 4px; border: 1px solid var(--border-color);">
+        </div>
+
+        <div>
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Max CPU (tf)</label>
+            <input type="number" name="max_cpu" value="{{ max_cpu }}" placeholder="e.g. {{ fitting.cpu|floatformat:0 }}"
+                   style="padding: 0.5rem; min-width: 120px; border-radius: 4px; border: 1px solid var(--border-color);">
+        </div>
+
+        <div>
+            <button type="submit" class="btn">Apply Filters</button>
+            <a href="{% url 'core:sde_ship_fittings' ship.type_id %}" class="btn" style="background: var(--bg-primary);">Reset</a>
+        </div>
+    </form>
+
+    {% if fitting_stats %}
+    <div style="margin-top: 1rem; padding: 1rem; background: var(--bg-primary); border-radius: 4px;">
+        <strong>Results:</strong>
+        {{ fitting_stats.total }} modules found |
+        <span style="color: #4caf50;">{{ fitting_stats.fits_all }} fit within limits</span> |
+        <span style="color: #ff9800;">{{ fitting_stats.fits_pg }} fit PG</span> |
+        <span style="color: #2196f3;">{{ fitting_stats.fits_cpu }} fit CPU</span>
+    </div>
+    {% endif %}
+</div>
+
+{% for slot, groups in modules_by_slot.items %}
+<div class="card">
+    <h2 style="display: flex; align-items: center; gap: 0.5rem;">
+        <span style="padding: 0.5rem 1rem; background: linear-gradient(135deg, var(--accent-color) 0%, #4a90d9 100%); color: white; border-radius: 6px; font-size: 0.9rem;">
+            {{ slot_names|get_item:slot|default:slot|title }}
+        </span>
+        <span>{{ groups|length }} Group{{ groups|length|pluralize }}</span>
+    </h2>
+
+    {% for group_name, modules in groups.items %}
+    <details style="margin-bottom: 1rem; border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden;" open>
+        <summary style="padding: 1rem; background: var(--bg-primary); cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <strong>{{ group_name }}</strong>
+                <span style="padding: 0.25rem 0.75rem; background: var(--bg-secondary); border-radius: 4px; font-size: 0.9rem;">
+                    {{ modules|length }} Module{{ modules|length|pluralize }}
+                </span>
+            </div>
+            <span style="color: var(--text-secondary);">▶</span>
+        </summary>
+
+        <div style="padding: 1rem;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="border-bottom: 2px solid var(--border-color);">
+                        <th style="padding: 0.75rem; text-align: left;">Module</th>
+                        <th style="padding: 0.75rem; text-align: center;">Meta</th>
+                        <th style="padding: 0.75rem; text-align: right;">PG</th>
+                        <th style="padding: 0.75rem; text-align: right;">CPU</th>
+                        <th style="padding: 0.75rem; text-align: right;">Cap</th>
+                        {% if slot == 'rig' %}
+                        <th style="padding: 0.75rem; text-align: right;">Cal</th>
+                        {% endif %}
+                        <th style="padding: 0.75rem; text-align: center;">Fits</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for module in modules %}
+                    <tr style="border-bottom: 1px solid var(--table-border);">
+                        <td style="padding: 0.75rem;">
+                            <a href="{% url 'core:sde_item_detail' module.type_id %}" style="font-weight: 500;">
+                                {{ module.name }}
+                            </a>
+                        </td>
+                        <td style="padding: 0.75rem; text-align: center;">
+                            {% if module.meta_group_id %}
+                            <span style="padding: 0.25rem 0.5rem; background: var(--bg-primary); border-radius: 3px; font-size: 0.85rem;">
+                                {{ module.meta_group_id }}
+                            </span>
+                            {% else %}
+                            <span style="color: var(--text-secondary);">-</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 0.75rem; text-align: right; {% if not module.fits_pg %}color: #f44336;{% endif %}">
+                            {% if module.pg is not None %}{{ module.pg|floatformat:1 }}{% else %}-{% endif %}
+                        </td>
+                        <td style="padding: 0.75rem; text-align: right; {% if not module.fits_cpu %}color: #f44336;{% endif %}">
+                            {% if module.cpu is not None %}{{ module.cpu|floatformat:1 }}{% else %}-{% endif %}
+                        </td>
+                        <td style="padding: 0.75rem; text-align: right;">
+                            {% if module.cap is not None %}{{ module.cap|floatformat:1 }}{% else %}-{% endif %}
+                        </td>
+                        {% if slot == 'rig' %}
+                        <td style="padding: 0.75rem; text-align: right; {% if not module.fits_cal %}color: #f44336;{% endif %}">
+                            {% if module.calibration is not None %}{{ module.calibration|floatformat:0 }}{% else %}-{% endif %}
+                        </td>
+                        {% endif %}
+                        <td style="padding: 0.75rem; text-align: center;">
+                            {% if module.fits_pg and module.fits_cpu and module.fits_cal %}
+                            <span style="color: #4caf50; font-weight: bold;">Yes</span>
+                            {% else %}
+                            <span style="color: #f44336;">No</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </details>
+    {% endfor %}
+</div>
+{% empty %}
+<div class="card">
+    <div style="padding: 3rem; text-align: center;">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">🔍</div>
+        <h3>No Modules Found</h3>
+        <p style="color: var(--text-secondary);">
+            Try adjusting your filters or selecting a different slot type.
+        </p>
+    </div>
+</div>
+{% endfor %}
+
+<div class="card">
+    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+        <a href="{% url 'core:sde_ship_detail' ship.type_id %}" class="btn">&larr; Back to {{ ship.name }}</a>
+        <a href="{% url 'core:sde_category_detail' 6 %}" class="btn">Back to Ships</a>
+    </div>
+</div>
+
+<style>
+.remarks-indicator {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 0.5rem;
+}
+
+.remarks-good { background-color: #4caf50; }
+.remarks-warning { background-color: #ff9800; }
+.remarks-error { background-color: #f44336; }
+</style>
+{% endblock %}

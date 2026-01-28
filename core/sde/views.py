@@ -1051,15 +1051,62 @@ def sde_blueprint_detail(request: HttpRequest, blueprint_id: int) -> HttpRespons
     # Calculate total costs for the requested quantity
     total_estimated_cost = estimated_cost * quantity
 
-    # Calculate material totals for the quantity
+    # Calculate material totals for the quantity and enhanced cost data
+    total_material_volume = 0
     for material in materials:
         material['total_quantity'] = material['quantity'] * quantity
         if material['base_price']:
             material['total_cost'] = material['base_price'] * material['total_quantity']
             material['single_run_cost'] = material['base_price'] * material['quantity']
+            material['cost_percentage'] = (material['total_cost'] / total_estimated_cost * 100) if total_estimated_cost > 0 else 0
         else:
             material['total_cost'] = 0
             material['single_run_cost'] = 0
+            material['cost_percentage'] = 0
+
+        # Calculate volume (quantity * volume per unit)
+        if material['volume']:
+            material['total_volume'] = material['volume'] * material['total_quantity']
+            total_material_volume += material['total_volume']
+        else:
+            material['total_volume'] = 0
+
+    # Get top 5 most expensive materials
+    most_expensive_materials = sorted(
+        [m for m in materials if m['base_price']],
+        key=lambda x: x['total_cost'],
+        reverse=True
+    )[:5]
+
+    # Calculate cost per unit
+    cost_per_unit = total_estimated_cost / quantity if quantity > 0 else 0
+
+    # Build shopping list grouped by category
+    shopping_list_by_category = {}
+    for group_name, group_materials in material_groups.items():
+        shopping_items = []
+        for material in group_materials:
+            shopping_items.append({
+                'name': material['name'],
+                'quantity': material['total_quantity'],
+                'quantity_formatted': f"{material['total_quantity']:,.0f}",
+                'type_id': material['type_id'],
+            })
+        shopping_list_by_category[group_name] = shopping_items
+
+    # Build plain text shopping list for copy/paste
+    shopping_list_text = []
+    shopping_list_text.append(f"Shopping List for {quantity}x {product.name if product else blueprint.name}")
+    shopping_list_text.append("=" * 60)
+    for group_name in sorted(shopping_list_by_category.keys()):
+        shopping_list_text.append(f"\n[{group_name}]")
+        for item in shopping_list_by_category[group_name]:
+            shopping_list_text.append(f"  {item['name']} x {item['quantity_formatted']}")
+    shopping_list_text.append(f"\nTotal Materials: {len(materials)} types")
+    shopping_list_text.append(f"Total Volume: {total_material_volume:,.2f} m³")
+    if total_estimated_cost > 0:
+        shopping_list_text.append(f"Estimated Cost: {total_estimated_cost:,.2f} ISK")
+    shopping_list_plain = "\n".join(shopping_list_text)
 
     # Format time attributes (seconds to human-readable)
     def format_time(seconds):
@@ -1089,6 +1136,12 @@ def sde_blueprint_detail(request: HttpRequest, blueprint_id: int) -> HttpRespons
         'is_t2_blueprint': is_t2_blueprint,
         'invention_info': invention_info,
         'format_time': format_time,
+        # Enhanced cost and shopping list data
+        'most_expensive_materials': most_expensive_materials,
+        'total_material_volume': total_material_volume,
+        'cost_per_unit': cost_per_unit,
+        'shopping_list_by_category': shopping_list_by_category,
+        'shopping_list_plain': shopping_list_plain,
     })
 
 
@@ -2021,4 +2074,345 @@ def sde_skills_directory(request: HttpRequest) -> HttpResponse:
         'rank_filter': rank_filter,
         'sort_by': sort_by,
         'has_filters': bool(search_query or primary_attr or secondary_attr or rank_filter),
+    })
+
+
+def sde_sitemap(request: HttpRequest) -> HttpResponse:
+    """
+    Comprehensive sitemap/overview page for SDE browser.
+
+    Shows:
+    - All categories with item counts
+    - Top 50 groups by item count
+    - All market groups with hierarchy
+    - All meta groups
+    - All factions
+    - Special pages (Skills Directory, Route Planner, Industry Activities)
+    - Statistics overview
+    """
+    # Get overall statistics
+    stats = {
+        'total_items': InvTypes.objects.filter(published=True).count(),
+        'total_groups': InvGroups.objects.filter(published=True).count(),
+        'total_categories': InvCategories.objects.filter(published=True).count(),
+        'total_systems': MapSolarSystems.objects.count(),
+        'total_regions': MapRegions.objects.count(),
+        'total_constellations': MapConstellations.objects.count(),
+        'total_factions': ChrFactions.objects.count(),
+        'total_corporations': CrpNPCCorporations.objects.count(),
+        'total_agents': AgtAgents.objects.count(),
+        'total_stations': StaStations.objects.count(),
+        'total_certificates': CertCerts.objects.count(),
+        'total_blueprints': IndustryBlueprints.objects.count(),
+    }
+
+    # Get all categories with counts
+    from django.conf import settings
+    original_debug = settings.DEBUG
+    settings.DEBUG = False
+
+    try:
+        with connection.cursor() as cursor:
+            # Categories with item counts
+            cursor.execute("""
+                SELECT c.categoryID, c.categoryName, COUNT(DISTINCT t.typeID) as item_count
+                FROM evesde_invcategories c
+                LEFT JOIN evesde_invgroups g ON c.categoryID = g.categoryID
+                LEFT JOIN evesde_invtypes t ON g.groupID = t.groupID AND t.published = 1
+                WHERE c.published = 1
+                GROUP BY c.categoryID, c.categoryName
+                ORDER BY c.categoryName
+            """)
+            categories = [{'id': row[0], 'name': row[1], 'count': row[2]} for row in cursor.fetchall()]
+
+            # Top 50 groups by item count
+            cursor.execute("""
+                SELECT g.groupID, g.groupName, c.categoryName, COUNT(DISTINCT t.typeID) as item_count
+                FROM evesde_invgroups g
+                JOIN evesde_invcategories c ON g.categoryID = c.categoryID
+                LEFT JOIN evesde_invtypes t ON g.groupID = t.groupID AND t.published = 1
+                WHERE g.published = 1 AND c.published = 1
+                GROUP BY g.groupID, g.groupName, c.categoryName
+                HAVING item_count > 0
+                ORDER BY item_count DESC, g.groupName
+                LIMIT 50
+            """)
+            top_groups = [{'id': row[0], 'name': row[1], 'category': row[2], 'count': row[3]} for row in cursor.fetchall()]
+
+            # All market groups (top-level only with counts)
+            cursor.execute("""
+                SELECT mg.marketGroupID, mg.marketGroupName,
+                       COUNT(DISTINCT t.typeID) as item_count,
+                       (SELECT COUNT(*) FROM evesde_invmarketgroups WHERE parentGroupID = mg.marketGroupID) as child_count
+                FROM evesde_invmarketgroups mg
+                LEFT JOIN evesde_invtypes t ON mg.marketGroupID = t.marketGroupID AND t.published = 1
+                WHERE mg.parentGroupID IS NULL
+                GROUP BY mg.marketGroupID, mg.marketGroupName
+                ORDER BY mg.marketGroupName
+            """)
+            market_groups = [{'id': row[0], 'name': row[1], 'count': row[2], 'child_count': row[3]} for row in cursor.fetchall()]
+
+            # All meta groups with counts
+            cursor.execute("""
+                SELECT mg.metaGroupID, mg.metaGroupName, COUNT(DISTINCT mt.typeID) as item_count
+                FROM evesde_invmetagroups mg
+                LEFT JOIN evesde_invmetatypes mt ON mg.metaGroupID = mt.metaGroupID
+                GROUP BY mg.metaGroupID, mg.metaGroupName
+                ORDER BY mg.metaGroupID
+            """)
+            meta_groups = [{'id': row[0], 'name': row[1], 'count': row[2]} for row in cursor.fetchall()]
+
+            # All factions with corporation counts
+            cursor.execute("""
+                SELECT f.factionID, f.factionName,
+                       (SELECT COUNT(*) FROM evesde_crpnpccorporations WHERE factionID = f.factionID) as corp_count,
+                       (SELECT COUNT(*) FROM evesde_chrfactions WHERE factionID = f.factionID) as system_count
+                FROM evesde_chrfactions f
+                ORDER BY f.factionName
+            """)
+            factions = [{'id': row[0], 'name': row[1], 'corp_count': row[2], 'system_count': row[3]} for row in cursor.fetchall()]
+
+            # Ship classes (groups from Ship category)
+            cursor.execute("""
+                SELECT g.groupID, g.groupName, COUNT(DISTINCT t.typeID) as item_count
+                FROM evesde_invgroups g
+                JOIN evesde_invcategories c ON g.categoryID = c.categoryID
+                LEFT JOIN evesde_invtypes t ON g.groupID = t.groupID AND t.published = 1
+                WHERE c.categoryID = 6 AND g.published = 1
+                GROUP BY g.groupID, g.groupName
+                HAVING item_count > 0
+                ORDER BY g.groupName
+            """)
+            ship_classes = [{'id': row[0], 'name': row[1], 'count': row[2]} for row in cursor.fetchall()]
+
+            # Skill groups
+            cursor.execute("""
+                SELECT g.groupID, g.groupName, COUNT(DISTINCT t.typeID) as item_count
+                FROM evesde_invgroups g
+                LEFT JOIN evesde_invtypes t ON g.groupID = t.groupID AND t.published = 1
+                WHERE g.categoryID = 16 AND g.published = 1
+                GROUP BY g.groupID, g.groupName
+                HAVING item_count > 0
+                ORDER BY g.groupName
+            """)
+            skill_groups = [{'id': row[0], 'name': row[1], 'count': row[2]} for row in cursor.fetchall()]
+
+    finally:
+        settings.DEBUG = original_debug
+
+    return render(request, 'core/sde/sitemap.html', {
+        'stats': stats,
+        'categories': categories,
+        'top_groups': top_groups,
+        'market_groups': market_groups,
+        'meta_groups': meta_groups,
+        'factions': factions,
+        'ship_classes': ship_classes,
+        'skill_groups': skill_groups,
+        'total_categories': len(categories),
+        'total_top_groups': len(top_groups),
+        'total_market_groups': len(market_groups),
+        'total_meta_groups': len(meta_groups),
+        'total_factions': len(factions),
+        'total_ship_classes': len(ship_classes),
+        'total_skill_groups': len(skill_groups),
+    })
+
+
+def sde_ship_fittings(request: HttpRequest, ship_id: int) -> HttpResponse:
+    """
+    Browser for modules that can fit on a ship.
+
+    Shows:
+    - Ship fitting limits (slots, PG, CPU, calibration)
+    - Modules grouped by slot type (hi/med/low/rig)
+    - Fitting requirements (PG, CPU, calibration)
+    - Filter by meta group
+    - Module stats relevant to each slot type
+    """
+    # Get the ship
+    try:
+        ship = InvTypes.objects.select_related(
+            'group', 'group__category'
+        ).get(type_id=ship_id, published=True)
+    except InvTypes.DoesNotExist:
+        return render(request, 'core/error.html', {
+            'message': f'Ship {ship_id} not found',
+        }, status=404)
+
+    # Verify this is a ship
+    if ship.group.category_id != 6:
+        return render(request, 'core/error.html', {
+            'message': f'Item {ship_id} is not a ship',
+        }, status=400)
+
+    # Get ship fitting limits
+    fitting = get_ship_fitting(ship_id)
+
+    # Get filters from request
+    slot_type = request.GET.get('slot', 'all')  # all, hi, med, low, rig
+    meta_group_id = request.GET.get('meta', '')
+    max_pg = request.GET.get('max_pg', '')
+    max_cpu = request.GET.get('max_cpu', '')
+
+    # Define slot attribute mappings
+    # Attribute IDs: 12=low, 13=med, 14=hi, 970=rig
+    SLOT_ATTRS = {
+        'low': 12,
+        'med': 13,
+        'hi': 14,
+        'rig': 970,
+    }
+
+    SLOT_NAMES = {
+        'low': 'Low Slot',
+        'med': 'Medium Slot',
+        'hi': 'High Slot',
+        'rig': 'Rig Slot',
+    }
+
+    # Module categories (7=Module, 8=Charge, 32=Subsystem)
+    MODULE_CATEGORIES = [7, 8, 32]
+
+    # Get all modules with their fitting requirements
+    modules_data = []
+    from django.conf import settings
+    original_debug = settings.DEBUG
+    settings.DEBUG = False
+
+    try:
+        with connection.cursor() as cursor:
+            # Build query for modules with fitting requirements
+            sql_query = """
+                SELECT DISTINCT
+                    t.typeID, t.typeName, t.description, t.basePrice, t.volume,
+                    g.groupID, g.groupName,
+                    c.categoryID, c.categoryName,
+                    mt.metaGroupID,
+                    COALESCE(ta_cpu.valueFloat, ta_cpu.valueInt) as cpu_req,
+                    COALESCE(ta_pg.valueFloat, ta_pg.valueInt) as pg_req,
+                    COALESCE(ta_cap.valueFloat, ta_cap.valueInt) as cap_req,
+                    COALESCE(ta_cal.valueFloat, ta_cal.valueInt) as cal_req,
+                    ta_slot.valueInt as slot_attr_id
+                FROM evesde_invtypes t
+                JOIN evesde_invgroups g ON t.groupID = g.groupID
+                JOIN evesde_invcategories c ON g.categoryID = c.categoryID
+                LEFT JOIN evesde_invmetatypes mt ON t.typeID = mt.typeID
+                LEFT JOIN evesde_dgmattypeattributes ta_cpu ON t.typeID = ta_cpu.typeID AND ta_cpu.attributeID = 50
+                LEFT JOIN evesde_dgmattypeattributes ta_pg ON t.typeID = ta_pg.typeID AND ta_pg.attributeID = 11
+                LEFT JOIN evesde_dgmattypeattributes ta_cap ON t.typeID = ta_cap.typeID AND ta_cap.attributeID = 856
+                LEFT JOIN evesde_dgmattypeattributes ta_cal ON t.typeID = ta_cal.typeID AND ta_cal.attributeID = 1132
+                LEFT JOIN evesde_dgmattypeattributes ta_slot ON t.typeID = ta_slot.typeID AND ta_slot.attributeID IN (12, 13, 14, 970)
+                WHERE c.categoryID IN (7, 8, 32)
+                    AND t.published = 1
+            """
+            params = []
+
+            # Filter by slot type
+            if slot_type in SLOT_ATTRS:
+                sql_query += " AND ta_slot.attributeID = ?"
+                params.append(SLOT_ATTRS[slot_type])
+
+            # Filter by meta group
+            if meta_group_id:
+                try:
+                    meta_id = int(meta_group_id)
+                    sql_query += " AND mt.metaGroupID = ?"
+                    params.append(meta_id)
+                except ValueError:
+                    pass
+
+            # Filter by PG (must be <= ship's PG if specified)
+            if max_pg and fitting.get('powerOutput'):
+                try:
+                    pg_limit = float(max_pg)
+                    sql_query += " AND (ta_pg.valueFloat <= ? OR ta_pg.valueInt <= ? OR ta_pg.valueFloat IS NULL)"
+                    params.extend([pg_limit, pg_limit])
+                except ValueError:
+                    pass
+
+            # Filter by CPU (must be <= ship's CPU if specified)
+            if max_cpu and fitting.get('cpu'):
+                try:
+                    cpu_limit = float(max_cpu)
+                    sql_query += " AND (ta_cpu.valueFloat <= ? OR ta_cpu.valueInt <= ? OR ta_cpu.valueFloat IS NULL)"
+                    params.extend([cpu_limit, cpu_limit])
+                except ValueError:
+                    pass
+
+            sql_query += " ORDER BY g.groupName, t.typeName LIMIT 500"
+
+            cursor.execute(sql_query, params)
+
+            for row in cursor.fetchall():
+                (type_id, name, description, base_price, volume,
+                 group_id, group_name, category_id, category_name,
+                 meta_group_id, cpu_req, pg_req, cap_req, cal_req, slot_attr_id) = row
+
+                # Determine slot type from attribute
+                module_slot = None
+                if slot_attr_id == 12:
+                    module_slot = 'low'
+                elif slot_attr_id == 13:
+                    module_slot = 'med'
+                elif slot_attr_id == 14:
+                    module_slot = 'hi'
+                elif slot_attr_id == 970:
+                    module_slot = 'rig'
+
+                modules_data.append({
+                    'type_id': type_id,
+                    'name': name,
+                    'description': description,
+                    'group_name': group_name,
+                    'category_name': category_name,
+                    'meta_group_id': meta_group_id,
+                    'cpu': cpu_req,
+                    'pg': pg_req,
+                    'cap': cap_req,
+                    'calibration': cal_req,
+                    'slot': module_slot,
+                    'fits_pg': pg_req is None or pg_req <= fitting.get('powerOutput', float('inf')) if fitting.get('powerOutput') else True,
+                    'fits_cpu': cpu_req is None or cpu_req <= fitting.get('cpu', float('inf')) if fitting.get('cpu') else True,
+                    'fits_cal': cal_req is None or cal_req <= fitting.get('upgradeCapacity', float('inf')) if fitting.get('upgradeCapacity') else True,
+                })
+    finally:
+        settings.DEBUG = original_debug
+
+    # Group modules by slot type and group
+    modules_by_slot = {}
+    for module in modules_data:
+        slot = module['slot'] or 'other'
+        if slot not in modules_by_slot:
+            modules_by_slot[slot] = {}
+        group = module['group_name']
+        if group not in modules_by_slot[slot]:
+            modules_by_slot[slot][group] = []
+        modules_by_slot[slot][group].append(module)
+
+    # Get all meta groups for filter
+    meta_groups = InvMetaGroups.objects.all().order_by('meta_group_id')
+
+    # Calculate fitting stats
+    total_modules = len(modules_data)
+    fitting_stats = {
+        'total': total_modules,
+        'fits_all': sum(1 for m in modules_data if m['fits_pg'] and m['fits_cpu'] and m['fits_cal']),
+        'fits_pg': sum(1 for m in modules_data if m['fits_pg']),
+        'fits_cpu': sum(1 for m in modules_data if m['fits_cpu']),
+        'fits_cal': sum(1 for m in modules_data if m['fits_cal']),
+    }
+
+    return render(request, 'core/sde/ship_fittings.html', {
+        'ship': ship,
+        'fitting': fitting,
+        'modules_by_slot': modules_by_slot,
+        'meta_groups': meta_groups,
+        'slot_type': slot_type,
+        'meta_group_id': meta_group_id,
+        'max_pg': max_pg,
+        'max_cpu': max_cpu,
+        'slot_names': SLOT_NAMES,
+        'fitting_stats': fitting_stats,
+        'total_modules': total_modules,
     })

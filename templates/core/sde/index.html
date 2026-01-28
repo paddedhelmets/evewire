@@ -66,8 +66,15 @@
 </style>
 
 <div class="card">
-    <h1>SDE Browser</h1>
-    <p>Explore EVE Online's Static Data Export</p>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <div>
+            <h1 style="margin: 0;">SDE Browser</h1>
+            <p style="margin: 0.25rem 0 0 0;">Explore EVE Online's Static Data Export</p>
+        </div>
+        <a href="{% url 'core:sde_sitemap' %}" class="btn" style="background: var(--link-color);">
+            <i class="fas fa-sitemap"></i> Full Sitemap
+        </a>
+    </div>
 </div>
 
 <div class="card">

@@ -1,0 +1,441 @@
+{% extends "base.html" %}
+
+{% block title %}SDE Sitemap - evewire{% endblock %}
+
+{% block content %}
+<style>
+.sitemap-header {
+    background: linear-gradient(135deg, var(--link-color) 0%, var(--btn-primary) 100%);
+    color: white;
+    padding: 2rem;
+    border-radius: 8px;
+    margin-bottom: 2rem;
+}
+.sitemap-header h1 {
+    margin: 0 0 0.5rem 0;
+    color: white;
+}
+.sitemap-header p {
+    margin: 0;
+    opacity: 0.9;
+}
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+.stat-card {
+    background: var(--bg-primary);
+    padding: 1.25rem;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    text-align: center;
+}
+.stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--link-color);
+    margin-bottom: 0.25rem;
+}
+.stat-label {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.sitemap-section {
+    margin-bottom: 3rem;
+}
+.sitemap-section-title {
+    font-size: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 2px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.sitemap-section-count {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    font-weight: normal;
+}
+.sitemap-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 0.75rem;
+}
+.sitemap-item {
+    padding: 0.875rem 1rem;
+    background: var(--bg-primary);
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    transition: all 0.2s;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    text-decoration: none;
+}
+.sitemap-item:hover {
+    border-color: var(--link-color);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    transform: translateY(-1px);
+}
+.sitemap-item-name {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+.sitemap-item-count {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    background: var(--bg-secondary);
+    padding: 0.25rem 0.6rem;
+    border-radius: 12px;
+}
+.special-pages {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+}
+.special-page {
+    padding: 1.5rem;
+    background: linear-gradient(135deg, var(--bg-primary), var(--bg-secondary));
+    border-radius: 8px;
+    border: 2px solid var(--border-color);
+    transition: all 0.2s;
+    text-decoration: none;
+    display: block;
+}
+.special-page:hover {
+    border-color: var(--link-color);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+.special-page-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+.special-page-desc {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+.alpha-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+.alpha-link {
+    padding: 0.4rem 0.7rem;
+    background: var(--bg-secondary);
+    border-radius: 4px;
+    text-decoration: none;
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    transition: background 0.2s;
+}
+.alpha-link:hover {
+    background: var(--link-color);
+    color: white;
+    text-decoration: none;
+}
+.breadcrumb-nav {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+.breadcrumb-link {
+    padding: 0.5rem 1rem;
+    background: var(--btn-primary);
+    color: white;
+    border-radius: 6px;
+    text-decoration: none;
+    font-size: 0.9rem;
+}
+.breadcrumb-link:hover {
+    background: var(--btn-primary-hover);
+    color: white;
+    text-decoration: none;
+}
+</style>
+
+<div class="sitemap-header">
+    <h1>SDE Browser Sitemap</h1>
+    <p>Complete overview of all available SDE data and navigation pages</p>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.total_items|default:0 }}</div>
+        <div class="stat-label">Items</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.total_ships|default:0 }}</div>
+        <div class="stat-label">Ships</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.total_modules|default:0 }}</div>
+        <div class="stat-label">Modules</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.total_systems|default:0 }}</div>
+        <div class="stat-label">Solar Systems</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.total_regions|default:0 }}</div>
+        <div class="stat-label">Regions</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.total_factions|default:0 }}</div>
+        <div class="stat-label">Factions</div>
+    </div>
+</div>
+
+<!-- Quick Navigation -->
+<div style="margin-bottom: 2rem;">
+    <div class="breadcrumb-nav">
+        <a href="#categories" class="breadcrumb-link">Browse by Category ({{ total_categories }})</a>
+        <a href="#groups" class="breadcrumb-link">Browse by Group ({{ total_top_groups }})</a>
+        <a href="#market" class="breadcrumb-link">Market Groups ({{ total_market_groups }})</a>
+        <a href="#meta" class="breadcrumb-link">Meta Groups ({{ total_meta_groups }})</a>
+        <a href="#factions" class="breadcrumb-link">Factions ({{ total_factions }})</a>
+        <a href="#special" class="breadcrumb-link">Special Pages</a>
+    </div>
+</div>
+
+<!-- Special Pages -->
+<section id="special" class="sitemap-section">
+    <h2 class="sitemap-section-title">
+        Special Pages
+        <span class="sitemap-section-count">Essential Tools & Directories</span>
+    </h2>
+    <div class="special-pages">
+        <a href="{% url 'core:sde_index' %}" class="special-page">
+            <div class="special-page-title">SDE Browser Home</div>
+            <div class="special-page-desc">Main entry point with quick links and statistics</div>
+        </a>
+        <a href="{% url 'core:sde_search' %}" class="special-page">
+            <div class="special-page-title">Item Search</div>
+            <div class="special-page-desc">Search all items with filters and sorting</div>
+        </a>
+        <a href="{% url 'core:sde_skills_directory' %}" class="special-page">
+            <div class="special-page-title">Skills Directory</div>
+            <div class="special-page-desc">{{ stats.total_items }} skills organized by group and attributes</div>
+        </a>
+        <a href="{% url 'core:sde_route_planner' %}" class="special-page">
+            <div class="special-page-title">Route Planner</div>
+            <div class="special-page-desc">Find optimal routes between solar systems</div>
+        </a>
+        <a href="{% url 'core:sde_industry_activities' %}" class="special-page">
+            <div class="special-page-title">Industry Activities</div>
+            <div class="special-page-desc">Browse blueprints by activity type</div>
+        </a>
+        <a href="{% url 'core:sde_faction_list' %}" class="special-page">
+            <div class="special-page-title">Factions Directory</div>
+            <div class="special-page-desc">{{ stats.total_factions }} factions and their corporations</div>
+        </a>
+    </div>
+</section>
+
+<!-- Browse by Category -->
+<section id="categories" class="sitemap-section">
+    <h2 class="sitemap-section-title">
+        Browse by Category
+        <span class="sitemap-section-count">{{ total_categories }} categories</span>
+    </h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+        Top-level item categories (e.g., Ships, Modules, Materials)
+    </p>
+    <div class="sitemap-grid">
+        {% for cat in categories %}
+        <a href="{% url 'core:sde_category_detail' cat.id %}" class="sitemap-item">
+            <span class="sitemap-item-name">{{ cat.name }}</span>
+            <span class="sitemap-item-count">{{ cat.count|default:0 }}</span>
+        </a>
+        {% endfor %}
+    </div>
+</section>
+
+<!-- Browse by Group -->
+<section id="groups" class="sitemap-section">
+    <h2 class="sitemap-section-title">
+        Browse by Group (Top 50)
+        <span class="sitemap-section-count">Largest groups by item count</span>
+    </h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+        Item groups organized by category, showing the 50 largest groups
+    </p>
+    <div class="sitemap-grid">
+        {% for group in top_groups %}
+        <a href="{% url 'core:sde_group_detail' group.id %}" class="sitemap-item">
+            <div>
+                <div class="sitemap-item-name">{{ group.name }}</div>
+                <div style="font-size: 0.8rem; color: var(--text-secondary);">{{ group.category }}</div>
+            </div>
+            <span class="sitemap-item-count">{{ group.count }}</span>
+        </a>
+        {% endfor %}
+    </div>
+</section>
+
+<!-- Ship Classes -->
+<section class="sitemap-section">
+    <h2 class="sitemap-section-title">
+        Ship Classes
+        <span class="sitemap-section-count">{{ total_ship_classes }} classes</span>
+    </h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+        All ship types organized by class (Frigates, Cruisers, Battleships, etc.)
+    </p>
+    <div class="sitemap-grid">
+        {% for ship_class in ship_classes %}
+        <a href="{% url 'core:sde_group_detail' ship_class.id %}" class="sitemap-item">
+            <span class="sitemap-item-name">{{ ship_class.name }}</span>
+            <span class="sitemap-item-count">{{ ship_class.count }}</span>
+        </a>
+        {% endfor %}
+    </div>
+</section>
+
+<!-- Skill Groups -->
+<section class="sitemap-section">
+    <h2 class="sitemap-section-title">
+        Skill Groups
+        <span class="sitemap-section-count">{{ total_skill_groups }} groups</span>
+    </h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+        All skills organized by group (Corporation, Gunner, Industry, etc.)
+    </p>
+    <div class="sitemap-grid">
+        {% for skill_group in skill_groups %}
+        <a href="{% url 'core:sde_group_detail' skill_group.id %}" class="sitemap-item">
+            <span class="sitemap-item-name">{{ skill_group.name }}</span>
+            <span class="sitemap-item-count">{{ skill_group.count }}</span>
+        </a>
+        {% endfor %}
+    </div>
+</section>
+
+<!-- Browse by Market Group -->
+<section id="market" class="sitemap-section">
+    <h2 class="sitemap-section-title">
+        Browse by Market Group
+        <span class="sitemap-section-count">{{ total_market_groups }} top-level groups</span>
+    </h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+        Market hierarchy for buy/sell orders. Each group may contain subgroups.
+    </p>
+    <div class="sitemap-grid">
+        {% for market_group in market_groups %}
+        <a href="{% url 'core:sde_market_group_detail' market_group.id %}" class="sitemap-item">
+            <div>
+                <div class="sitemap-item-name">{{ market_group.name }}</div>
+                {% if market_group.child_count > 0 %}
+                <div style="font-size: 0.8rem; color: var(--text-secondary);">{{ market_group.child_count }} subgroups</div>
+                {% endif %}
+            </div>
+            <span class="sitemap-item-count">{{ market_group.count|default:0 }}</span>
+        </a>
+        {% endfor %}
+    </div>
+</section>
+
+<!-- Browse by Meta Group -->
+<section id="meta" class="sitemap-section">
+    <h2 class="sitemap-section-title">
+        Browse by Meta Group
+        <span class="sitemap-section-count">{{ total_meta_groups }} tiers</span>
+    </h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+        Item variants organized by technology level (Tech I, Tech II, Faction, Deadspace)
+    </p>
+    <div class="sitemap-grid">
+        {% for meta in meta_groups %}
+        <div class="sitemap-item" style="cursor: default;">
+            <span class="sitemap-item-name">{{ meta.name }}</span>
+            <span class="sitemap-item-count">{{ meta.count|default:0 }}</span>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+<!-- Browse by Faction -->
+<section id="factions" class="sitemap-section">
+    <h2 class="sitemap-section-title">
+        Browse by Faction
+        <span class="sitemap-section-count">{{ total_factions }} factions</span>
+    </h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+        Major factions in New Eden with their member corporations
+    </p>
+    <div class="sitemap-grid">
+        {% for faction in factions %}
+        <a href="{% url 'core:sde_faction_detail' faction.id %}" class="sitemap-item">
+            <div>
+                <div class="sitemap-item-name">{{ faction.name }}</div>
+                <div style="font-size: 0.8rem; color: var(--text-secondary);">
+                    {{ faction.corp_count }} corporations
+                    {% if faction.system_count > 0 %} &bull; {{ faction.system_count }} systems{% endif %}
+                </div>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+</section>
+
+<!-- Universe Statistics -->
+<section class="sitemap-section">
+    <h2 class="sitemap-section-title">
+        Universe Statistics
+        <span class="sitemap-section-count">New Eden Overview</span>
+    </h2>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.total_regions|default:0 }}</div>
+            <div class="stat-label">Regions</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.total_constellations|default:0 }}</div>
+            <div class="stat-label">Constellations</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.total_systems|default:0 }}</div>
+            <div class="stat-label">Solar Systems</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.total_stations|default:0 }}</div>
+            <div class="stat-label">Stations</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.total_corporations|default:0 }}</div>
+            <div class="stat-label">NPC Corporations</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.total_agents|default:0 }}</div>
+            <div class="stat-label">Agents</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.total_certificates|default:0 }}</div>
+            <div class="stat-label">Certificates</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.total_blueprints|default:0 }}</div>
+            <div class="stat-label">Blueprints</div>
+        </div>
+    </div>
+</section>
+
+<div style="text-align: center; margin-top: 3rem; padding: 2rem; background: var(--bg-secondary); border-radius: 8px;">
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+        Looking for something specific? Try the <a href="{% url 'core:sde_search' %}" style="color: var(--link-color);">SDE Search</a>
+    </p>
+    <p style="color: var(--text-secondary); font-size: 0.9rem;">
+        Data from EVE Online Static Data Export (SDE)
+    </p>
+</div>
+{% endblock %}

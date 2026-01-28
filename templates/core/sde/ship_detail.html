@@ -410,6 +410,7 @@
     <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
         <a href="{% url 'core:sde_category_detail' 6 %}" class="btn">&larr; Back to Ships</a>
         <a href="{% url 'core:sde_group_detail' ship.group_id %}" class="btn">View {{ ship.group.group_name }}</a>
+        <a href="{% url 'core:sde_ship_fittings' ship.type_id %}" class="btn" style="background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);">What Can Fit</a>
     </div>
 </div>
 {% endblock %}
