@@ -30,18 +30,18 @@ class InvTypes(models.Model):
     type_id = models.BigIntegerField(primary_key=True, db_column='typeID')
     name = models.CharField(max_length=255, db_index=True, db_column='typeName')
     description = models.TextField(blank=True, db_column='description')
-    group_id = models.IntegerField(db_index=True, db_column='groupID')
+    group = models.ForeignKey('InvGroups', on_delete=models.DO_NOTHING, db_column='groupID', related_name='types')
     mass = models.FloatField(null=True, blank=True, db_column='mass')
     volume = models.FloatField(null=True, blank=True, db_column='volume')
     capacity = models.FloatField(null=True, blank=True, db_column='capacity')
     portion_size = models.IntegerField(null=True, blank=True, db_column='portionSize')
-    race_id = models.IntegerField(null=True, blank=True, db_column='raceID')
+    race = models.ForeignKey('ChrRaces', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='raceID', related_name='types')
     base_price = models.FloatField(null=True, blank=True, db_column='basePrice')
     published = models.BooleanField(db_column='published')
-    market_group_id = models.IntegerField(null=True, blank=True, db_column='marketGroupID')
-    icon_id = models.IntegerField(null=True, blank=True, db_column='iconID')
+    market_group = models.ForeignKey('InvMarketGroups', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='marketGroupID', related_name='types')
+    icon = models.ForeignKey('EveIcons', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='iconID', related_name='types')
     sound_id = models.IntegerField(null=True, blank=True, db_column='soundID')
-    graphic_id = models.IntegerField(null=True, blank=True, db_column='graphicID')
+    graphic = models.ForeignKey('EveGraphics', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='graphicID', related_name='types')
 
     class Meta:
         db_table = 'evesde_invtypes'
@@ -56,18 +56,12 @@ class InvTypes(models.Model):
     @property
     def is_ship(self):
         """Check if this is a ship (category 6)."""
-        try:
-            return self.group.category_id == 6
-        except InvGroups.DoesNotExist:
-            return False
+        return self.group.category_id == 6 if self.group else False
 
     @property
     def is_module(self):
         """Check if this is a module (category 7)."""
-        try:
-            return self.group.category_id == 7
-        except InvGroups.DoesNotExist:
-            return False
+        return self.group.category_id == 7 if self.group else False
 
 
 class InvGroups(models.Model):
@@ -77,9 +71,9 @@ class InvGroups(models.Model):
     Item groups - categories of similar items (e.g., Cruisers, Laser Turrets)
     """
     group_id = models.IntegerField(primary_key=True, db_column='groupID')
-    category_id = models.IntegerField(db_index=True, db_column='categoryID')
+    category = models.ForeignKey('InvCategories', on_delete=models.DO_NOTHING, db_column='categoryID', related_name='groups')
     group_name = models.CharField(max_length=255, db_column='groupName')
-    icon_id = models.IntegerField(null=True, blank=True, db_column='iconID')
+    icon = models.ForeignKey('EveIcons', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='iconID', related_name='groups')
     use_base_price = models.BooleanField(db_column='useBasePrice')
     anchored = models.BooleanField(db_column='anchored')
     anchorable = models.BooleanField(db_column='anchorable')
@@ -201,8 +195,8 @@ class DgmTypeAttributes(models.Model):
 
     Actual attribute values for each item type
     """
-    type_id = models.IntegerField(db_index=True, db_column='typeID')
-    attribute_id = models.IntegerField(db_index=True, db_column='attributeID')
+    type = models.ForeignKey('InvTypes', on_delete=models.DO_NOTHING, db_column='typeID', related_name='attributes')
+    attribute = models.ForeignKey('DgmAttributeTypes', on_delete=models.DO_NOTHING, db_column='attributeID', related_name='type_attributes')
     value_int = models.IntegerField(null=True, blank=True, db_column='valueInt')
     value_float = models.FloatField(null=True, blank=True, db_column='valueFloat')
 
@@ -248,7 +242,7 @@ class MapConstellations(models.Model):
     EVE constellations (groups of solar systems)
     """
     constellation_id = models.IntegerField(primary_key=True, db_column='constellationID')
-    region_id = models.IntegerField(db_index=True, db_column='regionID')
+    region = models.ForeignKey('MapRegions', on_delete=models.DO_NOTHING, db_column='regionID', related_name='constellations')
     constellation_name = models.CharField(max_length=255, db_column='constellationName')
     x = models.FloatField(null=True, blank=True, db_column='x')
     y = models.FloatField(null=True, blank=True, db_column='y')
@@ -259,7 +253,7 @@ class MapConstellations(models.Model):
     y_max = models.FloatField(null=True, blank=True, db_column='yMax')
     z_min = models.FloatField(null=True, blank=True, db_column='zMin')
     z_max = models.FloatField(null=True, blank=True, db_column='zMax')
-    faction_id = models.IntegerField(null=True, blank=True, db_column='factionID')
+    faction = models.ForeignKey('ChrFactions', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='factionID', related_name='constellations')
     radius = models.FloatField(null=True, blank=True, db_column='radius')
 
     class Meta:
@@ -280,8 +274,8 @@ class MapSolarSystems(models.Model):
     Individual solar systems
     """
     system_id = models.IntegerField(primary_key=True, db_column='solarSystemID')
-    region_id = models.IntegerField(db_index=True, db_column='regionID')
-    constellation_id = models.IntegerField(db_index=True, db_column='constellationID')
+    region = models.ForeignKey('MapRegions', on_delete=models.DO_NOTHING, db_column='regionID', related_name='systems')
+    constellation = models.ForeignKey('MapConstellations', on_delete=models.DO_NOTHING, db_column='constellationID', related_name='systems')
     system_name = models.CharField(max_length=255, db_index=True, db_column='solarSystemName')
     x = models.FloatField(null=True, blank=True, db_column='x')
     y = models.FloatField(null=True, blank=True, db_column='y')
@@ -299,11 +293,11 @@ class MapSolarSystems(models.Model):
     hub = models.BooleanField(null=True, blank=True, db_column='hub')
     international = models.BooleanField(null=True, blank=True, db_column='international')
     regional = models.BooleanField(null=True, blank=True, db_column='regional')
-    constellation = models.BooleanField(null=True, blank=True, db_column='constellation')
+    is_constellation = models.BooleanField(null=True, blank=True, db_column='constellation')
     security = models.FloatField(null=True, blank=True, db_column='security')
-    faction_id = models.IntegerField(null=True, blank=True, db_column='factionID')
+    faction = models.ForeignKey('ChrFactions', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='factionID', related_name='systems')
     radius = models.FloatField(null=True, blank=True, db_column='radius')
-    sun_type_id = models.IntegerField(null=True, blank=True, db_column='solarSystemTypeID')
+    sun_type = models.ForeignKey('InvTypes', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='solarSystemTypeID', related_name='star_systems')
     security_class = models.CharField(max_length=10, blank=True, db_column='securityClass')
 
     class Meta:
@@ -342,11 +336,11 @@ class StaStations(models.Model):
     max_ship_volume_dockable = models.FloatField(null=True, blank=True, db_column='maxShipVolumeDockable')
     office_rental_cost = models.IntegerField(null=True, blank=True, db_column='officeRentalCost')
     operation_id = models.IntegerField(null=True, blank=True, db_column='operationID')
-    station_type_id = models.IntegerField(null=True, blank=True, db_column='stationTypeID')
-    corporation_id = models.IntegerField(null=True, blank=True, db_column='corporationID')
-    solar_system_id = models.IntegerField(db_index=True, db_column='solarSystemID')
-    constellation_id = models.IntegerField(null=True, blank=True, db_column='constellationID')
-    region_id = models.IntegerField(null=True, blank=True, db_column='regionID')
+    station_type = models.ForeignKey('InvTypes', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='stationTypeID', related_name='stations_of_type')
+    corporation = models.ForeignKey('CrpNPCCorporations', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='corporationID', related_name='stations')
+    solar_system = models.ForeignKey('MapSolarSystems', on_delete=models.DO_NOTHING, db_column='solarSystemID', related_name='stations')
+    constellation = models.ForeignKey('MapConstellations', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='constellationID', related_name='stations')
+    region = models.ForeignKey('MapRegions', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='regionID', related_name='stations')
     station_name = models.CharField(max_length=255, db_column='stationName')
     x = models.FloatField(null=True, blank=True, db_column='x')
     y = models.FloatField(null=True, blank=True, db_column='y')
@@ -467,9 +461,9 @@ class InvMetaTypes(models.Model):
 
     Item variants (Tech II, faction, deadspace, etc.) - links to base items
     """
-    type_id = models.IntegerField(primary_key=True, db_column='typeID')
-    parent_type_id = models.IntegerField(null=True, blank=True, db_column='parentTypeID')
-    meta_group_id = models.IntegerField(db_index=True, db_column='metaGroupID')
+    type = models.OneToOneField('InvTypes', on_delete=models.DO_NOTHING, primary_key=True, db_column='typeID', related_name='meta_type')
+    parent_type = models.ForeignKey('InvTypes', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='parentTypeID', related_name='variant_types')
+    meta_group = models.ForeignKey('InvMetaGroups', on_delete=models.DO_NOTHING, db_column='metaGroupID', related_name='types')
 
     class Meta:
         db_table = 'evesde_invmetatypes'
