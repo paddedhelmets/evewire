@@ -140,7 +140,7 @@ OAUTH2_PROVIDER = {
 Q_CLUSTER = {
     'name': 'evewire',
     'workers': config('Q_WORKERS', default=1, cast=int),
-    'timeout': config('Q_TIMEOUT', default=30, cast=int),
+    'timeout': config('Q_TIMEOUT', default=300, cast=int),
     'retry': config('Q_RETRY', default=120, cast=int),
     'queue_limit': config('Q_QUEUE_LIMIT', default=50, cast=int),
     'bulk': config('Q_BULK', default=1, cast=int),
@@ -148,7 +148,7 @@ Q_CLUSTER = {
     'cpu_affinity': config('Q_CPU_AFFINITY', default=1, cast=int),
     'label': 'Django Q2',
     'orm': 'default',  # Use database broker with 'default' connection
-    'sync': True,  # Enable scheduler
+    'sync': False,  # Run scheduler async (separate from workers)
     'schedule': [
         # Character metadata (location, wallet, orders) - 10 min
         {
