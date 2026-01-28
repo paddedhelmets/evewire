@@ -429,24 +429,23 @@ def _sync_character_skills(character_id: int) -> bool:
 
 def queue_esi_refresh(task_path: str, *args, jitter_range: tuple = (0, 30), **kwargs):
     """
-    Queue an ESI refresh task with random jitter to spread load.
+    Queue an ESI refresh task.
+
+    Note: jitter_range is no longer used as async_task doesn't support scheduling.
+    Tasks run immediately.
 
     Args:
         task_path: Dotted path to the task function (e.g., 'core.eve.tasks.refresh_incursions')
         *args: Arguments to pass to the task
-        jitter_range: Tuple of (min_seconds, max_seconds) for random jitter
+        jitter_range: Ignored (kept for compatibility)
         **kwargs: Keyword arguments to pass to the task
 
     Returns:
         The task ID from async_task
     """
-    jitter_seconds = random.randint(*jitter_range)
-    scheduled_time = timezone.now() + timedelta(seconds=jitter_seconds)
-
     return async_task(
         task_path,
         *args,
-        schedule=scheduled_time,  # Pass datetime directly, not wrapped in schedule()
         **kwargs
     )
 
