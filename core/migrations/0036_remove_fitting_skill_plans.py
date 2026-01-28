@@ -6,7 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0036_skillplanentry_unique_skill_level'),
+        ('core', '0035_skillplan_ownership_update'),
     ]
 
     operations = [
