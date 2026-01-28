@@ -103,7 +103,7 @@
         <div class="corp-grid">
             {% for item in corporations %}
             <div class="corp-item">
-                <a href="{% url 'core:live_lp_store_detail' item.corporation.id %}">
+                <a href="{% url 'core:live_lp_store_detail' item.corporation.corporation_id %}">
                     <span class="corp-name">{{ item.corporation.name }}</span>
                     <span class="offer-count">{{ item.lp_info.total_offers }} offers</span>
                 </a>
