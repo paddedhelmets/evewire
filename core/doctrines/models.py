@@ -104,6 +104,7 @@ class Fitting(models.Model):
 
     # Fitting management
     is_active = models.BooleanField(default=True, help_text="Whether this fitting is currently in use")
+    is_tracked = models.BooleanField(default=False, db_index=True, help_text="Whether this fitting is tracked for fleet readiness")
     tags = models.JSONField(default=dict, blank=True, help_text="User-defined tags (e.g., {'role': 'logi', 'tier': '1'})")
 
     # Timestamps
