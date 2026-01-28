@@ -104,7 +104,7 @@
         <tbody>
             {% for attr_name, attr_value in attributes.items %}
             <tr style="border-bottom: 1px solid var(--table-border);">
-                <td style="padding: 0.5rem;">{{ attr_name|title:"attribute_name" }}</td>
+                <td style="padding: 0.5rem;">{{ attr_name|title }}</td>
                 <td style="padding: 0.5rem; text-align: right; font-family: monospace;">{{ attr_value }}</td>
             </tr>
             {% endfor %}
