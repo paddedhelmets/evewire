@@ -556,15 +556,30 @@ def character_plans_page(request: HttpRequest, character_id: int) -> HttpRespons
 @login_required
 @require_http_methods(['POST'])
 def toggle_theme(request: HttpRequest) -> HttpResponse:
-    """Toggle between light and dark theme."""
+    """Cycle through themes: light → dark → solarized-light → solarized-dark → light."""
     from django.contrib import messages
 
+    themes = ['light', 'dark', 'solarized-light', 'solarized-dark']
     current_theme = request.user.settings.get('theme', 'light')
-    new_theme = 'dark' if current_theme == 'light' else 'light'
+
+    try:
+        current_index = themes.index(current_theme)
+        new_theme = themes[(current_index + 1) % len(themes)]
+    except ValueError:
+        new_theme = 'light'
+
     request.user.settings['theme'] = new_theme
     request.user.save(update_fields=['settings'])
 
-    messages.success(request, f'Theme changed to {new_theme} mode.')
+    # Friendly theme names
+    theme_names = {
+        'light': 'Light',
+        'dark': 'Dark',
+        'solarized-light': 'Solarized Light',
+        'solarized-dark': 'Solarized Dark',
+    }
+
+    messages.success(request, f'Theme changed to {theme_names.get(new_theme, new_theme)}.')
     return redirect(request.META.get('HTTP_REFERER', 'dashboard'))
 
 
