@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}{{ station.station_name }} - Station - SDE Browser{% endblock %}
+
+{% block content %}
+<style>
+.breadcrumb {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.5rem;
+    font-size: 0.9rem;
+}
+
+.breadcrumb a {
+    color: var(--accent-primary);
+    text-decoration: none;
+}
+
+.breadcrumb a:hover {
+    text-decoration: underline;
+}
+
+.breadcrumb span {
+    color: var(--text-secondary);
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.info-card {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.info-label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.25rem;
+}
+
+.info-value {
+    font-size: 1rem;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.station-list {
+    margin-top: 1rem;
+}
+
+.station-item {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.station-item a {
+    text-decoration: none;
+    color: inherit;
+}
+
+.station-item:hover {
+    border-color: var(--accent-primary);
+}
+
+.station-name {
+    font-weight: 500;
+    color: var(--accent-primary);
+}
+
+.corporation-name {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+</style>
+
+<div class="breadcrumb">
+    <a href="{% url 'core:sde_index' %}">SDE</a>
+    <span>&gt;</span>
+    {% if station.region %}
+    <a href="{% url 'core:sde_region_detail' station.region.region_id %}">{{ station.region.region_name }}</a>
+    <span>&gt;</span>
+    {% endif %}
+    {% if station.solar_system %}
+    <a href="{% url 'core:sde_system_detail' station.solar_system.system_id %}">{{ station.solar_system.system_name }}</a>
+    <span>&gt;</span>
+    {% endif %}
+    <span>{{ station.station_name }}</span>
+</div>
+
+<div class="card">
+    <h1>{{ station.station_name }}</h1>
+
+    <div class="info-grid">
+        {% if station.solar_system %}
+        <div class="info-card">
+            <div class="info-label">Solar System</div>
+            <div class="info-value">
+                <a href="{% url 'core:sde_system_detail' station.solar_system.system_id %}">{{ station.solar_system.system_name }}</a>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if station.constellation %}
+        <div class="info-card">
+            <div class="info-label">Constellation</div>
+            <div class="info-value">
+                <a href="{% url 'core:sde_constellation_detail' station.constellation.constellation_id %}">{{ station.constellation.constellation_name }}</a>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if station.region %}
+        <div class="info-card">
+            <div class="info-label">Region</div>
+            <div class="info-value">
+                <a href="{% url 'core:sde_region_detail' station.region.region_id %}">{{ station.region.region_name }}</a>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if station.station_type %}
+        <div class="info-card">
+            <div class="info-label">Station Type</div>
+            <div class="info-value">
+                <a href="{% url 'core:sde_item_detail' station.station_type.type_id %}">{{ station.station_type.name }}</a>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if station.corporation %}
+        <div class="info-card">
+            <div class="info-label">Owner</div>
+            <div class="info-value">
+                <a href="{% url 'core:sde_corporation_detail' station.corporation.corporation_id %}">{{ station.corporation.corporation_name }}</a>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if station.security is not None %}
+        <div class="info-card">
+            <div class="info-label">Security Status</div>
+            <div class="info-value">{{ station.security|floatformat:2 }}</div>
+        </div>
+        {% endif %}
+
+        {% if station.reprocessing_efficiency is not None %}
+        <div class="info-card">
+            <div class="info-label">Reprocessing Efficiency</div>
+            <div class="info-value">{{ station.reprocessing_efficiency|floatformat:4 }} ({{ station.reprocessing_efficiency|mul:50|floatformat:1 }}%)</div>
+        </div>
+        {% endif %}
+
+        {% if station.office_rental_cost %}
+        <div class="info-card">
+            <div class="info-label">Office Rental</div>
+            <div class="info-value">{{ station.office_rental_cost }} ISK</div>
+        </div>
+        {% endif %}
+
+        {% if station.docking_cost_per_volume is not None %}
+        <div class="info-card">
+            <div class="info-label">Docking Cost</div>
+            <div class="info-value">{{ station.docking_cost_per_volume|floatformat:2 }} ISK/m³</div>
+        </div>
+        {% endif %}
+
+        {% if station.max_ship_volume_dockable is not None %}
+        <div class="info-card">
+            <div class="info-label">Max Ship Volume</div>
+            <div class="info-value">{{ station.max_ship_volume_dockable|floatformat:0 }} m³</div>
+        </div>
+        {% endif %}
+
+        <div class="info-card">
+            <div class="info-label">Position</div>
+            <div class="info-value">
+                {% if station.x is not None %}
+                X: {{ station.x|floatformat:0 }}<br>
+                Y: {{ station.y|floatformat:0 }}<br>
+                Z: {{ station.z|floatformat:0 }}
+                {% else %}
+                    N/A
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if nearby_stations %}
+<div class="card" style="margin-top: 2rem;">
+    <h2>Other Stations in {{ station.solar_system.system_name }}</h2>
+    <div class="station-list">
+        {% for other_station in nearby_stations %}
+        <div class="station-item">
+            <a href="{% url 'core:sde_station_detail' other_station.station_id %}">
+                <div class="station-name">{{ other_station.station_name }}</div>
+                {% if other_station.corporation %}
+                <div class="corporation-name">{{ other_station.corporation.corporation_name }}</div>
+                {% endif %}
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

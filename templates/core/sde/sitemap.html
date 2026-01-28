@@ -388,6 +388,31 @@
     </div>
 </section>
 
+<!-- Browse by Universe -->
+<section class="sitemap-section">
+    <h2 class="sitemap-section-title">
+        Browse by Universe
+        <span class="sitemap-section-count">New Eden Geography</span>
+    </h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+        Explore the universe from regions down to individual solar systems
+    </p>
+
+    <h3 style="font-size: 1.1rem; margin: 2rem 0 1rem 0;">Regions (sample)</h3>
+    <div class="sitemap-grid">
+        {% for region in sample_regions %}
+        <a href="{% url 'core:sde_region_detail' region.region_id %}" class="sitemap-item">
+            <div>
+                <div class="sitemap-item-name">{{ region.region_name }}</div>
+                <div style="font-size: 0.8rem; color: var(--text-secondary);">
+                    {% if region.faction_name %}{{ region.faction_name }}{% endif %}
+                </div>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+</section>
+
 <!-- Universe Statistics -->
 <section class="sitemap-section">
     <h2 class="sitemap-section-title">

@@ -3,13 +3,95 @@
 {% block title %}{{ system.solar_system_name }} - SDE Browser{% endblock %}
 
 {% block content %}
-<div class="card">
-    <nav style="margin-bottom: 1rem; font-size: 0.9rem;">
-        <a href="{% url 'core:sde_index' %}">SDE</a> &gt;
-        <a href="{% url 'core:sde_region_detail' system.region_id %}">{{ system.region.region_name }}</a> &gt;
-        <strong>{{ system.solar_system_name }}</strong>
-    </nav>
+<style>
+.breadcrumb {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.5rem;
+    font-size: 0.9rem;
+}
 
+.breadcrumb a {
+    color: var(--accent-primary);
+    text-decoration: none;
+}
+
+.breadcrumb a:hover {
+    text-decoration: underline;
+}
+
+.breadcrumb span {
+    color: var(--text-secondary);
+}
+
+.celestial-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.celestial-card {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+}
+
+.celestial-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+}
+
+.celestial-details {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.stats-row {
+    display: flex;
+    gap: 2rem;
+    margin: 1.5rem 0;
+    flex-wrap: wrap;
+}
+
+.stat-item {
+    display: flex;
+    gap: 0.5rem;
+    align-items: baseline;
+}
+
+.stat-label {
+    color: var(--text-secondary);
+}
+
+.stat-value {
+    font-weight: 600;
+    color: var(--accent-primary);
+}
+
+.section {
+    margin-top: 2rem;
+}
+
+.section h2 {
+    margin-bottom: 1rem;
+}
+</style>
+
+<div class="breadcrumb">
+    <a href="{% url 'core:sde_index' %}">SDE</a>
+    <span>&gt;</span>
+    <a href="{% url 'core:sde_region_detail' system.region_id %}">{{ system.region.region_name }}</a>
+    <span>&gt;</span>
+    <a href="{% url 'core:sde_constellation_detail' system.constellation.constellation_id %}">{{ system.constellation.constellation_name }}</a>
+    <span>&gt;</span>
+    <span>{{ system.solar_system_name }}</span>
+</div>
+
+<div class="card">
     <h1>{{ system.solar_system_name }}</h1>
 
     <div style="margin-top: 1rem; display: flex; gap: 2rem; flex-wrap: wrap;">
@@ -25,31 +107,134 @@
                 <span style="color: #9b59b6;">{{ system.security|floatformat:2 }}</span> (Wormhole)
             {% endif %}
         </div>
-        <div><strong>Constellation:</strong> {{ system.constellation.constellation_name }}</div>
-        <div><strong>Region:</strong> <a href="{% url 'core:sde_region_detail' system.region_id %}">{{ system.region.region_name }}</a></div>
         {% if system.faction %}
         <div><strong>Faction:</strong> {{ system.faction.faction_name }}</div>
         {% endif %}
         {% if system.x %}
         <div><strong>Coordinates:</strong> X: {{ system.x|floatformat:0 }}, Y: {{ system.y|floatformat:0 }}, Z: {{ system.z|floatformat:0 }}</div>
         {% endif %}
+        <div><strong>Luminosity:</strong> {{ system.luminosity|floatformat:4 }}</div>
+    </div>
+
+    <div class="stats-row">
+        <div class="stat-item">
+            <span class="stat-label">Planets:</span>
+            <span class="stat-value">{{ planet_count }}</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">Moons:</span>
+            <span class="stat-value">{{ moon_count }}+</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">Asteroid Belts:</span>
+            <span class="stat-value">{{ belt_count }}</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">Stargates:</span>
+            <span class="stat-value">{{ stargate_count }}</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">Stations:</span>
+            <span class="stat-value">{{ stations|length }}</span>
+        </div>
     </div>
 </div>
 
+{% if planets %}
+<div class="card section">
+    <h2>Planets ({{ planet_count }})</h2>
+    <div class="celestial-grid">
+        {% for planet in planets %}
+        <div class="celestial-card">
+            <div class="celestial-name">{{ planet.item_name }} {{ planet.celestial_index }}</div>
+            <div class="celestial-details">
+                Radius: {% widthratio planet.radius 1000 1 %} km<br>
+                {% if planet.orbit_id %}
+                Orbits: {{ planet.orbit_index }}
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% if stargates %}
+<div class="card section">
+    <h2>Stargates ({{ stargate_count }})</h2>
+    <div class="celestial-grid">
+        {% for gate in stargates %}
+        <div class="celestial-card">
+            <div class="celestial-name">{{ gate.item_name }}</div>
+            <div class="celestial-details">
+                ID: {{ gate.item_id }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% if belts %}
+<div class="card section">
+    <h2>Asteroid Belts ({{ belt_count }})</h2>
+    <div class="celestial-grid">
+        {% for belt in belts %}
+        <div class="celestial-card">
+            <div class="celestial-name">{{ belt.item_name }}</div>
+            <div class="celestial-details">
+                {{ belt.celestial_index }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% if moons %}
+<div class="card section">
+    <h2>Moons (showing first 50 of {{ moon_count }}+)</h2>
+    <div class="celestial-grid" style="grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));">
+        {% for moon in moons %}
+        <div class="celestial-card" style="padding: 0.5rem 0.75rem;">
+            <div class="celestial-name" style="font-size: 0.9rem;">{{ moon.item_name }}</div>
+            <div class="celestial-details" style="font-size: 0.75rem;">
+                Orbit {{ moon.orbit_index }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
 {% if stations %}
-<div class="card">
-    <h2>Stations ({{ stations|length }} shown, max 20)</h2>
+<div class="card section">
+    <h2>Stations ({{ stations|length }})</h2>
     <table style="width: 100%; border-collapse: collapse;">
         <thead>
             <tr style="border-bottom: 2px solid var(--border-color);">
                 <th style="padding: 0.75rem; text-align: left;">Station Name</th>
+                <th style="padding: 0.75rem; text-align: left;">Corporation</th>
                 <th style="padding: 0.75rem; text-align: right;">ID</th>
             </tr>
         </thead>
         <tbody>
             {% for station in stations %}
             <tr style="border-bottom: 1px solid var(--table-border);">
-                <td style="padding: 0.75rem;">{{ station.station_name }}</td>
+                <td style="padding: 0.75rem;">
+                    <a href="{% url 'core:sde_station_detail' station.station_id %}" style="text-decoration: none; color: inherit;">
+                        {{ station.station_name }}
+                    </a>
+                </td>
+                <td style="padding: 0.75rem;">
+                    {% if station.corporation %}
+                    <a href="{% url 'core:sde_corporation_detail' station.corporation.corporation_id %}" style="color: var(--accent-primary); text-decoration: none;">
+                        {{ station.corporation.corporation_name }}
+                    </a>
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
                 <td style="padding: 0.75rem; text-align: right; font-family: monospace;">{{ station.station_id }}</td>
             </tr>
             {% endfor %}
@@ -59,6 +244,6 @@
 {% endif %}
 
 <div class="card">
-    <a href="{% url 'core:sde_region_detail' system.region_id %}" class="btn">&larr; Back to {{ system.region.region_name }}</a>
+    <a href="{% url 'core:sde_constellation_detail' system.constellation.constellation_id %}" class="btn">&larr; Back to {{ system.constellation.constellation_name }}</a>
 </div>
 {% endblock %}

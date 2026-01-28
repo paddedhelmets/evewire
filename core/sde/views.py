@@ -7,8 +7,9 @@ Read-only views for exploring EVE's Static Data Export.
 from django.shortcuts import render
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.core.paginator import Paginator
-from django.db.models import Q, Count, Prefetch
+from django.db.models import Q, Count, Prefetch, Avg, Min, Max
 from django.db import connection
+from django.db import models
 
 from core.sde.models import (
     InvTypes, InvGroups, InvCategories, InvMarketGroups, InvMetaGroups, InvMetaTypes,
@@ -336,11 +337,47 @@ def sde_system_detail(request: HttpRequest, system_id: int) -> HttpResponse:
     # Get stations in this system
     stations = StaStations.objects.filter(
         solar_system_id=system_id
-    ).order_by('station_name')[:20]
+    ).select_related('corporation').order_by('station_name')[:20]
+
+    # Get celestial objects in this system using MapDenormalize
+    # Group IDs: 6=Sun, 7=Planet, 8=Moon, 9=Asteroid Belt, 10=Stargate
+    from core.sde.models import MapDenormalize
+
+    # Get stargates for connections
+    stargates = MapDenormalize.objects.filter(
+        solar_system_id=system_id,
+        group_id=10  # Stargate
+    ).order_by('item_name')
+
+    # Get planets
+    planets = MapDenormalize.objects.filter(
+        solar_system_id=system_id,
+        group_id=7  # Planet
+    ).order_by('celestial_index')
+
+    # Get asteroid belts
+    belts = MapDenormalize.objects.filter(
+        solar_system_id=system_id,
+        group_id=9  # Asteroid Belt
+    ).order_by('celestial_index')[:20]
+
+    # Get moons (limited to avoid overwhelming pages)
+    moons = MapDenormalize.objects.filter(
+        solar_system_id=system_id,
+        group_id=8  # Moon
+    ).order_by('celestial_index')[:50]
 
     return render(request, 'core/sde/system_detail.html', {
         'system': system,
         'stations': stations,
+        'stargates': stargates,
+        'planets': planets,
+        'belts': belts,
+        'moons': moons,
+        'stargate_count': stargates.count(),
+        'planet_count': planets.count(),
+        'belt_count': belts.count(),
+        'moon_count': moons.count(),
     })
 
 
@@ -362,6 +399,70 @@ def sde_region_detail(request: HttpRequest, region_id: int) -> HttpResponse:
         'region': region,
         'constellations': constellations,
     })
+
+
+def sde_constellation_detail(request: HttpRequest, constellation_id: int) -> HttpResponse:
+    """Detail page for a constellation."""
+    try:
+        constellation = MapConstellations.objects.select_related(
+            'region', 'region__faction'
+        ).get(constellation_id=constellation_id)
+    except MapConstellations.DoesNotExist:
+        return render(request, 'core/error.html', {
+            'message': f'Constellation {constellation_id} not found',
+        }, status=404)
+
+    # Get systems in this constellation
+    systems = MapSolarSystems.objects.filter(
+        constellation_id=constellation_id
+    ).select_related('region', 'constellation').order_by('system_name')
+
+    # Count statistics
+    system_count = systems.count()
+
+    # Calculate security status (average of systems in constellation)
+    security_data = systems.aggregate(
+        avg_security=models.Avg('security'),
+        min_security=models.Min('security'),
+        max_security=models.Max('security'),
+    )
+
+    return render(request, 'core/sde/constellation_detail.html', {
+        'constellation': constellation,
+        'systems': systems,
+        'system_count': system_count,
+        'security_avg': security_data['avg_security'],
+        'security_min': security_data['min_security'],
+        'security_max': security_data['max_security'],
+    })
+
+
+def sde_station_detail(request: HttpRequest, station_id: int) -> HttpResponse:
+    """Detail page for a station."""
+    try:
+        station = StaStations.objects.select_related(
+            'station_type',
+            'corporation',
+            'solar_system',
+            'solar_system__constellation',
+            'solar_system__constellation__region',
+            'region'
+        ).get(station_id=station_id)
+    except StaStations.DoesNotExist:
+        return render(request, 'core/error.html', {
+            'message': f'Station {station_id} not found',
+        }, status=404)
+
+    # Get other stations in the same system
+    nearby_stations = StaStations.objects.filter(
+        solar_system_id=station.solar_system_id
+    ).exclude(station_id=station_id)[:10]
+
+    return render(request, 'core/sde/station_detail.html', {
+        'station': station,
+        'nearby_stations': nearby_stations,
+    })
+
 
 # ============================================================================
 # Enhanced SDE Views with Relationships
@@ -2208,6 +2309,23 @@ def sde_sitemap(request: HttpRequest) -> HttpResponse:
             """)
             skill_groups = [{'id': row[0], 'name': row[1], 'count': row[2]} for row in cursor.fetchall()]
 
+            # Sample regions for sitemap (first 20 alphabetically)
+            cursor.execute("""
+                SELECT r.regionID, r.regionName, r.x, r.y, r.z, f.factionName
+                FROM evesde_mapregions r
+                LEFT JOIN evesde_chrfactions f ON r.factionID = f.factionID
+                ORDER BY r.regionName
+                LIMIT 20
+            """)
+            sample_regions = [{
+                'region_id': row[0],
+                'region_name': row[1],
+                'x': row[2],
+                'y': row[3],
+                'z': row[4],
+                'faction_name': row[5]
+            } for row in cursor.fetchall()]
+
     finally:
         settings.DEBUG = original_debug
 
@@ -2220,6 +2338,7 @@ def sde_sitemap(request: HttpRequest) -> HttpResponse:
         'factions': factions,
         'ship_classes': ship_classes,
         'skill_groups': skill_groups,
+        'sample_regions': sample_regions,
         'total_categories': len(categories),
         'total_top_groups': len(top_groups),
         'total_market_groups': len(market_groups),
