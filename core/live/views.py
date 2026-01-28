@@ -55,45 +55,37 @@ def live_lp_stores(request):
     """
     from core.eve.models import CorporationLPStoreInfo
     from core.sde.models import CrpNPCCorporations, ChrFactions
+    from django.core.cache import cache
 
-    # Get corps with stores
-    corps = CorporationLPStoreInfo.objects.filter(
+    # Get corps with stores, then get corporation data with faction in one query
+    lp_infos = CorporationLPStoreInfo.objects.filter(
         has_loyalty_store=True
-    ).order_by('corporation_id')
+    ).values_list('corporation_id', flat=True)
 
-    # Enrich with SDE data
-    corps_with_factions = []
-    for lp_info in corps:
-        try:
-            corp = CrpNPCCorporations.objects.get(corporation_id=lp_info.corporation_id)
-            faction = None
-            if corp.faction:
-                faction = corp.faction  # FK from CrpNPCCorporations to ChrFactions
+    corps = CrpNPCCorporations.objects.filter(
+        corporation_id__in=lp_infos
+    ).select_related('faction').order_by('faction__faction_name', 'corporation_id')
 
-            corps_with_factions.append({
-                'lp_info': lp_info,
-                'corporation': corp,
-                'faction': faction,
-            })
-        except CrpNPCCorporations.DoesNotExist:
-            pass
+    # Fetch all LP info in one query and create a map
+    lp_info_map = {
+        lp.corporation_id: lp
+        for lp in CorporationLPStoreInfo.objects.filter(
+            corporation_id__in=lp_infos
+        )
+    }
 
-    # Group by faction
+    # Attach LP info to each corp and group by faction
     from collections import defaultdict
     factions_dict = defaultdict(list)
-    for item in corps_with_factions:
-        faction_key = item['faction'] if item['faction'] else None
-        factions_dict[faction_key].append(item)
+    for corp in corps:
+        corp.lp_info = lp_info_map.get(corp.corporation_id)
+        factions_dict[corp.faction].append(corp)
 
-    # Sort factions
+    # Sort factions by name
     sorted_factions = sorted(
         factions_dict.items(),
         key=lambda x: x[0].faction_name if x[0] else ''
     )
-
-    # Debug: check total_offers values
-    non_zero_count = sum(1 for item in corps_with_factions if item['lp_info'].total_offers > 0)
-    print(f"DEBUG VIEW: corps_with_factions={len(corps_with_factions)}, non_zero_count={non_zero_count}")
 
     return render(request, 'core/live/lp_stores.html', {
         'factions': sorted_factions,
