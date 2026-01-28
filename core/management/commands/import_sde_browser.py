@@ -552,4 +552,14 @@ class Command(BaseCommand):
         sde_conn.close()
         django_conn.close()
 
+        # Apply factionID sideload for crpNPCCorporations
+        # The garveen SDE has the factionID column but all values are NULL
+        if sde_table == 'crpNPCCorporations':
+            try:
+                from core.data import apply_corp_faction_id_sideload
+                updated = apply_corp_faction_id_sideload(evesde_table)
+                self.stdout.write(f'    Applied factionID sideload: {updated} corporations updated')
+            except Exception as e:
+                self.stdout.write(self.style.WARNING(f'    Failed to apply factionID sideload: {e}'))
+
         return total_copied
