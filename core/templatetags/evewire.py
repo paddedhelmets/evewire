@@ -25,6 +25,9 @@ def multiply(value, arg):
     except (ValueError, TypeError):
         return ''
 
+# Also register as 'mul' for template compatibility
+mul = register.filter('mul', multiply)
+
 
 @register.filter
 def divide(value, arg):

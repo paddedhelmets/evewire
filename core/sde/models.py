@@ -299,7 +299,7 @@ class MapSolarSystems(models.Model):
     security = models.FloatField(null=True, blank=True, db_column='security')
     faction = models.ForeignKey('ChrFactions', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='factionID', related_name='systems')
     radius = models.FloatField(null=True, blank=True, db_column='radius')
-    sun_type = models.ForeignKey('InvTypes', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='solarSystemTypeID', related_name='star_systems')
+    sun_type = models.ForeignKey('InvTypes', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='sunTypeID', related_name='star_systems')
     security_class = models.CharField(max_length=10, blank=True, db_column='securityClass')
 
     class Meta:

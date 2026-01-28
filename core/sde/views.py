@@ -384,7 +384,7 @@ def sde_system_detail(request: HttpRequest, system_id: int) -> HttpResponse:
 def sde_region_detail(request: HttpRequest, region_id: int) -> HttpResponse:
     """Detail page for a region."""
     try:
-        region = MapRegions.objects.select_related('faction').get(region_id=region_id)
+        region = MapRegions.objects.get(region_id=region_id)
     except MapRegions.DoesNotExist:
         return render(request, 'core/error.html', {
             'message': f'Region {region_id} not found',
@@ -405,7 +405,7 @@ def sde_constellation_detail(request: HttpRequest, constellation_id: int) -> Htt
     """Detail page for a constellation."""
     try:
         constellation = MapConstellations.objects.select_related(
-            'region', 'region__faction'
+            'region'
         ).get(constellation_id=constellation_id)
     except MapConstellations.DoesNotExist:
         return render(request, 'core/error.html', {
