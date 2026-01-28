@@ -108,6 +108,28 @@
 </div>
 
 <div class="card">
+    <h2 class="section-title">Certificates</h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+        Professional certifications with {{ certificates_count }} total certificates available.
+        Each certificate has 5 levels (Basic to Elite) with increasing skill requirements.
+    </p>
+    <div class="browse-grid">
+        {% for cert in certificates %}
+        <div class="browse-item">
+            <a href="{% url 'core:sde_certificate_detail' cert.cert_id %}">
+                <span class="browse-item-name">{{ cert.name }}</span>
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+    {% if certificates_count > 20 %}
+    <p style="margin-top: 1rem; color: var(--text-secondary); font-size: 0.9rem;">
+        Showing 20 of {{ certificates_count }} certificates.
+    </p>
+    {% endif %}
+</div>
+
+<div class="card">
     <h2 class="section-title">Browse by Market Group</h2>
     <p style="color: var(--text-secondary); margin-bottom: 1rem;">Market hierarchy for buy/sell orders</p>
     <div class="browse-grid">

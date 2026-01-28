@@ -58,7 +58,14 @@
 
 {% if parent_meta or variants_by_group %}
 <div class="card">
-    <h2>Variants</h2>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h2 style="margin: 0;">Variants</h2>
+        {% if variants_by_group %}
+        <a href="{% url 'core:sde_variant_comparison' item.type_id %}" class="btn">
+            Compare All Variants &rarr;
+        </a>
+        {% endif %}
+    </div>
 
     {% if parent_meta %}
     <div style="margin-bottom: 1rem;">

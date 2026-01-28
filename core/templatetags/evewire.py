@@ -225,3 +225,45 @@ def markdown(value):
         return mark_safe(md.markdown(str(value), extensions=['extra', 'codehilite', 'nl2br', 'tables']))
     except Exception:
         return value
+
+
+@register.filter
+def get_item(dictionary, key):
+    """Get an item from a dictionary by key. Returns None if key doesn't exist."""
+    if isinstance(dictionary, dict):
+        return dictionary.get(key)
+    return None
+
+
+# Also register as 'lookup' for easier use in templates
+lookup = register.filter('lookup', get_item)
+
+
+@register.simple_tag
+def meta_badge_class(meta_group_id):
+    """Return the CSS class for a meta group badge."""
+    meta_classes = {
+        1: 'meta-tech-1',      # Tech I
+        2: 'meta-tech-2',      # Tech II
+        3: 'meta-storyline',   # Storyline
+        4: 'meta-faction',     # Faction
+        5: 'meta-officer',     # Officer
+        6: 'meta-deadspace',   # Deadspace
+        14: 'meta-abyssal',    # Abyssal
+    }
+    return meta_classes.get(meta_group_id, 'meta-default')
+
+
+@register.simple_tag
+def meta_badge_name(meta_group_id):
+    """Return the display name for a meta group."""
+    meta_names = {
+        1: 'Tech I',
+        2: 'Tech II',
+        3: 'Storyline',
+        4: 'Faction',
+        5: 'Officer',
+        6: 'Deadspace',
+        14: 'Abyssal',
+    }
+    return meta_names.get(meta_group_id, 'Unknown')

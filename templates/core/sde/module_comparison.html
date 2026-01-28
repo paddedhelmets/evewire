@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+
+{% block title %}Module Comparison: {{ base.name }} - SDE Browser{% endblock %}
+
+{% block content %}
+<style>
+.meta-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-right: 0.5rem;
+}
+.meta-tech-1 { background: #6c757d; color: white; }
+.meta-tech-2 { background: #007bff; color: white; }
+.meta-storyline { background: #17a2b8; color: white; }
+.meta-faction { background: #28a745; color: white; }
+.meta-officer { background: #dc3545; color: white; }
+.meta-deadspace { background: #fd7e14; color: white; }
+.meta-abyssal { background: #6f42c1; color: white; }
+.meta-default { background: #e9ecef; color: #495057; }
+
+.stat-better {
+    color: #28a745;
+    font-weight: 600;
+}
+.stat-worse {
+    color: #dc3545;
+    font-weight: 600;
+}
+.stat-neutral {
+    color: var(--text-secondary);
+}
+
+.comparison-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+.comparison-table th {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 2px solid var(--border-color);
+    background: var(--bg-secondary);
+    position: sticky;
+    top: 0;
+}
+.comparison-table td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--table-border);
+}
+.comparison-table tr:hover td {
+    background: var(--bg-hover);
+}
+.comparison-table .numeric {
+    text-align: right;
+    font-family: monospace;
+}
+.comparison-table .module-name {
+    font-weight: 600;
+    min-width: 200px;
+}
+.comparison-table .base-row {
+    background: var(--bg-secondary);
+    font-weight: 600;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--border-color);
+}
+</style>
+
+<div class="card">
+    <nav style="margin-bottom: 1rem; font-size: 0.9rem;">
+        <a href="{% url 'core:sde_index' %}">SDE</a> &gt;
+        <a href="{% url 'core:sde_item_detail' base.type_id %}">{{ base.name }}</a> &gt;
+        <strong>Module Comparison</strong>
+    </nav>
+
+    <div class="section-header">
+        <div>
+            <h1 style="margin: 0;">{{ base.name }}</h1>
+            {% if base.description %}
+            <p style="color: var(--text-secondary); margin-top: 0.5rem; margin-bottom: 0;">{{ base.description }}</p>
+            {% endif %}
+        </div>
+        <div style="text-align: right;">
+            <div style="font-size: 0.9rem; color: var(--text-secondary);">
+                {{ variants|length }} variants
+            </div>
+        </div>
+    </div>
+
+    <div style="margin-top: 1rem; display: flex; gap: 2rem; flex-wrap: wrap; font-size: 0.9rem;">
+        <div><strong>Type ID:</strong> {{ base.type_id }}</div>
+        <div><strong>Group:</strong> <a href="{% url 'core:sde_group_detail' base.group_id %}">{{ base.group.group_name }}</a></div>
+        <div><strong>Category:</strong> <a href="{% url 'core:sde_category_detail' base.group.category_id %}">{{ base.group.category.category_name }}</a></div>
+    </div>
+</div>
+
+{% if all_items %}
+<div class="card">
+    <h2>Variant Comparison</h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+        Comparing all variants of {{ base.name }}. Green highlights indicate better stats (where applicable).
+    </p>
+
+    <div style="overflow-x: auto;">
+        <table class="comparison-table">
+            <thead>
+                <tr>
+                    <th rowspan="2" style="min-width: 250px;">Module</th>
+                    <th rowspan="2" style="min-width: 120px;">Meta Group</th>
+                    <th colspan="3" style="text-align: center; border-left: 1px solid var(--border-color);">Fitting Requirements</th>
+                    <th colspan="{% for stat_name in combat_stats %}{{ combat_stats|length }}{% endfor %}" style="text-align: center; border-left: 1px solid var(--border-color);">Combat Stats</th>
+                    <th colspan="2" style="text-align: center; border-left: 1px solid var(--border-color);">Other</th>
+                </tr>
+                <tr>
+                    {# Fitting Requirements #}
+                    <th class="numeric" style="border-left: 1px solid var(--border-color);">CPU</th>
+                    <th class="numeric">PG</th>
+                    <th class="numeric">Cap</th>
+
+                    {# Combat Stats #}
+                    {% for stat in combat_stats %}
+                    <th class="numeric" style="border-left: 1px solid var(--border-color);">{{ stat.label }}</th>
+                    {% endfor %}
+
+                    {# Other #}
+                    <th class="numeric" style="border-left: 1px solid var(--border-color);">Volume</th>
+                    <th class="numeric">Price</th>
+                </tr>
+            </thead>
+            <tbody>
+                {# Base item first #}
+                <tr class="base-row">
+                    <td class="module-name">
+                        <a href="{% url 'core:sde_item_detail' base.type_id %}">{{ base.name }}</a>
+                        <span style="font-size: 0.8rem; color: var(--text-secondary); display: block;">(Base)</span>
+                    </td>
+                    <td><span class="meta-badge meta-default">Tech I</span></td>
+                    <td class="numeric" style="border-left: 1px solid var(--border-color);">{{ base_attrs.cpu|default:"—" }}</td>
+                    <td class="numeric">{{ base_attrs.power|default:"—" }}</td>
+                    <td class="numeric">{{ base_attrs.capacitor|default:"—" }}</td>
+
+                    {% for stat in combat_stats %}
+                    <td class="numeric" style="border-left: 1px solid var(--border-color);">
+                        {% with val=base_attrs|get_item:stat.attr_name %}
+                            {% if val %}{{ val|floatformat:2 }}{% else %}—{% endif %}
+                        {% endwith %}
+                    </td>
+                    {% endfor %}
+
+                    <td class="numeric" style="border-left: 1px solid var(--border-color);">{{ base.volume|default:"—" }}</td>
+                    <td class="numeric">
+                        {% if base.base_price %}{{ base.base_price|floatformat:2 }} ISK{% else %}—{% endif %}
+                    </td>
+                </tr>
+
+                {# Variants #}
+                {% for item_data in variants %}
+                <tr>
+                    <td class="module-name">
+                        <a href="{% url 'core:sde_item_detail' item_data.item.type_id %}">{{ item_data.item.name }}</a>
+                        {% if item_data.meta %}
+                        <span style="font-size: 0.8rem; color: var(--text-secondary); display: block;">
+                            {{ item_data.meta.meta_group.meta_group_name }}
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item_data.meta %}
+                        <span class="meta-badge {% meta_badge_class item_data.meta.meta_group.meta_group_id %}">
+                            {% meta_badge_name item_data.meta.meta_group.meta_group_id %}
+                        </span>
+                        {% else %}
+                        <span class="meta-badge meta-default">—</span>
+                        {% endif %}
+                    </td>
+
+                    {# Fitting Requirements - Lower is better #}
+                    <td class="numeric" style="border-left: 1px solid var(--border-color);">
+                        {% with val=item_data.attrs.cpu %}
+                            {% if val %}
+                                {% if val < base_attrs.cpu %}<span class="stat-better">{{ val|floatformat:1 }}</span>
+                                {% elif val > base_attrs.cpu %}<span class="stat-worse">{{ val|floatformat:1 }}</span>
+                                {% else %}<span class="stat-neutral">{{ val|floatformat:1 }}</span>{% endif %}
+                            {% else %}—{% endif %}
+                        {% endwith %}
+                    </td>
+                    <td class="numeric">
+                        {% with val=item_data.attrs.power %}
+                            {% if val %}
+                                {% if val < base_attrs.power %}<span class="stat-better">{{ val|floatformat:0 }}</span>
+                                {% elif val > base_attrs.power %}<span class="stat-worse">{{ val|floatformat:0 }}</span>
+                                {% else %}<span class="stat-neutral">{{ val|floatformat:0 }}</span>{% endif %}
+                            {% else %}—{% endif %}
+                        {% endwith %}
+                    </td>
+                    <td class="numeric">
+                        {% with val=item_data.attrs.capacitor %}
+                            {% if val %}
+                                {% if val < base_attrs.capacitor %}<span class="stat-better">{{ val|floatformat:1 }}</span>
+                                {% elif val > base_attrs.capacitor %}<span class="stat-worse">{{ val|floatformat:1 }}</span>
+                                {% else %}<span class="stat-neutral">{{ val|floatformat:1 }}</span>{% endif %}
+                            {% else %}—{% endif %}
+                        {% endwith %}
+                    </td>
+
+                    {# Combat Stats - Higher is better for most, lower for some #}
+                    {% for stat in combat_stats %}
+                    <td class="numeric" style="border-left: 1px solid var(--border-color);">
+                        {% with val=item_data.attrs|get_item:stat.attr_name base_val=base_attrs|get_item:stat.attr_name %}
+                            {% if val %}
+                                {% if stat.high_is_good %}
+                                    {% if val > base_val %}<span class="stat-better">{{ val|floatformat:2 }}</span>
+                                    {% elif val < base_val %}<span class="stat-worse">{{ val|floatformat:2 }}</span>
+                                    {% else %}<span class="stat-neutral">{{ val|floatformat:2 }}</span>{% endif %}
+                                {% else %}
+                                    {% if val < base_val %}<span class="stat-better">{{ val|floatformat:2 }}</span>
+                                    {% elif val > base_val %}<span class="stat-worse">{{ val|floatformat:2 }}</span>
+                                    {% else %}<span class="stat-neutral">{{ val|floatformat:2 }}</span>{% endif %}
+                                {% endif %}
+                            {% else %}—{% endif %}
+                        {% endwith %}
+                    </td>
+                    {% endfor %}
+
+                    {# Other stats #}
+                    <td class="numeric" style="border-left: 1px solid var(--border-color);">{{ item_data.item.volume|default:"—" }}</td>
+                    <td class="numeric">
+                        {% if item_data.item.base_price %}{{ item_data.item.base_price|floatformat:2 }} ISK{% else %}—{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card">
+    <h3>Attribute Legend</h3>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 1rem;">
+        <div>
+            <strong style="color: var(--text-secondary);">Fitting Requirements</strong>
+            <ul style="margin-top: 0.5rem; padding-left: 1.2rem;">
+                <li><strong>CPU</strong>: CPU usage (lower is better)</li>
+                <li><strong>PG</strong>: PowerGrid (lower is better)</li>
+                <li><strong>Cap</strong>: Capacitor usage (lower is better)</li>
+            </ul>
+        </div>
+        <div>
+            <strong style="color: var(--text-secondary);">Meta Groups</strong>
+            <ul style="margin-top: 0.5rem; padding-left: 1.2rem; font-size: 0.9rem;">
+                <li>Tech I: Basic modules</li>
+                <li>Tech II: Improved stats, higher skill reqs</li>
+                <li>Storyline: Mission rewards</li>
+                <li>Faction: Faction-specific, good stats</li>
+                <li>Officer: Rare, best stats</li>
+                <li>Deadspace: Complex loot, high stats</li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <p>No variants found for this module.</p>
+</div>
+{% endif %}
+
+<div class="card">
+    <a href="{% url 'core:sde_item_detail' base.type_id %}" class="btn">&larr; Back to {{ base.name }}</a>
+</div>
+{% endblock %}

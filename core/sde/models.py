@@ -819,8 +819,9 @@ class CertSkills(models.Model):
 
     Certificate skill requirements
     """
-    cert_id = models.IntegerField(db_index=True, db_column='certID')
-    skill_id = models.IntegerField(db_index=True, db_column='skillID')
+    id = models.AutoField(primary_key=True)  # Django requires a PK, using auto-increment
+    cert = models.ForeignKey('CertCerts', on_delete=models.DO_NOTHING, db_column='certID', related_name='skill_requirements')
+    skill = models.ForeignKey('InvTypes', on_delete=models.DO_NOTHING, db_column='skillID', related_name='certificate_requirements')
     cert_level_int = models.IntegerField(null=True, blank=True, db_column='certLevelInt')
     skill_level = models.IntegerField(null=True, blank=True, db_column='skillLevel')
     cert_level_text = models.CharField(max_length=8, blank=True, db_column='certLevelText')
@@ -830,7 +831,6 @@ class CertSkills(models.Model):
         managed = False
         verbose_name = 'Certificate Skill'
         verbose_name_plural = 'Certificate Skills'
-        # Note: No primary key in SDE table
 
 
 class CertMasteries(models.Model):
@@ -839,16 +839,16 @@ class CertMasteries(models.Model):
 
     Certificate mastery levels
     """
-    type_id = models.IntegerField(null=True, blank=True, db_column='typeID')
+    id = models.AutoField(primary_key=True)  # Django requires a PK, using auto-increment
+    type = models.ForeignKey('InvTypes', on_delete=models.DO_NOTHING, db_column='typeID', related_name='mastery_certificates')
     mastery_level = models.IntegerField(null=True, blank=True, db_column='masteryLevel')
-    cert_id = models.IntegerField(null=True, blank=True, db_column='certID')
+    cert = models.ForeignKey('CertCerts', on_delete=models.DO_NOTHING, db_column='certID', related_name='masteries')
 
     class Meta:
         db_table = 'evesde_certmasteries'
         managed = False
         verbose_name = 'Certificate Mastery'
         verbose_name_plural = 'Certificate Masteries'
-        # Note: No primary key in SDE table
 
 
 # ============================================================================

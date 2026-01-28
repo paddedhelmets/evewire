@@ -288,6 +288,72 @@
 </div>
 {% endif %}
 
+{% if mastery_data %}
+<div class="card">
+    <h2>Mastery Certificates</h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+        Mastery levels for this ship, showing required certificates and their skill prerequisites.
+    </p>
+
+    <div style="display: flex; flex-direction: column; gap: 1rem;">
+        {% for level in mastery_data|dictsort:0 %}
+        {% with level_num=level.0 certs=level.1 %}
+        <details style="border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden;">
+            <summary style="padding: 1rem; background: var(--bg-primary); cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <span style="padding: 0.5rem 1rem; background: linear-gradient(135deg, var(--accent-color) 0%, #4a90d9 100%); color: white; border-radius: 6px; font-weight: bold;">
+                        Level {{ level_num }}
+                    </span>
+                    <span style="font-weight: 600;">{{ certs|length }} Certificate{{ certs|length|pluralize }}</span>
+                </div>
+                <span style="color: var(--text-secondary);">▶</span>
+            </summary>
+
+            <div style="padding: 1rem; background: var(--bg-secondary);">
+                {% for cert_data in certs %}
+                <div style="margin-bottom: 1.5rem; padding: 1rem; background: var(--bg-primary); border-radius: 6px; border-left: 3px solid var(--accent-color);">
+                    <h4 style="margin: 0 0 0.75rem 0; color: var(--link-color);">{{ cert_data.certificate.name }}</h4>
+
+                    <table style="width: 100%; border-collapse: collapse; margin-top: 0.5rem;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid var(--border-color);">
+                                <th style="padding: 0.5rem; text-align: left; font-size: 0.9rem; color: var(--text-secondary);">Skill</th>
+                                <th style="padding: 0.5rem; text-align: center; font-size: 0.9rem; color: var(--text-secondary);">Required Level</th>
+                                <th style="padding: 0.5rem; text-align: left; font-size: 0.9rem; color: var(--text-secondary);">Certificate Level</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for skill_req in cert_data.skills %}
+                            <tr style="border-bottom: 1px solid var(--table-border);">
+                                <td style="padding: 0.5rem;">
+                                    <a href="{% url 'core:sde_skill_detail' skill_req.skill.type_id %}" style="font-weight: 500;">
+                                        {{ skill_req.skill.name }}
+                                    </a>
+                                </td>
+                                <td style="padding: 0.5rem; text-align: center;">
+                                    <span style="padding: 0.25rem 0.5rem; background: var(--bg-secondary); border-radius: 3px; font-weight: bold; font-size: 0.9rem;">
+                                        {{ skill_req.required_level }}
+                                    </span>
+                                </td>
+                                <td style="padding: 0.5rem;">
+                                    <span style="padding: 0.25rem 0.5rem; background: var(--bg-secondary); border-radius: 3px; font-size: 0.85rem;">
+                                        Level {{ skill_req.cert_level }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endfor %}
+            </div>
+        </details>
+        {% endwith %}
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
 {% if variants %}
 <div class="card">
     <h2>Variants</h2>

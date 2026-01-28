@@ -65,6 +65,11 @@ def sde_index(request: HttpRequest) -> HttpResponse:
         published=True
     ).count()
 
+    # Get certificates
+    certificates_count = CertCerts.objects.count()
+    # Get a sample of certificates to display
+    certificates = CertCerts.objects.all().order_by('name')[:20]
+
     return render(request, 'core/sde/index.html', {
         'stats': stats,
         'all_categories': all_categories,
@@ -72,6 +77,8 @@ def sde_index(request: HttpRequest) -> HttpResponse:
         'meta_groups': meta_groups,
         'ship_groups': ship_groups,
         'skills_count': skills_count,
+        'certificates_count': certificates_count,
+        'certificates': certificates,
     })
 
 
@@ -430,19 +437,152 @@ def sde_skill_detail(request: HttpRequest, skill_id: int) -> HttpResponse:
 
 
 def sde_variant_comparison(request: HttpRequest, type_id: int) -> HttpResponse:
-    """Compare all variants of an item (meta group comparison)."""
+    """Compare all variants of an item (meta group comparison).
+
+    For modules (category 7 = Module, 8 = Charge, 32 = Subsystem):
+    Shows fitting requirements, combat stats, and other key attributes.
+
+    For other items:
+    Shows general variant information with tier grouping.
+    """
     try:
-        base = InvTypes.objects.get(type_id=type_id)
+        base = InvTypes.objects.select_related('group', 'group__category').get(type_id=type_id)
     except InvTypes.DoesNotExist:
         return render(request, 'core/error.html', {
             'message': f'Item {type_id} not found',
         }, status=404)
-    
+
+    # Check if this is a module (category 7 = Module, 8 = Charge, 32 = Subsystem)
+    is_module = base.group.category_id in [7, 8, 32]
+
+    if is_module:
+        return _module_comparison(request, base)
+    else:
+        return _general_variant_comparison(request, base)
+
+
+def _get_module_attributes(type_id: int) -> dict:
+    """Extract module-relevant attributes for comparison."""
+    attrs = {}
+
+    with connection.cursor() as cursor:
+        # Key attribute IDs for modules
+        fitting_queries = [
+            ('cpu', 50),          # cpu
+            ('power', 11),        # power
+            ('capacitor', 856),   # capacitorNeed
+        ]
+
+        for name, attr_id in fitting_queries:
+            cursor.execute("""
+                SELECT valueInt, valueFloat
+                FROM evesde_dgmattypeattributes
+                WHERE typeID = ? AND attributeID = ?
+            """, [type_id, attr_id])
+            row = cursor.fetchone()
+            if row:
+                value = row[1] if row[1] is not None else row[0]
+                if value is not None:
+                    attrs[name] = float(value)
+
+        # Combat-related attributes (will vary by module type)
+        combat_queries = [
+            ('damage', 64),              # damage multiplier
+            ('rof', 506),                # speed multiplier (rate of fire)
+            ('range', 54),               # max range
+            ('falloff', 158),            # falloff
+            ('tracking', 160),           # tracking speed
+            ('shield_boost', 74),        # shield boost amount
+            ('armor_repair', 88),        # armor repair amount
+            ('capacitor_boost', 87),     # capacitor bonus
+        ]
+
+        for name, attr_id in combat_queries:
+            cursor.execute("""
+                SELECT valueInt, valueFloat
+                FROM evesde_dgmattypeattributes
+                WHERE typeID = ? AND attributeID = ?
+            """, [type_id, attr_id])
+            row = cursor.fetchone()
+            if row:
+                value = row[1] if row[1] is not None else row[0]
+                if value is not None:
+                    attrs[name] = float(value)
+
+    return attrs
+
+
+def _module_comparison(request: HttpRequest, base: InvTypes) -> HttpResponse:
+    """Render module-specific comparison view."""
+    from django.conf import settings
+    original_debug = settings.DEBUG
+    settings.DEBUG = False
+
+    try:
+        # Get base item attributes
+        base_attrs = _get_module_attributes(base.type_id)
+
+        # Get all variants
+        variants_qs = InvMetaTypes.objects.filter(
+            parent_type_id=base.type_id
+        ).select_related('type', 'meta_group').order_by('meta_group__meta_group_id', 'type__name')
+
+        # Build variant data with attributes
+        variants_data = []
+        for v in variants_qs:
+            variant_attrs = _get_module_attributes(v.type_id)
+            variants_data.append({
+                'item': v.type,
+                'meta': v,
+                'attrs': variant_attrs,
+            })
+
+        # Determine which combat stats are relevant (appear in any variant)
+        all_attrs = set(base_attrs.keys())
+        for v in variants_data:
+            all_attrs.update(v['attrs'].keys())
+
+        # Define combat stats with labels and whether higher is better
+        combat_stat_defs = {
+            'damage': {'label': 'Damage', 'high_is_good': True},
+            'rof': {'label': 'ROF', 'high_is_good': False},  # Lower ROF is better
+            'range': {'label': 'Range', 'high_is_good': True},
+            'falloff': {'label': 'Falloff', 'high_is_good': True},
+            'tracking': {'label': 'Tracking', 'high_is_good': True},
+            'shield_boost': {'label': 'Shield Boost', 'high_is_good': True},
+            'armor_repair': {'label': 'Armor Rep', 'high_is_good': True},
+            'capacitor_boost': {'label': 'Cap Boost', 'high_is_good': True},
+        }
+
+        # Filter to only stats that appear in our items
+        combat_stats = []
+        for attr_name in ['damage', 'rof', 'range', 'falloff', 'tracking',
+                         'shield_boost', 'armor_repair', 'capacitor_boost']:
+            if attr_name in all_attrs:
+                combat_stats.append({
+                    'attr_name': attr_name,
+                    **combat_stat_defs[attr_name]
+                })
+
+        return render(request, 'core/sde/module_comparison.html', {
+            'base': base,
+            'base_attrs': base_attrs,
+            'variants': variants_data,
+            'combat_stats': combat_stats,
+            'all_items': [base] + [v['item'] for v in variants_data],
+        })
+
+    finally:
+        settings.DEBUG = original_debug
+
+
+def _general_variant_comparison(request: HttpRequest, base: InvTypes) -> HttpResponse:
+    """Render general variant comparison view (for non-modules)."""
     # Get all variants that reference this as parent
     variants = InvMetaTypes.objects.filter(
-        parent_type_id=type_id
+        parent_type_id=base.type_id
     ).select_related('type', 'meta_group').order_by('meta_group__meta_group_id')
-    
+
     # Group by tier for display
     tiers = {}
     for v in variants:
@@ -453,17 +593,17 @@ def sde_variant_comparison(request: HttpRequest, type_id: int) -> HttpResponse:
             'variant': v,
             'item': v.type,
         })
-    
+
     # Also get attributes for the base item for comparison
     base_attrs = DgmTypeAttributes.objects.filter(
-        type_id=type_id
+        type_id=base.type_id
     ).select_related('attribute')[:20]  # Limit for performance
-    
+
     base_attributes = {}
     for attr in base_attrs:
         value = attr.value_float if attr.value_float is not None else attr.value_int
         base_attributes[attr.attribute.attribute_name] = value
-    
+
     return render(request, 'core/sde/variant_comparison.html', {
         'base': base,
         'tiers': tiers,
@@ -516,6 +656,137 @@ def sde_market_group_detail(request: HttpRequest, group_id: int) -> HttpResponse
         'breadcrumb': breadcrumb,
         'child_groups': child_groups,
         'items': items_page,
+    })
+
+
+def get_ship_mastery_data(ship_id: int) -> dict:
+    """
+    Get mastery certificate data for a ship.
+
+    Returns a dictionary with mastery levels (1-5) as keys,
+    each containing a list of required certificates with their skills.
+    """
+    mastery_data = {}
+
+    # Get all mastery levels for this ship
+    masteries = CertMasteries.objects.filter(
+        type_id=ship_id
+    ).select_related('cert').order_by('mastery_level')
+
+    # Group by mastery level
+    for mastery in masteries:
+        level = mastery.mastery_level
+        if level not in mastery_data:
+            mastery_data[level] = []
+
+        # Get certificate details
+        cert = mastery.cert
+
+        # Get skills required for this certificate
+        cert_skills = CertSkills.objects.filter(
+            cert_id=cert.cert_id
+        ).select_related('skill')
+
+        skills = []
+        for cert_skill in cert_skills:
+            try:
+                skill_type = InvTypes.objects.get(type_id=cert_skill.skill_id)
+                skills.append({
+                    'skill': skill_type,
+                    'required_level': cert_skill.skill_level,
+                    'cert_level': cert_skill.cert_level_int,
+                })
+            except InvTypes.DoesNotExist:
+                pass
+
+        mastery_data[level].append({
+            'certificate': cert,
+            'skills': skills,
+        })
+
+    return mastery_data
+
+
+def sde_ship_detail(request: HttpRequest, ship_id: int) -> HttpResponse:
+    """
+    Detail page for a ship with mastery certificates.
+
+    Shows:
+    - Ship information and fitting stats
+    - Required skills to fly
+    - Mastery certificates (levels 1-5)
+    - Variants and related ships
+    """
+    # Get the ship item
+    try:
+        ship = InvTypes.objects.select_related(
+            'group', 'group__category', 'market_group', 'race', 'meta_type', 'meta_type__meta_group'
+        ).get(type_id=ship_id, published=True)
+    except InvTypes.DoesNotExist:
+        return render(request, 'core/error.html', {
+            'message': f'Ship {ship_id} not found',
+        }, status=404)
+
+    # Verify this is a ship (category 6)
+    if ship.group.category_id != 6:
+        return render(request, 'core/error.html', {
+            'message': f'Item {ship_id} is not a ship',
+        }, status=400)
+
+    # Get fitting attributes
+    fitting = get_ship_fitting(ship_id)
+
+    # Get mastery certificate data
+    mastery_data = get_ship_mastery_data(ship_id)
+
+    # Get required skills (from attributes)
+    required_skills = []
+    with connection.cursor() as cursor:
+        # Required skills are stored in attributes 182, 183, 184, 277, 278, 279, 1289, 1290
+        req_attr_ids = [182, 183, 184, 277, 278, 279, 1289, 1290]
+        placeholders = ','.join(str(x) for x in req_attr_ids)
+
+        cursor.execute("""
+            SELECT ta.attributeID, ta.valueInt, t.typeName, t.typeID, g.groupName
+            FROM evesde_dgmattypeattributes ta
+            JOIN evesde_invtypes t ON ta.valueInt = t.typeID
+            JOIN evesde_invgroups g ON t.groupID = g.groupID
+            WHERE ta.typeID = ? AND ta.attributeID IN (""" + placeholders + """)
+            ORDER BY ta.attributeID
+        """, [ship_id])
+
+        skill_attr_map = {
+            182: 1, 183: 2, 184: 3, 277: 4, 278: 5, 279: 6,
+            1289: 1, 1290: 2  # Secondary skills
+        }
+
+        for attr_id, skill_type_id, skill_name, type_id, group_name in cursor.fetchall():
+            required_level = skill_attr_map.get(attr_id, 1)
+            required_skills.append({
+                'type_id': type_id,
+                'name': skill_name,
+                'required_level': required_level,
+                'group': group_name,
+            })
+
+    # Get variants (ships that have this ship as parent)
+    variants = InvMetaTypes.objects.filter(
+        parent_type_id=ship_id
+    ).select_related('type', 'meta_group').order_by('meta_group__meta_group_id')
+
+    # Get related ships (same group, excluding self)
+    related_ships = InvTypes.objects.filter(
+        group_id=ship.group_id,
+        published=True
+    ).exclude(type_id=ship_id)[:10]
+
+    return render(request, 'core/sde/ship_detail.html', {
+        'ship': ship,
+        'fitting': fitting,
+        'required_skills': required_skills,
+        'mastery_data': mastery_data,
+        'variants': variants,
+        'related_ships': related_ships,
     })
 
 
@@ -728,4 +999,105 @@ def sde_blueprint_detail(request: HttpRequest, blueprint_id: int) -> HttpRespons
         'is_t2_blueprint': is_t2_blueprint,
         'invention_info': invention_info,
         'format_time': format_time,
+    })
+
+
+def sde_certificate_detail(request: HttpRequest, cert_id: int) -> HttpResponse:
+    """
+    Detail page for a certificate.
+
+    Shows:
+    - Certificate name and description
+    - Required skills for each level (0-4)
+    - Ships that require this certificate for mastery
+    """
+    try:
+        certificate = CertCerts.objects.get(cert_id=cert_id)
+    except CertCerts.DoesNotExist:
+        return render(request, 'core/error.html', {
+            'message': f'Certificate {cert_id} not found',
+        }, status=404)
+
+    # Get skill requirements for all levels, grouped by level
+    # Use raw SQL to avoid Django model issues with composite keys
+    skill_requirements = {}
+    from django.conf import settings
+    original_debug = settings.DEBUG
+    settings.DEBUG = False
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT cs.certLevelInt, cs.skillLevel, cs.certLevelText,
+                       t.typeID, t.typeName, g.groupName, t.description
+                FROM evesde_certskills cs
+                JOIN evesde_invtypes t ON cs.skillID = t.typeID
+                JOIN evesde_invgroups g ON t.groupID = g.groupID
+                WHERE cs.certID = ?
+                ORDER BY cs.certLevelInt, t.typeName
+            """, [cert_id])
+
+            for row in cursor.fetchall():
+                cert_level, skill_level, level_text, skill_id, skill_name, group_name, description = row
+                level = int(cert_level)
+                if level not in skill_requirements:
+                    skill_requirements[level] = []
+                skill_requirements[level].append({
+                    'skill_id': skill_id,
+                    'name': skill_name,
+                    'group': group_name,
+                    'description': description,
+                    'required_level': skill_level,
+                    'level_text': level_text,
+                })
+    finally:
+        settings.DEBUG = original_debug
+
+    # Get mastery information (ships that require this certificate)
+    mastery_ships = {}
+    settings.DEBUG = False
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT cm.masteryLevel, t.typeID, t.typeName, g.groupName
+                FROM evesde_certmasteries cm
+                JOIN evesde_invtypes t ON cm.typeID = t.typeID
+                JOIN evesde_invgroups g ON t.groupID = g.groupID
+                WHERE cm.certID = ? AND t.published = 1
+                ORDER BY cm.masteryLevel, g.groupName, t.typeName
+            """, [cert_id])
+
+            for row in cursor.fetchall():
+                mastery_level, ship_id, ship_name, group_name = row
+                level = int(mastery_level)
+                if level not in mastery_ships:
+                    mastery_ships[level] = []
+                mastery_ships[level].append({
+                    'type_id': ship_id,
+                    'name': ship_name,
+                    'group': group_name,
+                })
+    finally:
+        settings.DEBUG = original_debug
+
+    # Level names for display
+    level_names = {
+        0: 'Basic',
+        1: 'Standard',
+        2: 'Improved',
+        3: 'Advanced',
+        4: 'Elite',
+    }
+
+    # Count total requirements and masteries
+    total_skill_reqs = sum(len(reqs) for reqs in skill_requirements.values())
+    total_mastery_ships = sum(len(ships) for ships in mastery_ships.values())
+
+    return render(request, 'core/sde/certificate_detail.html', {
+        'certificate': certificate,
+        'skill_requirements': skill_requirements,
+        'mastery_ships': mastery_ships,
+        'level_names': level_names,
+        'total_skill_reqs': total_skill_reqs,
+        'total_mastery_ships': total_mastery_ships,
+        'cert_levels': [0, 1, 2, 3, 4],
     })
