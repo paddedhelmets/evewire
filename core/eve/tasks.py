@@ -11,7 +11,7 @@ import time
 from datetime import timedelta
 from django.db import models
 from django.utils import timezone
-from django_q.tasks import async_task, schedule
+from django_q.tasks import async_task
 
 logger = logging.getLogger('evewire')
 
@@ -226,7 +226,7 @@ def refresh_stale_characters() -> dict:
         async_task(
             'core.eve.tasks._sync_character_metadata',
             character.id,
-            schedule=schedule(scheduled_time)
+            schedule=scheduled_time
         )
         queued += 1
 
@@ -331,7 +331,7 @@ def refresh_stale_assets() -> dict:
         async_task(
             'core.eve.tasks._sync_character_assets',
             character.id,
-            schedule=schedule(scheduled_time)
+            schedule=scheduled_time
         )
         queued += 1
 
@@ -393,7 +393,7 @@ def refresh_stale_skills() -> dict:
             async_task(
                 'core.eve.tasks._sync_character_skills',
                 character.id,
-                schedule=schedule(scheduled_time)
+                schedule=scheduled_time
             )
             queued += 1
 
