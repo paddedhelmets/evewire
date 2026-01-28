@@ -884,3 +884,89 @@ def fitting_bulk_import(request: HttpRequest) -> HttpResponse:
             {'name': 'MD', 'description': 'Markdown format with embedded EFT fit and metadata'},
         ],
     })
+
+
+@login_required
+def fleet_readiness(request: HttpRequest) -> HttpResponse:
+    """Show fleet readiness dashboard for all tracked fittings."""
+    from core.doctrines.models import Fitting, FittingMatch
+    from core.models import Character
+    from core.eve.models import ItemType
+
+    # Get all tracked fittings (or all active if none tracked)
+    tracked_fittings = Fitting.objects.filter(is_tracked=True)
+    if not tracked_fittings.exists():
+        # Fallback to active fittings if nothing is tracked
+        tracked_fittings = Fitting.objects.filter(is_active=True)
+
+    # Calculate readiness for each fitting
+    fitting_readiness = []
+    for fitting in tracked_fittings:
+        # Get readiness summary across all user's characters
+        characters_ready = 0
+        characters_partial = 0
+        characters_total = 0
+        matches_data = []
+        missing_modules_counts = {}  # {module_id: count} for common gaps
+
+        for character in request.user.characters.all():
+            characters_total += 1
+
+            # Get all matches for this character/fitting
+            matches = FittingMatch.objects.filter(
+                character=character,
+                fitting=fitting
+            ).order_by('-match_score')
+
+            best_match = matches.first()
+            if best_match and best_match.match_score >= 1.0:
+                characters_ready += 1
+            elif best_match and best_match.match_score > 0:
+                characters_partial += 1
+
+            # Count missing modules for common gaps analysis
+            for match in matches:
+                for module_id in match.missing_modules:
+                    missing_modules_counts[module_id] = missing_modules_counts.get(module_id, 0) + 1
+
+            matches_data.append({
+                'character': character,
+                'best_match': best_match,
+            })
+
+        # Calculate readiness percentage
+        readiness_percent = (characters_ready / characters_total * 100) if characters_total > 0 else 0
+
+        # Get top 5 most common missing modules
+        sorted_missing = sorted(missing_modules_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+        top_missing = []
+        for module_id, count in sorted_missing:
+            try:
+                module = ItemType.objects.get(id=module_id)
+                top_missing.append({
+                    'name': module.name,
+                    'count': count,
+                })
+            except ItemType.DoesNotExist:
+                top_missing.append({
+                    'name': f"Module {module_id}",
+                    'count': count,
+                })
+
+        fitting_readiness.append({
+            'fitting': fitting,
+            'characters_ready': characters_ready,
+            'characters_partial': characters_partial,
+            'characters_total': characters_total,
+            'readiness_percent': readiness_percent,
+            'matches_data': matches_data,
+            'top_missing': top_missing,
+        })
+
+    # Sort by readiness percent (highest first), then by name
+    fitting_readiness.sort(key=lambda x: (-x['readiness_percent'], x['fitting'].name))
+
+    return render(request, 'core/fleet_readiness.html', {
+        'fitting_readiness': fitting_readiness,
+        'total_fittings': len(fitting_readiness),
+    })

@@ -133,6 +133,7 @@ urlpatterns = [
     path('fittings/import/', views.fitting_import, name='fitting_import'),
     path('fittings/<int:fitting_id>/export/<str:format>/', views.fitting_export, name='fitting_export'),
     path('fittings/bulk-import/', views.fitting_bulk_import, name='fitting_bulk_import'),
+    path('fittings/readiness/', views.fleet_readiness, name='fleet_readiness'),
     path('shopping-lists/', views.shopping_lists_list, name='shopping_lists_list'),
     path('character/<int:character_id>/shopping-lists/', views.shopping_lists_list, name='character_shopping_lists_list'),
     path('shopping-lists/<int:list_id>/', views.shopping_list_detail, name='shopping_list_detail'),

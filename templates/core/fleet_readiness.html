@@ -1,0 +1,432 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}Fleet Readiness - evewire{% endblock %}
+
+{% block extra_head %}
+<style>
+/* Fleet readiness dashboard styles */
+.readiness-grid {
+    display: grid;
+    grid-template-columns: 350px 1fr 300px;
+    gap: 1rem;
+    align-items: start;
+}
+
+@media (max-width: 1200px) {
+    .readiness-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.fitting-list-item {
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.fitting-list-item:hover {
+    background: var(--bg-secondary);
+}
+
+.fitting-list-item.active {
+    background: var(--bg-secondary);
+    border-color: var(--link-color);
+}
+
+.fitting-list-item .fitting-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.fitting-list-item .fitting-name {
+    font-weight: 500;
+}
+
+.fitting-list-item .readiness-badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: 3px;
+    font-size: 0.85rem;
+    font-weight: bold;
+}
+
+.readiness-badge.high {
+    background: #080;
+    color: white;
+}
+
+.readiness-badge.medium {
+    background: #cc0;
+    color: white;
+}
+
+.readiness-badge.low {
+    background: #c00;
+    color: white;
+}
+
+.fitting-list-item .readiness-bar {
+    width: 100%;
+    height: 6px;
+    background: var(--border-color);
+    border-radius: 3px;
+    margin-top: 0.25rem;
+}
+
+.fitting-list-item .readiness-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #1976d2, #42a5f5);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+.fitting-list-item .summary {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.readiness-detail h3 {
+    margin-bottom: 1rem;
+}
+
+.readiness-detail .pilot-list {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.pilot-row {
+    padding: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.pilot-row:last-child {
+    border-bottom: none;
+}
+
+.pilot-row .pilot-name {
+    font-weight: 500;
+}
+
+.pilot-row .pilot-status {
+    font-size: 0.9rem;
+    font-weight: bold;
+}
+
+.pilot-row .status-ready {
+    color: #080;
+}
+
+.pilot-row .status-partial {
+    color: #c60;
+}
+
+.pilot-row .status-none {
+    color: #c00;
+}
+
+.pilot-row .pilot-location {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.recommendations-card {
+    position: sticky;
+    top: 1rem;
+}
+
+.recommendation-item {
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+}
+
+.recommendation-item .rec-type {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin-bottom: 0.25rem;
+}
+
+.recommendation-item.quick-win .rec-type {
+    color: #080;
+}
+
+.recommendation-item.location-priority .rec-type {
+    color: #1976d2;
+}
+
+.recommendation-item.common-gap .rec-type {
+    color: #f57c00;
+}
+
+.recommendation-item .rec-text {
+    font-size: 0.9rem;
+}
+
+.no-fittings {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-secondary);
+}
+
+.no-fittings h3 {
+    margin-bottom: 1rem;
+}
+
+.no-fittings p {
+    margin-bottom: 1rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+    <h1>Fleet Readiness</h1>
+    <a href="{% url 'core:fittings_list' %}">Back to Fittings</a>
+</div>
+
+{% if total_fittings > 0 %}
+<div class="readiness-grid">
+    <!-- Left column: Fitting list -->
+    <div>
+        <h2>Tracked Fleets ({{ total_fittings }})</h2>
+        {% for fitting_data in fitting_readiness %}
+        <div class="fitting-list-item {% if forloop.first %}active{% endif %}" data-fitting-id="{{ fitting_data.fitting.id }}" onclick="selectFitting({{ fitting_data.fitting.id }})">
+            <div class="fitting-header">
+                <span class="fitting-name">{{ fitting_data.fitting.name }}</span>
+                <span class="readiness-badge {% if fitting_data.readiness_percent >= 80 %}high{% elif fitting_data.readiness_percent >= 40 %}medium{% else %}low{% endif %}">
+                    {{ fitting_data.readiness_percent|floatformat:0 }}%
+                </span>
+            </div>
+            <div class="readiness-bar">
+                <div class="readiness-fill" style="width: {{ fitting_data.readiness_percent }}%; background: {% if fitting_data.readiness_percent >= 80 %}#080{% elif fitting_data.readiness_percent >= 40 %}#cc0{% else %}#c00{% endif %};"></div>
+            </div>
+            <div class="summary">
+                {{ fitting_data.characters_ready }}/{{ fitting_data.characters_total }} ready
+                {% if fitting_data.characters_partial > 0 %}
+                • {{ fitting_data.characters_partial }} partial
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Middle column: Selected fitting details -->
+    <div class="card readiness-detail" id="readinessDetail">
+        {% if fitting_readiness %}
+            {% with first=fitting_readiness.0 %}
+            <h3>{{ first.fitting.name }}</h3>
+
+            <div style="margin-bottom: 1rem;">
+                <strong>Readiness:</strong>
+                <span style="color: {% if first.readiness_percent >= 80 %}#080{% elif first.readiness_percent >= 40 %}#cc0{% else %}#c00{% endif %}; font-weight: bold;">
+                    {{ first.readiness_percent|floatformat:0 }}%
+                </span>
+                ({{ first.characters_ready }}/{{ first.characters_total }} pilots ready)
+            </div>
+
+            <h4>Pilots</h4>
+            <div class="pilot-list">
+                {% for match_data in first.matches_data %}
+                <div class="pilot-row">
+                    <div class="pilot-left">
+                        <a href="{% url 'core:character_overview' match_data.character.id %}" style="text-decoration: none; color: inherit;">
+                            <span class="pilot-name">{{ match_data.character.character_name }}</span>
+                        </a>
+                        <span class="pilot-location">({{ match_data.character.location_name }})</span>
+                    </div>
+                    {% if match_data.best_match %}
+                        {% if match_data.best_match.is_match %}
+                            <span class="pilot-status status-ready">✓ Ready</span>
+                        {% else %}
+                            <span class="pilot-status status-partial">{{ match_data.best_match.match_score|mul:100|floatformat:0 }}%</span>
+                        {% endif %}
+                    {% else %}
+                        <span class="pilot-status status-none">No ship</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+
+            {% if first.top_missing %}
+            <h4 style="margin-top: 1rem;">Common Gaps</h4>
+            <div style="font-size: 0.9rem;">
+                {% for missing in first.top_missing %}
+                <div style="padding: 0.25rem 0; border-bottom: 1px solid var(--table-border);">
+                    <strong>{{ missing.name }}</strong> - {{ missing.count }} pilot{% if missing.count > 1 %}s{% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% endwith %}
+    </div>
+
+    <!-- Right column: Recommendations -->
+    <div class="card recommendations-card">
+        <h2>Quick Wins</h2>
+
+        {% with first=fitting_readiness.0 %}
+            {% if first.characters_partial > 0 %}
+                <div class="recommendation-item quick-win">
+                    <div class="rec-type">Quick Win</div>
+                    <div class="rec-text">
+                        {% for match_data in first.matches_data %}
+                            {% if match_data.best_match and match_data.best_match.match_score >= 0.8 and match_data.best_match.match_score < 1.0 %}
+                                <p style="margin: 0.25rem 0;">
+                                    Get <strong>{{ match_data.character.character_name }}</strong> to 100%
+                                    <span style="color: #888; font-size: 0.85rem;">
+                                        ({{ match_data.best_match.match_score|mul:100|floatformat:0 }}% → 100%)
+                                    </span>
+                                </p>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endif %}
+
+            {% if first.top_missing %}
+            <div class="recommendation-item common-gap">
+                <div class="rec-type">Common Gap</div>
+                <div class="rec-text">
+                    {% for missing in first.top_missing %}
+                    <p style="margin: 0.25rem 0;">
+                        <strong>{{ missing.name }}</strong> - needed for {{ missing.count }} pilot{% if missing.count > 1 %}s{% endif %}
+                    </p>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        {% endwith %}
+    </div>
+</div>
+
+{% else %}
+<div class="no-fittings card">
+    <h3>No tracked fleets</h3>
+    <p>You haven't marked any fleets for readiness tracking yet.</p>
+    <p>Go to the <a href="{% url 'core:fittings_list' %}">Fittings List</a> and edit a fitting to set "Tracked" flag.</p>
+</div>
+{% endif %}
+
+<script>
+// Store fitting data for quick selection
+const fittingData = {{ fitting_readiness|safe }};
+
+function selectFitting(fittingId) {
+    // Update active class
+    document.querySelectorAll('.fitting-list-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    document.querySelector(`[data-fitting-id="${fittingId}"]`).classList.add('active');
+
+    // Find and update detail view
+    const fitting = fittingData.find(f => f.fitting.id === fittingId);
+    if (fitting) {
+        updateReadinessDetail(fitting);
+    }
+}
+
+function updateReadinessDetail(fitting) {
+    const detailDiv = document.getElementById('readinessDetail');
+
+    // Update the detail view
+    detailDiv.innerHTML = `
+        <h3>${fitting.fitting.name}</h3>
+        <div style="margin-bottom: 1rem;">
+            <strong>Readiness:</strong>
+            <span style="color: ${fitting.readiness_percent >= 80 ? '#080' : fitting.readiness_percent >= 40 ? '#cc0' : '#c00'}; font-weight: bold;">
+                ${fitting.readiness_percent.toFixed(0)}%
+            </span>
+            (${fitting.characters_ready}/${fitting.characters_total} pilots ready)
+        </div>
+        <h4>Pilots</h4>
+        <div class="pilot-list">
+            ${fitting.matches_data.map(match => `
+                <div class="pilot-row">
+                    <div class="pilot-left">
+                        <a href="/characters/${match.character.id}/" style="text-decoration: none; color: inherit;">
+                            <span class="pilot-name">${match.character.character_name}</span>
+                        </a>
+                        <span class="pilot-location">(${match.character.location_name || 'Unknown'})</span>
+                    </div>
+                    ${match.best_match ? `
+                        match.best_match.is_match
+                            ? '<span class="pilot-status status-ready">✓ Ready</span>'
+                            : `<span class="pilot-status status-partial">${(match.best_match.match_score * 100).toFixed(0)}%</span>`
+                        : '<span class="pilot-status status-none">No ship</span>'
+                    }
+                </div>
+            `).join('')}
+        </div>
+        ${fitting.top_missing && fitting.top_missing.length > 0 ? `
+            <h4 style="margin-top: 1rem;">Common Gaps</h4>
+            <div style="font-size: 0.9rem;">
+                ${fitting.top_missing.map(missing => `
+                    <div style="padding: 0.25rem 0; border-bottom: 1px solid var(--table-border);">
+                        <strong>${missing.name}</strong> - ${missing.count} pilot${missing.count > 1 ? 's' : ''}
+                    </div>
+                `).join('')}
+            </div>
+        ` : ''}
+    `;
+
+    // Update recommendations
+    updateRecommendations(fitting);
+}
+
+function updateRecommendations(fitting) {
+    const recCard = document.querySelector('.recommendations-card');
+
+    let quickWins = '';
+    let commonGaps = '';
+
+    // Quick wins: partial matches close to 100%
+    if (fitting.characters_partial > 0) {
+        quickWins = fitting.matches_data
+            .filter(m => m.best_match && m.best_match.match_score >= 0.8 && m.best_match.match_score < 1.0)
+            .map(m => `
+                <div class="recommendation-item quick-win">
+                    <div class="rec-type">Quick Win</div>
+                    <div class="rec-text">
+                        Get <strong>${m.character.character_name}</strong> to 100%
+                        <span style="color: #888; font-size: 0.85rem;">
+                            (${(m.best_match.match_score * 100).toFixed(0)}% → 100%)
+                        </span>
+                    </div>
+                </div>
+            `).join('');
+    }
+
+    // Common gaps
+    if (fitting.top_missing && fitting.top_missing.length > 0) {
+        commonGaps = `
+            <div class="recommendation-item common-gap">
+                <div class="rec-type">Common Gap</div>
+                <div class="rec-text">
+                    ${fitting.top_missing.map(m => `
+                        <p style="margin: 0.25rem 0;">
+                            <strong>${m.name}</strong> - needed for ${m.count} pilot${m.count > 1 ? 's' : ''}
+                        </p>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    recCard.innerHTML = `
+        <h2>Quick Wins</h2>
+        ${quickWins || '<p style="color: #888; font-size: 0.9rem;">No quick wins available.</p>'}
+        ${commonGaps || '<p style="color: #888; font-size: 0.9rem;">No common gaps identified.</p>'}
+    `;
+}
+</script>
+{% endblock %}
