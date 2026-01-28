@@ -475,7 +475,8 @@ def refresh_all_lp_stores() -> dict:
     checked = 0
 
     # Get distinct corporation IDs that have agents (corps with mission agents likely have LP stores)
-    agent_corp_ids = AgtAgents.objects.values_list('corporation_id', flat=True).distinct()
+    # Use set() to ensure deduplication
+    agent_corp_ids = set(AgtAgents.objects.values_list('corporation_id', flat=True))
 
     logger.info(f'Checking {len(agent_corp_ids)} corporations with agents for LP stores')
 
