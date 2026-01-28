@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}{{ region.region_name }} - SDE Browser{% endblock %}
+
+{% block content %}
+<div class="card">
+    <nav style="margin-bottom: 1rem; font-size: 0.9rem;">
+        <a href="{% url 'core:sde_index' %}">SDE</a> &gt;
+        <strong>{{ region.region_name }}</strong>
+    </nav>
+
+    <h1>{{ region.region_name }}</h1>
+    {% if region.description %}
+    <p style="color: var(--text-secondary); margin-top: 0.5rem;">{{ region.description }}</p>
+    {% endif %}
+
+    <div style="margin-top: 1rem; display: flex; gap: 2rem; flex-wrap: wrap;">
+        <div><strong>Region ID:</strong> {{ region.region_id }}</div>
+        <div><strong>Constellations:</strong> {{ constellations|length }}</div>
+        {% if region.faction %}
+        <div><strong>Faction:</strong> {{ region.faction.faction_name }}</div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <h2>Constellations in {{ region.region_name }} ({{ constellations|length }})</h2>
+    {% if constellations %}
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 2px solid var(--border-color);">
+                    <th style="padding: 0.75rem; text-align: left;">Constellation Name</th>
+                    <th style="padding: 0.75rem; text-align: right;">ID</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for constellation in constellations %}
+                <tr style="border-bottom: 1px solid var(--table-border);">
+                    <td style="padding: 0.75rem;">{{ constellation.constellation_name }}</td>
+                    <td style="padding: 0.75rem; text-align: right; font-family: monospace;">{{ constellation.constellation_id }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No constellations found in this region.</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <a href="{% url 'core:sde_index' %}" class="btn">&larr; Back to SDE Browser</a>
+</div>
+{% endblock %}

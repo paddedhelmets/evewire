@@ -225,3 +225,79 @@ def markdown(value):
         return mark_safe(md.markdown(str(value), extensions=['extra', 'codehilite', 'nl2br', 'tables']))
     except Exception:
         return value
+
+
+@register.filter
+def get_item(dictionary, key):
+    """Get an item from a dictionary by key. Returns None if key doesn't exist."""
+    if isinstance(dictionary, dict):
+        return dictionary.get(key)
+    return None
+
+
+# Also register as 'lookup' for easier use in templates
+lookup = register.filter('lookup', get_item)
+
+
+@register.simple_tag
+def meta_badge_class(meta_group_id):
+    """Return the CSS class for a meta group badge."""
+    meta_classes = {
+        1: 'meta-tech-1',      # Tech I
+        2: 'meta-tech-2',      # Tech II
+        3: 'meta-storyline',   # Storyline
+        4: 'meta-faction',     # Faction
+        5: 'meta-officer',     # Officer
+        6: 'meta-deadspace',   # Deadspace
+        14: 'meta-abyssal',    # Abyssal
+    }
+    return meta_classes.get(meta_group_id, 'meta-default')
+
+
+@register.simple_tag
+def meta_badge_name(meta_group_id):
+    """Return the display name for a meta group."""
+    meta_names = {
+        1: 'Tech I',
+        2: 'Tech II',
+        3: 'Storyline',
+        4: 'Faction',
+        5: 'Officer',
+        6: 'Deadspace',
+        14: 'Abyssal',
+    }
+    return meta_names.get(meta_group_id, 'Unknown')
+
+
+@register.filter
+def highlight(text, query):
+    """Highlight search query terms in text."""
+    if not query or not text:
+        return text
+
+    import re
+    # Escape special regex characters in the query
+    escaped_query = re.escape(str(query))
+    # Create a pattern that matches the query (case-insensitive)
+    pattern = re.compile(f'({escaped_query})', re.IGNORECASE)
+    # Wrap matches in a span with highlight class
+    highlighted = pattern.sub(r'<span class="highlight">\1</span>', str(text))
+    return mark_safe(highlighted)
+
+
+@register.filter
+def slice_start(value, length):
+    """Get first N characters of a string."""
+    try:
+        return str(value)[:int(length)]
+    except (ValueError, TypeError):
+        return value
+
+
+@register.filter
+def to_int(value):
+    """Convert value to integer."""
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return 0

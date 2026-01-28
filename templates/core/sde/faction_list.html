@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Factions - SDE Browser{% endblock %}
+
+{% block content %}
+<style>
+.faction-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+.faction-item {
+    padding: 1rem;
+    background: var(--bg-primary);
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    transition: all 0.2s;
+}
+.faction-item:hover {
+    border-color: var(--link-color);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+.faction-name {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+.faction-desc {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.75rem;
+    line-height: 1.4;
+}
+.faction-stats {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+</style>
+
+<div class="card">
+    <nav style="margin-bottom: 1rem; font-size: 0.9rem;">
+        <a href="{% url 'core:sde_index' %}">SDE</a> &gt;
+        <strong>Factions</strong>
+    </nav>
+
+    <h1>Factions</h1>
+    <p style="color: var(--text-secondary);">
+        Major factions in EVE Online with their member corporations
+    </p>
+</div>
+
+<div class="card">
+    <div class="faction-grid">
+        {% for faction in factions %}
+        <div class="faction-item">
+            <a href="{% url 'core:sde_faction_detail' faction.faction_id %}" style="text-decoration: none;">
+                <div class="faction-name">{{ faction.faction_name }}</div>
+                <div class="faction-desc">
+                    {% if faction.description %}
+                        {{ faction.description|truncatewords:20 }}
+                    {% else %}
+                        No description available
+                    {% endif %}
+                </div>
+                <div class="faction-stats">
+                    <span>ID: {{ faction.faction_id }}</span>
+                    {% if faction.militia_corporation_id %}
+                        <span>Factional Warfare</span>
+                    {% endif %}
+                </div>
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

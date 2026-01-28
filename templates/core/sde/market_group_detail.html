@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block title %}{{ market_group.market_group_name }} - SDE Browser{% endblock %}
+
+{% block content %}
+<div class="card">
+    <nav style="margin-bottom: 1rem; font-size: 0.9rem;">
+        <a href="{% url 'core:sde_index' %}">SDE</a> &gt;
+        {% for crumb in breadcrumb %}
+            {% if forloop.last %}
+                <strong>{{ crumb.market_group_name }}</strong>
+            {% else %}
+                <a href="{% url 'core:sde_market_group_detail' crumb.market_group_id %}">{{ crumb.market_group_name }}</a> &gt;
+            {% endif %}
+        {% endfor %}
+    </nav>
+
+    <h1>{{ market_group.market_group_name }}</h1>
+    {% if market_group.description %}
+    <p style="color: var(--text-secondary); margin-top: 0.5rem;">{{ market_group.description }}</p>
+    {% endif %}
+
+    <div style="margin-top: 1rem; display: flex; gap: 2rem; flex-wrap: wrap;">
+        <div><strong>Market Group ID:</strong> {{ market_group.market_group_id }}</div>
+        <div><strong>Has Types:</strong> {% if market_group.has_types %}Yes{% else %}No{% endif %}</div>
+        <div><strong>Items:</strong> {{ items.paginator.count }}</div>
+        {% if market_group.parent_group_id %}
+        <div><strong>Parent:</strong> <a href="{% url 'core:sde_market_group_detail' market_group.parent_group_id %}">View Parent Group</a></div>
+        {% endif %}
+    </div>
+</div>
+
+{% if child_groups %}
+<div class="card">
+    <h2>Child Market Groups ({{ child_groups|length }})</h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">Browse subcategories in the market hierarchy</p>
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid var(--border-color);">
+                <th style="padding: 0.75rem; text-align: left;">Market Group</th>
+                <th style="padding: 0.75rem; text-align: center;">Has Items</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for group in child_groups %}
+            <tr style="border-bottom: 1px solid var(--table-border);">
+                <td style="padding: 0.75rem;">
+                    <a href="{% url 'core:sde_market_group_detail' group.market_group_id %}">{{ group.market_group_name }}</a>
+                    {% if group.description %}
+                    <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">{{ group.description|truncatewords:15 }}</div>
+                    {% endif %}
+                </td>
+                <td style="padding: 0.75rem; text-align: center;">
+                    {% if group.has_types %}<span style="color: var(--alert-success-text);">✓</span>{% else %}<span style="color: var(--text-secondary);">—</span>{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<div class="card">
+    <h2>Items in {{ market_group.market_group_name }}</h2>
+    {% if items %}
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 2px solid var(--border-color);">
+                    <th style="padding: 0.75rem; text-align: left;">Name</th>
+                    <th style="padding: 0.75rem; text-align: left;">Group</th>
+                    <th style="padding: 0.75rem; text-align: right;">Volume (m³)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr style="border-bottom: 1px solid var(--table-border);">
+                    <td style="padding: 0.75rem;">
+                        <a href="{% url 'core:sde_item_detail' item.type_id %}">{{ item.name }}</a>
+                    </td>
+                    <td style="padding: 0.75rem; font-size: 0.9rem;">
+                        <a href="{% url 'core:sde_group_detail' item.group.group_id %}" style="color: var(--text-secondary);">{{ item.group.group_name }}</a>
+                    </td>
+                    <td style="padding: 0.75rem; text-align: right; font-family: monospace;">{{ item.volume|floatformat:2 }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% if items.has_other_pages %}
+        <div style="margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: center;">
+            {% if items.has_previous %}
+                <a href="?page={{ items.previous_page_number }}" class="btn">Previous</a>
+            {% endif %}
+            <span style="padding: 0.5rem 1rem;">Page {{ items.number }} of {{ items.paginator.num_pages }}</span>
+            {% if items.has_next %}
+                <a href="?page={{ items.next_page_number }}" class="btn">Next</a>
+            {% endif %}
+        </div>
+        {% endif %}
+    {% else %}
+        <p>No items found in this market group.{% if child_groups %} Try browsing child market groups.{% endif %}</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    {% if market_group.parent_group_id %}
+        <a href="{% url 'core:sde_market_group_detail' market_group.parent_group_id %}" class="btn">&larr; Back to Parent Group</a>
+    {% else %}
+        <a href="{% url 'core:sde_index' %}" class="btn">&larr; Back to SDE Browser</a>
+    {% endif %}
+</div>
+{% endblock %}

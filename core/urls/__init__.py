@@ -5,6 +5,7 @@ URL configuration for core app.
 from django.urls import path
 from core import views
 from core.views import api
+from core.sde import views as sde_views
 
 app_name = 'core'
 
@@ -137,6 +138,30 @@ urlpatterns = [
     path('shopping-lists/', views.shopping_lists_list, name='shopping_lists_list'),
     path('character/<int:character_id>/shopping-lists/', views.shopping_lists_list, name='character_shopping_lists_list'),
     path('shopping-lists/<int:list_id>/', views.shopping_list_detail, name='shopping_list_detail'),
+
+    # SDE Browser (read-only SDE exploration)
+    path('sde/', sde_views.sde_index, name='sde_index'),
+    path('sde/sitemap/', sde_views.sde_sitemap, name='sde_sitemap'),
+    path('sde/search', sde_views.sde_search, name='sde_search'),
+    path('sde/route/', sde_views.sde_route_planner, name='sde_route_planner'),
+    path('sde/item/<int:type_id>/', sde_views.sde_item_detail, name='sde_item_detail'),
+    path('sde/ship/<int:ship_id>/', sde_views.sde_ship_detail, name='sde_ship_detail'),
+    path('sde/category/<int:category_id>/', sde_views.sde_category_detail, name='sde_category_detail'),
+    path('sde/group/<int:group_id>/', sde_views.sde_group_detail, name='sde_group_detail'),
+    path('sde/market/<int:group_id>/', sde_views.sde_market_group_detail, name='sde_market_group_detail'),
+    path('sde/system/<int:system_id>/', sde_views.sde_system_detail, name='sde_system_detail'),
+    path('sde/region/<int:region_id>/', sde_views.sde_region_detail, name='sde_region_detail'),
+    path('sde/skill/<int:skill_id>/', sde_views.sde_skill_detail, name='sde_skill_detail'),
+    path('sde/blueprint/<int:blueprint_id>/', sde_views.sde_blueprint_detail, name='sde_blueprint_detail'),
+    path('sde/variants/<int:type_id>/', sde_views.sde_variant_comparison, name='sde_variant_comparison'),
+    path('sde/certificate/<int:cert_id>/', sde_views.sde_certificate_detail, name='sde_certificate_detail'),
+    path('sde/industry/', sde_views.sde_industry_activities, name='sde_industry_activities'),
+    path('sde/skills/', sde_views.sde_skills_directory, name='sde_skills_directory'),
+    path('sde/factions/', sde_views.sde_faction_list, name='sde_faction_list'),
+    path('sde/faction/<int:faction_id>/', sde_views.sde_faction_detail, name='sde_faction_detail'),
+    path('sde/corporation/<int:corporation_id>/', sde_views.sde_corporation_detail, name='sde_corporation_detail'),
+    path('sde/agent/<int:agent_id>/', sde_views.sde_agent_detail, name='sde_agent_detail'),
+    path('sde/ship/<int:ship_id>/fittings/', sde_views.sde_ship_fittings, name='sde_ship_fittings'),
 
     # API endpoints
     path('api/assets/locations/', api.api_asset_locations, name='api_asset_locations'),

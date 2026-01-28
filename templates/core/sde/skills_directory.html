@@ -1,0 +1,376 @@
+{% extends "base.html" %}
+
+{% block title %}Skills Directory - SDE Browser{% endblock %}
+
+{% block content %}
+{% load evewire %}
+<style>
+.attribute-icon {
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 24px;
+    font-size: 12px;
+    font-weight: bold;
+    margin-right: 4px;
+}
+.attr-intelligence { background: #3b82f6; color: white; }
+.attr-perception { background: #ef4444; color: white; }
+.attr-charisma { background: #ec4899; color: white; }
+.attr-willpower { background: #8b5cf6; color: white; }
+.attr-memory { background: #10b981; color: white; }
+
+.filter-section {
+    background: var(--bg-secondary);
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.stat-card {
+    background: var(--bg-primary);
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.stat-title {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+
+.stat-value {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--text-primary);
+}
+
+.stat-bar {
+    height: 8px;
+    background: var(--bg-secondary);
+    border-radius: 4px;
+    margin-top: 0.5rem;
+    overflow: hidden;
+}
+
+.stat-bar-fill {
+    height: 100%;
+    background: var(--link-color);
+    border-radius: 4px;
+    transition: width 0.3s;
+}
+
+.skill-group {
+    margin-bottom: 2rem;
+}
+
+.skill-group-header {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.skill-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 0.75rem;
+}
+
+.skill-card {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 0.75rem;
+    transition: all 0.2s;
+}
+
+.skill-card:hover {
+    border-color: var(--link-color);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.skill-name {
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+}
+
+.skill-name a {
+    color: var(--text-primary);
+    text-decoration: none;
+}
+
+.skill-name a:hover {
+    color: var(--link-color);
+}
+
+.skill-meta {
+    display: flex;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    flex-wrap: wrap;
+}
+
+.skill-attr {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.skill-rank {
+    background: var(--bg-secondary);
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+}
+
+.filter-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: flex-end;
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.filter-group label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.filter-group select,
+.filter-group input {
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-width: 150px;
+}
+
+.filter-group input {
+    min-width: 200px;
+}
+</style>
+
+<div class="card">
+    <nav style="margin-bottom: 1rem; font-size: 0.9rem;">
+        <a href="{% url 'core:sde_index' %}">SDE</a> &gt;
+        <strong>Skills Directory</strong>
+    </nav>
+
+    <h1>Skills Directory</h1>
+    <p style="color: var(--text-secondary); margin-top: 0.5rem;">
+        Browse and explore {{ total_skills }} skills across {{ total_groups }} skill groups.
+        Filter by attributes, rank, or search by name.
+    </p>
+</div>
+
+<div class="card filter-section">
+    <form action="{% url 'core:sde_skills_directory' %}" method="get" class="filter-form">
+        <div class="filter-group">
+            <label for="search-input">Search Skills</label>
+            <input type="text" id="search-input" name="q" placeholder="Skill name..." value="{{ search_query }}">
+        </div>
+
+        <div class="filter-group">
+            <label for="primary-select">Primary Attribute</label>
+            <select id="primary-select" name="primary">
+                <option value="">All</option>
+                {% for attr_key, attr_name in attribute_names.items %}
+                <option value="{{ attr_key }}" {% if primary_attr == attr_key %}selected{% endif %}>
+                    {{ attr_name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <label for="secondary-select">Secondary Attribute</label>
+            <select id="secondary-select" name="secondary">
+                <option value="">All</option>
+                {% for attr_key, attr_name in attribute_names.items %}
+                <option value="{{ attr_key }}" {% if secondary_attr == attr_key %}selected{% endif %}>
+                    {{ attr_name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <label for="rank-select">Skill Rank</label>
+            <select id="rank-select" name="rank">
+                <option value="">All Ranks</option>
+                {% for rank in rank_distribution.keys|dictsort:"int" %}
+                <option value="{{ rank }}" {% if rank_filter == rank|stringformat:"s" %}selected{% endif %}>
+                    Rank {{ rank }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <label for="sort-select">Sort By</label>
+            <select id="sort-select" name="sort">
+                <option value="group" {% if sort_by == 'group' %}selected{% endif %}>Group Name</option>
+                <option value="name" {% if sort_by == 'name' %}selected{% endif %}>Name (A-Z)</option>
+                <option value="name_desc" {% if sort_by == 'name_desc' %}selected{% endif %}>Name (Z-A)</option>
+                <option value="rank" {% if sort_by == 'rank' %}selected{% endif %}>Rank (Low to High)</option>
+                <option value="rank_desc" {% if sort_by == 'rank_desc' %}selected{% endif %}>Rank (High to Low)</option>
+            </select>
+        </div>
+
+        <button type="submit" class="btn">Apply Filters</button>
+
+        {% if has_filters %}
+        <a href="{% url 'core:sde_skills_directory' %}" class="btn" style="background: var(--bg-secondary);">Clear All</a>
+        {% endif %}
+    </form>
+</div>
+
+<div class="card">
+    <h2>Statistics Overview</h2>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-title">Total Skills</div>
+            <div class="stat-value">{{ total_skills }}</div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-title">Skill Groups</div>
+            <div class="stat-value">{{ total_groups }}</div>
+        </div>
+
+        {% for attr_key in attribute_names.keys %}
+        {% if attr_key in primary_distribution %}
+        <div class="stat-card">
+            <div class="stat-title">Primary {{ attribute_names|get_item:attr_key }}</div>
+            <div class="stat-value">{{ primary_distribution|get_item:attr_key }}</div>
+            <div class="stat-bar">
+                <div class="stat-bar-fill" style="width: {% widthratio primary_distribution|get_item:attr_key total_skills 100 %}%"></div>
+            </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+
+    <h3 style="margin-top: 2rem; margin-bottom: 1rem; font-size: 1.1rem;">Skill Rank Distribution</h3>
+    <div style="display: flex; flex-wrap: wrap; gap: 1rem;">
+        {% for rank in rank_distribution.keys|dictsort:"int" %}
+        <div style="flex: 1; min-width: 120px;">
+            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.25rem;">
+                Rank {{ rank }}
+            </div>
+            <div style="font-size: 1.25rem; font-weight: bold;">
+                {{ rank_distribution|get_item:rank }}
+            </div>
+            <div class="stat-bar">
+                <div class="stat-bar-fill" style="width: {% widthratio rank_distribution|get_item:rank total_skills 100 %}%"></div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{% if has_filters %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h2>Filtered Results ({{ total_skills }} skills)</h2>
+        <a href="{% url 'core:sde_skills_directory' %}" class="btn" style="font-size: 0.9rem;">Clear Filters</a>
+    </div>
+</div>
+{% endif %}
+
+{% for group_name, skills in skills_by_group.items|dictsort:"key" %}
+<div class="card skill-group">
+    <div class="skill-group-header">
+        <span>{{ group_name }}</span>
+        <span style="font-size: 0.9rem; color: var(--text-secondary); font-weight: normal;">
+            {{ skills|length }} skills
+        </span>
+    </div>
+
+    <div class="skill-grid">
+        {% for skill in skills %}
+        <div class="skill-card">
+            <div class="skill-name">
+                <a href="{% url 'core:sde_skill_detail' skill.type_id %}">{{ skill.name }}</a>
+            </div>
+            <div class="skill-meta">
+                <span class="skill-attr" title="Primary: {{ attribute_names|get_item:skill.primary }}">
+                    <span class="attribute-icon attr-{{ skill.primary }}">{{ attribute_names|get_item:skill.primary|slice:":1" }}</span>
+                    <span class="skill-attr" title="Secondary: {{ attribute_names|get_item:skill.secondary }}">
+                        <span class="attribute-icon attr-{{ skill.secondary }}" style="opacity: 0.7;">{{ attribute_names|get_item:skill.secondary|slice:":1" }}</span>
+                    </span>
+                </span>
+                <span class="skill-rank">Rank {{ skill.rank }}</span>
+            </div>
+            {% if skill.description %}
+            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem; line-height: 1.4;">
+                {{ skill.description|truncatewords:15 }}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endfor %}
+
+<div class="card">
+    <h3>Attribute Legend</h3>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+        EVE skills use two attributes that determine training speed:
+    </p>
+    <div style="display: flex; flex-wrap: wrap; gap: 1rem;">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span class="attribute-icon attr-intelligence">I</span>
+            <span>Intelligence (Memory icon)</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span class="attribute-icon attr-perception">P</span>
+            <span>Perception (Willpower icon)</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span class="attribute-icon attr-charisma">C</span>
+            <span>Charisma (Presence icon)</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span class="attribute-icon attr-willpower">W</span>
+            <span>Willpower (Determination icon)</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span class="attribute-icon attr-memory">M</span>
+            <span>Memory (Logic icon)</span>
+        </div>
+    </div>
+    <p style="color: var(--text-secondary); margin-top: 1rem; font-size: 0.9rem;">
+        <strong>Skill Rank:</strong> Training time multiplier (1 = fastest, 14 = slowest).
+        Higher ranks require more time to train each level.
+    </p>
+</div>
+
+<div class="card">
+    <a href="{% url 'core:sde_index' %}" class="btn">&larr; Back to SDE Browser</a>
+</div>
+{% endblock %}

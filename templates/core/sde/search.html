@@ -1,0 +1,337 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}Search{% if query %}: {{ query }}{% endif %} - SDE Browser{% endblock %}
+
+{% block content %}
+<style>
+.filter-section {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.filter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.filter-group label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: var(--text-primary);
+}
+
+.filter-group select,
+.filter-group input {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.filter-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.active-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.filter-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.75rem;
+    background: var(--accent-primary);
+    color: white;
+    border-radius: 20px;
+    font-size: 0.9rem;
+}
+
+.filter-badge a {
+    color: white;
+    text-decoration: none;
+    font-weight: bold;
+    font-size: 1.1rem;
+}
+
+.filter-badge a:hover {
+    color: #f0f0f0;
+}
+
+.results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.result-count {
+    font-size: 1.1rem;
+    color: var(--text-secondary);
+}
+
+.meta-badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-left: 0.5rem;
+}
+
+.meta-tech-1 { background: #a0a0a0; color: white; }
+.meta-tech-2 { background: #d4af37; color: black; }
+.meta-storyline { background: #6b7280; color: white; }
+.meta-faction { background: #3b82f6; color: white; }
+.meta-officer { background: #ef4444; color: white; }
+.meta-deadspace { background: #8b5cf6; color: white; }
+.meta-tech-3 { background: #10b981; color: white; }
+.meta-abyssal { background: #f59e0b; color: black; }
+
+.highlight {
+    background-color: rgba(255, 255, 0, 0.3);
+    padding: 0.1rem 0.2rem;
+    border-radius: 2px;
+}
+
+.item-name-cell {
+    min-width: 300px;
+}
+
+.item-info {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-top: 0.25rem;
+}
+
+.price-volume {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+</style>
+
+<div class="filter-section">
+    <h1>SDE Search</h1>
+    <form action="{% url 'core:sde_search' %}" method="get">
+        <div class="filter-grid">
+            <div class="filter-group">
+                <label for="search-input">Search Query</label>
+                <input type="text" id="search-input" name="q" value="{{ query }}" placeholder="Search items (min 2 chars)...">
+            </div>
+
+            <div class="filter-group">
+                <label for="category-select">Category</label>
+                <select id="category-select" name="category">
+                    <option value="">All Categories</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat.category_id }}" {% if cat.category_id == selected_category %}selected{% endif %}>
+                        {{ cat.category_name }} ({{ cat.item_count }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label for="meta-group-select">Meta Group</label>
+                <select id="meta-group-select" name="meta_group">
+                    <option value="">All Meta Groups</option>
+                    {% for mg in meta_groups %}
+                    <option value="{{ mg.meta_group_id }}" {% if mg.meta_group_id == selected_meta_group %}selected{% endif %}>
+                        {{ mg.meta_group_name }} ({{ mg.item_count }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label for="sort-select">Sort By</label>
+                <select id="sort-select" name="sort">
+                    {% for key, label in sort_options.items %}
+                    <option value="{{ key }}" {% if key == selected_sort %}selected{% endif %}>
+                        {{ label }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="filter-actions">
+            <button type="submit" class="btn">Search</button>
+            <a href="{% url 'core:sde_search' %}" class="btn" style="background: var(--text-secondary);">Clear All</a>
+        </div>
+
+        {% if active_filters %}
+        <div class="active-filters">
+            <strong>Active Filters:</strong>
+            {% if active_filters.query %}
+            <span class="filter-badge">
+                Query: "{{ active_filters.query }}"
+                <a href="{% url 'core:sde_search' %}?{% if active_filters.category %}category={{ active_filters.category.category_id }}{% endif %}{% if active_filters.meta_group %}&meta_group={{ active_filters.meta_group.meta_group_id }}{% endif %}{% if selected_sort != 'name' %}&sort={{ selected_sort }}{% endif %}">&times;</a>
+            </span>
+            {% endif %}
+            {% if active_filters.category %}
+            <span class="filter-badge">
+                Category: {{ active_filters.category.category_name }}
+                <a href="{% url 'core:sde_search' %}?{% if active_filters.query %}q={{ active_filters.query }}{% endif %}{% if active_filters.meta_group %}&meta_group={{ active_filters.meta_group.meta_group_id }}{% endif %}{% if selected_sort != 'name' %}&sort={{ selected_sort }}{% endif %}">&times;</a>
+            </span>
+            {% endif %}
+            {% if active_filters.meta_group %}
+            <span class="filter-badge">
+                Meta: {{ active_filters.meta_group.meta_group_name }}
+                <a href="{% url 'core:sde_search' %}?{% if active_filters.query %}q={{ active_filters.query }}{% endif %}{% if active_filters.category %}&category={{ active_filters.category.category_id }}{% endif %}{% if selected_sort != 'name' %}&sort={{ selected_sort }}{% endif %}">&times;</a>
+            </span>
+            {% endif %}
+        </div>
+        {% endif %}
+    </form>
+</div>
+
+{% if query or selected_category or selected_meta_group %}
+<div class="card">
+    <div class="results-header">
+        <h2>
+            {% if query %}Results for "{{ query }}"{% else %}All Items{% endif %}
+            {% if active_filters.category or active_filters.meta_group %}
+                <span style="font-weight: normal; color: var(--text-secondary); font-size: 0.9rem;">
+                    (filtered)
+                </span>
+            {% endif %}
+        </h2>
+        <span class="result-count">
+            <strong>{{ total_count }}</strong> items found
+        </span>
+    </div>
+
+    {% if results %}
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 2px solid var(--border-color);">
+                    <th style="padding: 0.75rem; text-align: left;">Name</th>
+                    <th style="padding: 0.75rem; text-align: left;">Meta Group</th>
+                    <th style="padding: 0.75rem; text-align: left;">Group / Category</th>
+                    <th style="padding: 0.75rem; text-align: right;">Base Price</th>
+                    <th style="padding: 0.75rem; text-align: right;">Volume</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in results %}
+                <tr style="border-bottom: 1px solid var(--table-border); {% if not item.published %}opacity: 0.6;{% endif %}">
+                    <td style="padding: 0.75rem;" class="item-name-cell">
+                        <a href="{% url 'core:sde_item_detail' item.type_id %}">
+                            {% if query %}{{ item.name|highlight:query }}{% else %}{{ item.name }}{% endif %}
+                        </a>
+                        {% if not item.published %}
+                            <span style="color: var(--text-secondary); font-size: 0.8rem;">(unpublished)</span>
+                        {% endif %}
+                        {% if item.meta_type %}
+                            {% with meta_name=item.meta_type.meta_group.meta_group_name %}
+                                <span class="meta-badge {% if 'Tech I' in meta_name %}meta-tech-1{% elif 'Tech II' in meta_name %}meta-tech-2{% elif 'Tech III' in meta_name %}meta-tech-3{% elif 'Storyline' in meta_name %}meta-storyline{% elif 'Faction' in meta_name %}meta-faction{% elif 'Officer' in meta_name %}meta-officer{% elif 'Deadspace' in meta_name %}meta-deadspace{% elif 'Abyssal' in meta_name %}meta-abyssal{% endif %}">
+                                    {{ meta_name }}
+                                </span>
+                            {% endwith %}
+                        {% endif %}
+                    </td>
+                    <td style="padding: 0.75rem;">
+                        {% if item.meta_type %}
+                            <span style="color: var(--text-secondary);">{{ item.meta_type.meta_group.meta_group_name }}</span>
+                        {% else %}
+                            <span style="color: var(--text-secondary); font-style: italic;">Tech I</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 0.75rem;">
+                        <a href="{% url 'core:sde_group_detail' item.group_id %}">{{ item.group.group_name }}</a>
+                        <div class="item-info">
+                            <a href="{% url 'core:sde_category_detail' item.group.category_id %}">{{ item.group.category.category_name }}</a>
+                        </div>
+                    </td>
+                    <td style="padding: 0.75rem; text-align: right; white-space: nowrap;">
+                        {% if item.base_price %}
+                            <span class="price-volume">{{ item.base_price|floatformat:2 }} ISK</span>
+                        {% else %}
+                            <span style="color: var(--text-secondary);">—</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 0.75rem; text-align: right; white-space: nowrap;">
+                        {% if item.volume %}
+                            <span class="price-volume">{{ item.volume|floatformat:2 }} m³</span>
+                        {% else %}
+                            <span style="color: var(--text-secondary);">—</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% if results.has_other_pages %}
+        <div style="margin-top: 1.5rem; display: flex; gap: 0.5rem; justify-content: center; align-items: center; flex-wrap: wrap;">
+            {% if results.has_previous %}
+                <a href="?{% if query %}q={{ query }}&{% endif %}{% if selected_category %}category={{ selected_category }}&{% endif %}{% if selected_meta_group %}meta_group={{ selected_meta_group }}&{% endif %}{% if selected_sort %}sort={{ selected_sort }}&{% endif %}page={{ results.previous_page_number }}" class="btn">Previous</a>
+            {% endif %}
+
+            <span style="padding: 0.5rem 1rem;">
+                Page {{ results.number }} of {{ results.paginator.num_pages }}
+                <span style="color: var(--text-secondary);">(showing {{ results.start_index }}-{{ results.end_index }} of {{ total_count }})</span>
+            </span>
+
+            {% if results.has_next %}
+                <a href="?{% if query %}q={{ query }}&{% endif %}{% if selected_category %}category={{ selected_category }}&{% endif %}{% if selected_meta_group %}meta_group={{ selected_meta_group }}&{% endif %}{% if selected_sort %}sort={{ selected_sort }}&{% endif %}page={{ results.next_page_number }}" class="btn">Next</a>
+            {% endif %}
+        </div>
+        {% endif %}
+    {% else %}
+        <div style="text-align: center; padding: 2rem;">
+            <p style="font-size: 1.1rem; color: var(--text-secondary);">No results found matching your criteria.</p>
+            <p style="color: var(--text-secondary);">Try adjusting your search term or filters.</p>
+            {% if active_filters %}
+            <p style="margin-top: 1rem;">
+                <a href="{% url 'core:sde_search' %}" class="btn">Clear All Filters</a>
+            </p>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>
+{% else %}
+<div class="card" style="text-align: center; padding: 2rem;">
+    <h2>Search the SDE Database</h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+        Enter a search term above to find items, ships, modules, and more.
+    </p>
+    <p style="color: var(--text-secondary);">
+        You can also browse by category or meta group without entering a search term.
+    </p>
+    <div style="margin-top: 1.5rem; display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+        <div style="text-align: center;">
+            <div style="font-size: 2rem; font-weight: bold; color: var(--accent-primary);">
+                {{ categories.0.item_count }}
+            </div>
+            <div style="color: var(--text-secondary);">Top Category</div>
+        </div>
+        <div style="text-align: center;">
+            <div style="font-size: 2rem; font-weight: bold; color: var(--accent-primary);">
+                {{ meta_groups|length }}
+            </div>
+            <div style="color: var(--text-secondary);">Meta Groups</div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

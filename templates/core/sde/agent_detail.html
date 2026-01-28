@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block title %}Agent {{ agent.agent_id }} - SDE Browser{% endblock %}
+
+{% block content %}
+<style>
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+.info-item {
+    padding: 1rem;
+    background: var(--bg-secondary);
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+}
+.info-label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.25rem;
+}
+.info-value {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+.level-badge {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    background: var(--btn-primary);
+    color: white;
+    border-radius: 8px;
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+.quality-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    background: {{ agent.quality|default:0|add:20 }}
+    color: white;
+    border-radius: 12px;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+</style>
+
+<div class="card">
+    <nav style="margin-bottom: 1rem; font-size: 0.9rem;">
+        <a href="{% url 'core:sde_index' %}">SDE</a> &gt;
+        {% if faction %}
+        <a href="{% url 'core:sde_faction_detail' faction.faction_id %}">{{ faction.faction_name }}</a> &gt;
+        <a href="{% url 'core:sde_corporation_detail' corporation.corporation_id %}">{{ corporation_name }}</a> &gt;
+        {% else %}
+        <a href="{% url 'core:sde_corporation_detail' corporation.corporation_id %}">{{ corporation_name }}</a> &gt;
+        {% endif %}
+        <strong>Agent {{ agent.agent_id }}</strong>
+    </nav>
+
+    <h1>Agent {{ agent.agent_id }}</h1>
+
+    <div style="margin-top: 1rem; display: flex; gap: 1rem; align-items: center;">
+        <span class="level-badge">Level {{ agent.level }}</span>
+        {% if agent.quality is not None %}
+        <span class="quality-badge">Quality {{ agent.quality }}</span>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <h2>Agent Information</h2>
+    <div class="info-grid">
+        <div class="info-item">
+            <div class="info-label">Agent ID</div>
+            <div class="info-value">{{ agent.agent_id }}</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Level</div>
+            <div class="info-value">{{ agent.level }}</div>
+        </div>
+        {% if agent.quality is not None %}
+        <div class="info-item">
+            <div class="info-label">Quality</div>
+            <div class="info-value">{{ agent.quality }}</div>
+        </div>
+        {% endif %}
+        {% if agent_type %}
+        <div class="info-item">
+            <div class="info-label">Agent Type</div>
+            <div class="info-value">{{ agent_type.agent_type }}</div>
+        </div>
+        {% endif %}
+        {% if division_name %}
+        <div class="info-item">
+            <div class="info-label">Division</div>
+            <div class="info-value">{{ division_name }}</div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <h2>Employment</h2>
+    <div style="margin-top: 1rem;">
+        <div style="margin-bottom: 1rem;">
+            <strong>Corporation:</strong>
+            {% if corporation %}
+            <a href="{% url 'core:sde_corporation_detail' corporation.corporation_id %}">{{ corporation_name }}</a>
+            {% else %}
+            {{ corporation_name|default:"Unknown" }}
+            {% endif %}
+        </div>
+        {% if faction %}
+        <div style="margin-bottom: 1rem;">
+            <strong>Faction:</strong>
+            <a href="{% url 'core:sde_faction_detail' faction.faction_id %}">{{ faction.faction_name }}</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <h2>Location</h2>
+    {% if station %}
+    <div style="margin-top: 1rem;">
+        <div style="margin-bottom: 0.5rem;">
+            <strong>Station:</strong> {{ station.station_name }}
+        </div>
+        {% if system %}
+        <div style="margin-bottom: 0.5rem;">
+            <strong>System:</strong>
+            <a href="{% url 'core:sde_system_detail' system.system_id %}">{{ system.system_name }}</a>
+            ({{ system.security|floatformat:1 }})
+        </div>
+        {% if system.constellation %}
+        <div style="margin-bottom: 0.5rem;">
+            <strong>Constellation:</strong> {{ system.constellation.constellation_name }}
+        </div>
+        {% endif %}
+        {% if region %}
+        <div style="margin-bottom: 0.5rem;">
+            <strong>Region:</strong>
+            <a href="{% url 'core:sde_region_detail' region.region_id %}">{{ region.region_name }}</a>
+        </div>
+        {% endif %}
+        {% endif %}
+    </div>
+    {% else %}
+    <p style="color: var(--text-secondary); margin-top: 1rem;">
+        No station location available for this agent.
+    </p>
+    {% endif %}
+</div>
+
+{% if agent.is_locator %}
+<div class="card" style="border-left: 4px solid #e74c3c;">
+    <h2 style="color: #e74c3c;">Locator Agent</h2>
+    <p style="color: var(--text-secondary);">
+        This agent is a locator agent and can locate characters for a fee.
+    </p>
+</div>
+{% endif %}
+
+<div class="card">
+    {% if corporation %}
+    <a href="{% url 'core:sde_corporation_detail' corporation.corporation_id %}" class="btn">&larr; Back to {{ corporation_name }}</a>
+    {% endif %}
+</div>
+{% endblock %}

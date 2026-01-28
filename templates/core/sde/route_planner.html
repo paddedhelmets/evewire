@@ -1,0 +1,293 @@
+{% extends "base.html" %}
+
+{% block title %}Route Planner - SDE Browser{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1>
+                <i class="fas fa-route"></i> Route Planner
+            </h1>
+            <p class="text-muted">Find the best route between solar systems in New Eden</p>
+        </div>
+    </div>
+
+    <!-- Route Search Form -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <form method="get" class="row g-3">
+                        <div class="col-md-4">
+                            <label for="origin_id" class="form-label">Origin System ID</label>
+                            <input type="number" class="form-control" name="origin_id" id="origin_id"
+                                   value="{{ origin_system.system_id|default:'' }}"
+                                   placeholder="e.g., 30000142" required>
+                            {% if origin_system %}
+                                <small class="text-success">
+                                    <i class="fas fa-check-circle"></i> {{ origin_system.system_name }}
+                                    ({{ origin_system.region.region_name }})
+                                </small>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-4">
+                            <label for="destination_id" class="form-label">Destination System ID</label>
+                            <input type="number" class="form-control" name="destination_id" id="destination_id"
+                                   value="{{ destination_system.system_id|default:'' }}"
+                                   placeholder="e.g., 30000121" required>
+                            {% if destination_system %}
+                                <small class="text-success">
+                                    <i class="fas fa-check-circle"></i> {{ destination_system.system_name }}
+                                    ({{ destination_system.region.region_name }})
+                                </small>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-3">
+                            <label for="route_type" class="form-label">Route Type</label>
+                            <select class="form-select" name="route_type" id="route_type">
+                                <option value="shortest" {% if route_type == 'shortest' %}selected{% endif %}>
+                                    <i class="fas fa-arrows-alt-h"></i> Shortest (Fewest Jumps)
+                                </option>
+                                <option value="safest" {% if route_type == 'safest' %}selected{% endif %}>
+                                    <i class="fas fa-shield-alt"></i> Safest (Avoid Low/Nullsec)
+                                </option>
+                                <option value="fastest" {% if route_type == 'fastest' %}selected{% endif %}>
+                                    <i class="fas fa-tachometer-alt"></i> Fastest (Balanced)
+                                </option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-1 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="fas fa-search"></i> Find
+                            </button>
+                        </div>
+                    </form>
+
+                    <!-- Quick Examples -->
+                    <div class="mt-3">
+                        <small class="text-muted">
+                            <strong>Example routes:</strong>
+                            <a href="?origin_id=30000142&destination_id=30000121&route_type=shortest" class="text-decoration-none">
+                                Jita → Amarr
+                            </a> |
+                            <a href="?origin_id=30000142&destination_id=30002659&route_type=safest" class="text-decoration-none">
+                                Jita → Dodixie (Safest)
+                            </a> |
+                            <a href="?origin_id=30000142&destination_id=30001384&route_type=shortest" class="text-decoration-none">
+                                Jita → Rens
+                            </a>
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if error %}
+        <div class="row">
+            <div class="col-12">
+                <div class="alert alert-warning" role="alert">
+                    <i class="fas fa-exclamation-triangle"></i> {{ error }}
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
+    {% if route %}
+        <!-- Route Summary -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-info-circle"></i> Route Summary
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-md-3">
+                                <h3>{{ total_jumps }}</h3>
+                                <p class="text-muted mb-0">Total Jumps</p>
+                            </div>
+                            <div class="col-md-3">
+                                <h3>{{ estimated_time }}</h3>
+                                <p class="text-muted mb-0">Est. Travel Time</p>
+                            </div>
+                            <div class="col-md-3">
+                                <h3>{{ route_stats.security_counts.highsec }}</h3>
+                                <p class="text-success mb-0">Highsec Systems</p>
+                            </div>
+                            <div class="col-md-3">
+                                <h3>{{ route_stats.region_changes }}</h3>
+                                <p class="text-muted mb-0">Region Changes</p>
+                            </div>
+                        </div>
+
+                        {% if route_type != 'shortest' %}
+                            <div class="row mt-3">
+                                <div class="col-12">
+                                    <h6>Security Breakdown:</h6>
+                                    <div class="d-flex gap-2">
+                                        <span class="badge bg-success">
+                                            Highsec: {{ route_stats.security_counts.highsec }}
+                                        </span>
+                                        <span class="badge bg-warning">
+                                            Lowsec: {{ route_stats.security_counts.lowsec }}
+                                        </span>
+                                        <span class="badge bg-danger">
+                                            Nullsec: {{ route_stats.security_counts.nullsec }}
+                                        </span>
+                                        {% if route_stats.security_counts.wormhole > 0 %}
+                                            <span class="badge bg-dark">
+                                                Wormhole: {{ route_stats.security_counts.wormhole }}
+                                            </span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Route Details -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-list-ol"></i> Route Details
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 50px;">#</th>
+                                        <th>System</th>
+                                        <th>Security</th>
+                                        <th>Region</th>
+                                        <th>Constellation</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for system in route %}
+                                        <tr {% if forloop.first %}class="table-success"{% endif %} {% if forloop.last %}class="table-primary"{% endif %}>
+                                            <td>
+                                                {% if forloop.first %}
+                                                    <i class="fas fa-play-circle text-success"></i>
+                                                {% elif forloop.last %}
+                                                    <i class="fas fa-flag-checkered text-primary"></i>
+                                                {% else %}
+                                                    {{ forloop.counter }}
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <a href="{% url 'core:sde_system_detail' system.system_id %}">
+                                                    <strong>{{ system.system_name }}</strong>
+                                                </a>
+                                                {% if forloop.first %}
+                                                    <span class="badge bg-success ms-2">Start</span>
+                                                {% endif %}
+                                                {% if forloop.last %}
+                                                    <span class="badge bg-primary ms-2">End</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% if system.security >= 0.45 %}
+                                                    <span class="badge bg-success">{{ system.security_status }}</span>
+                                                {% elif system.security >= 0.05 %}
+                                                    <span class="badge bg-warning">{{ system.security_status }}</span>
+                                                {% elif system.security >= 0 %}
+                                                    <span class="badge bg-danger">{{ system.security_status }}</span>
+                                                {% else %}
+                                                    <span class="badge bg-dark">{{ system.security_status }}</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <a href="{% url 'core:sde_region_detail' system.region.region_id %}">
+                                                    {{ system.region.region_name }}
+                                                </a>
+                                            </td>
+                                            <td>
+                                                {{ system.constellation.constellation_name }}
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Route Visualization -->
+                        <div class="mt-4">
+                            <h6>Route Visualization:</h6>
+                            <div class="d-flex flex-wrap gap-1">
+                                {% for system in route %}
+                                    <a href="{% url 'core:sde_system_detail' system.system_id %}"
+                                       class="btn btn-sm
+                                       {% if system.security >= 0.45 %}btn-success
+                                       {% elif system.security >= 0.05 %}btn-warning
+                                       {% elif system.security >= 0 %}btn-danger
+                                       {% else %}btn-dark{% endif %}"
+                                       title="{{ system.system_name }} ({{ system.security_status }})">
+                                        {{ forloop.counter }}
+                                    </a>
+                                    {% if not forloop.last %}
+                                        <i class="fas fa-arrow-right text-muted align-self-center"></i>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% elif not error %}
+        <!-- Help Text -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <i class="fas fa-route fa-3x text-muted mb-3"></i>
+                        <h4>Enter Origin and Destination</h4>
+                        <p class="text-muted">
+                            Use the form above to find routes between solar systems.
+                            You can find system IDs by searching for systems in the SDE Browser.
+                        </p>
+                        <hr>
+                        <div class="row text-start">
+                            <div class="col-md-4">
+                                <h6><i class="fas fa-arrows-alt-h"></i> Shortest Route</h6>
+                                <p class="small text-muted">
+                                    Finds the route with the fewest stargate jumps, regardless of security status.
+                                    Best for: Experienced pilots, AFK hauling in safe space, quick calculations.
+                                </p>
+                            </div>
+                            <div class="col-md-4">
+                                <h6><i class="fas fa-shield-alt"></i> Safest Route</h6>
+                                <p class="small text-muted">
+                                    Prefers highsec systems and heavily penalizes lowsec/nullsec.
+                                    Best for: New pilots, valuable cargo, avoiding dangerous space.
+                                </p>
+                            </div>
+                            <div class="col-md-4">
+                                <h6><i class="fas fa-tachometer-alt"></i> Fastest Route</h6>
+                                <p class="small text-muted">
+                                    Balances jump count with security, avoiding the most dangerous space.
+                                    Best for: General travel, time-efficient routes, moderate risk tolerance.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

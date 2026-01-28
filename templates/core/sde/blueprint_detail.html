@@ -1,0 +1,590 @@
+{% extends "base.html" %}
+
+{% block title %}{{ blueprint.name }} - Blueprint Detail - SDE Browser{% endblock %}
+{% load evewire %}
+
+{% block content %}
+<style>
+.manufacturing-calculator {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-top: 1.5rem;
+}
+
+.material-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+}
+
+.material-table th {
+    background: var(--bg-primary);
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 2px solid var(--border-color);
+    font-weight: 600;
+}
+
+.material-table td {
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--table-border);
+}
+
+.material-table tr:hover {
+    background: var(--bg-primary);
+}
+
+.material-group {
+    margin-top: 1.5rem;
+}
+
+.material-group h4 {
+    margin-bottom: 0.5rem;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.qty-input {
+    width: 80px;
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    text-align: center;
+}
+
+.attribute-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1rem;
+}
+
+.attribute-item {
+    padding: 0.75rem;
+    background: var(--bg-secondary);
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+}
+
+.attribute-label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.25rem;
+}
+
+.attribute-value {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.cost-summary-card {
+    background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+    border-left: 4px solid var(--accent-color);
+    padding: 1.5rem;
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+}
+
+.cost-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1rem;
+}
+
+.cost-summary-item {
+    text-align: center;
+}
+
+.cost-summary-label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.cost-summary-value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--accent-color);
+}
+
+.cost-summary-sub {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-top: 0.25rem;
+}
+
+.expensive-materials-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+}
+
+.expensive-materials-table th {
+    background: var(--bg-primary);
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 2px solid var(--border-color);
+    font-weight: 600;
+}
+
+.expensive-materials-table td {
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--table-border);
+}
+
+.expensive-materials-table tr:hover {
+    background: var(--bg-primary);
+}
+
+.cost-bar-container {
+    width: 100%;
+    background: var(--bg-primary);
+    height: 8px;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 0.5rem;
+}
+
+.cost-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-color) 0%, #ff6b6b 100%);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.shopping-list-container {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-top: 1.5rem;
+}
+
+.shopping-list-textarea {
+    width: 100%;
+    min-height: 300px;
+    padding: 1rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    resize: vertical;
+    white-space: pre;
+    overflow-wrap: normal;
+    overflow-x: auto;
+}
+
+.copy-button {
+    margin-top: 1rem;
+    padding: 0.5rem 1.5rem;
+    background: var(--accent-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background 0.2s;
+}
+
+.copy-button:hover {
+    background: #3a7bd5;
+}
+
+.copy-button.copied {
+    background: var(--alert-success-text);
+}
+
+.category-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    background: var(--bg-secondary);
+    border-radius: 12px;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+</style>
+
+<div class="card">
+    <nav style="margin-bottom: 1rem; font-size: 0.9rem;">
+        <a href="{% url 'core:sde_index' %}">SDE</a> &gt;
+        <a href="{% url 'core:sde_category_detail' blueprint.group.category_id %}">{{ blueprint.group.category.category_name }}</a> &gt;
+        <a href="{% url 'core:sde_group_detail' blueprint.group_id %}">{{ blueprint.group.group_name }}</a> &gt;
+        <strong>{{ blueprint.name }}</strong>
+    </nav>
+
+    <div style="display: flex; justify-content: space-between; align-items: start; gap: 2rem;">
+        <div style="flex: 1;">
+            <h1>{{ blueprint.name }}</h1>
+            {% if blueprint.description %}
+            <p style="color: var(--text-secondary); margin-top: 0.5rem;">{{ blueprint.description }}</p>
+            {% endif %}
+        </div>
+
+        {% if product %}
+        <div style="text-align: center; padding: 1rem; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-color);">
+            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Manufactures</div>
+            <a href="{% url 'core:sde_item_detail' product.type_id %}" style="font-size: 1.2rem; font-weight: 600; color: var(--accent-color); text-decoration: none;">
+                {{ product.name }}
+            </a>
+            <div style="margin-top: 0.5rem; font-size: 0.9rem; color: var(--text-secondary);">
+                {{ product.group.group_name }}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div style="margin-top: 1.5rem; display: flex; gap: 2rem; flex-wrap: wrap;">
+        <div><strong>Type ID:</strong> {{ blueprint.type_id }}</div>
+        <div><strong>Group:</strong> <a href="{% url 'core:sde_group_detail' blueprint.group_id %}">{{ blueprint.group.group_name }}</a></div>
+        <div><strong>Volume:</strong> {{ blueprint.volume|floatformat:2 }} m³</div>
+        {% if blueprint.portion_size %}
+        <div><strong>Portion Size:</strong> {{ blueprint.portion_size }}</div>
+        {% endif %}
+        {% if blueprint_meta %}
+        <div><strong>Max Production Limit:</strong> {{ blueprint_meta.max_production_limit|default:"N/A" }}</div>
+        {% endif %}
+    </div>
+</div>
+
+{% if product %}
+<!-- Manufacturing Calculator -->
+<div class="manufacturing-calculator">
+    <h2>Manufacturing Calculator</h2>
+
+    <div style="display: flex; align-items: center; gap: 1rem; margin-top: 1rem;">
+        <label for="quantity" style="font-weight: 600;">Quantity to manufacture:</label>
+        <input type="number" id="quantity" class="qty-input" value="{{ quantity }}" min="1" max="1000"
+               onchange="updateQuantity(this.value)">
+        <button class="btn" onclick="updateQuantity(document.getElementById('quantity').value)">Calculate</button>
+    </div>
+
+    {% if total_estimated_cost > 0 %}
+    <!-- Cost Summary Card -->
+    <div class="cost-summary-card">
+        <h3 style="margin-bottom: 1rem;">Cost Summary{% if quantity > 1 %} (for {{ quantity }} runs){% endif %}</h3>
+        <div class="cost-summary-grid">
+            <div class="cost-summary-item">
+                <div class="cost-summary-label">Total Cost</div>
+                <div class="cost-summary-value">{{ total_estimated_cost|floatformat:0 }} ISK</div>
+                {% if quantity > 1 %}
+                <div class="cost-summary-sub">{{ cost_per_unit|floatformat:0 }} ISK per unit</div>
+                {% endif %}
+            </div>
+            <div class="cost-summary-item">
+                <div class="cost-summary-label">Material Types</div>
+                <div class="cost-summary-value">{{ total_materials_count }}</div>
+            </div>
+            <div class="cost-summary-item">
+                <div class="cost-summary-label">Total Volume</div>
+                <div class="cost-summary-value">{{ total_material_volume|floatformat:2 }} m³</div>
+                {% if quantity > 1 %}
+                <div class="cost-summary-sub">{{ total_material_volume|floatformat:2 }} m³ total</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div style="margin-top: 1.5rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+        <div style="padding: 1rem; background: var(--bg-primary); border-radius: 4px; text-align: center;">
+            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Runs Required</div>
+            <div style="font-size: 1.5rem; font-weight: 600; color: var(--accent-color);">{{ quantity }}</div>
+        </div>
+
+        {% if total_materials_count > 0 and total_estimated_cost == 0 %}
+        <div style="padding: 1rem; background: var(--bg-primary); border-radius: 4px; text-align: center;">
+            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Material Types</div>
+            <div style="font-size: 1.5rem; font-weight: 600;">{{ total_materials_count }}</div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{% if material_groups %}
+<!-- Materials Required -->
+<div class="card">
+    <h2>Materials Required{% if quantity > 1 %} (for {{ quantity }} runs){% endif %}</h2>
+
+    {% for group_name, group_materials in material_groups.items %}
+    <div class="material-group">
+        <h4>{{ group_name }}</h4>
+        <table class="material-table">
+            <thead>
+                <tr>
+                    <th style="width: 50%;">Material</th>
+                    <th style="width: 15%; text-align: center;">Qty/Run</th>
+                    {% if quantity > 1 %}
+                    <th style="width: 15%; text-align: center;">Total Qty</th>
+                    {% endif %}
+                    <th style="width: 10%; text-align: right;">Volume</th>
+                    {% if group_materials.0.base_price %}
+                    <th style="width: 10%; text-align: right;">Est. Cost</th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for material in group_materials %}
+                <tr>
+                    <td>
+                        <a href="{% url 'core:sde_item_detail' material.type_id %}" style="font-weight: 500; text-decoration: none; color: var(--accent-color);">
+                            {{ material.name }}
+                        </a>
+                    </td>
+                    <td style="text-align: center; font-family: monospace;">
+                        {{ material.quantity|floatformat:0 }}
+                    </td>
+                    {% if quantity > 1 %}
+                    <td style="text-align: center; font-family: monospace; font-weight: 600;">
+                        {{ material.total_quantity|floatformat:0 }}
+                    </td>
+                    {% endif %}
+                    <td style="text-align: right; font-family: monospace;">
+                        {% if material.volume %}{{ material.volume|floatformat:2 }} m³{% else %}-{% endif %}
+                    </td>
+                    {% if material.base_price %}
+                    <td style="text-align: right; font-family: monospace;">
+                        {% if quantity > 1 %}
+                            {{ material.total_cost|floatformat:0 }} ISK
+                        {% else %}
+                            {% if material.single_run_cost %}{{ material.single_run_cost|floatformat:0 }} ISK{% endif %}
+                        {% endif %}
+                    </td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endfor %}
+
+    {% if estimated_cost > 0 %}
+    <div style="margin-top: 1.5rem; text-align: right; font-size: 1.1rem;">
+        <strong>Total Estimated Material Cost: </strong>
+        <span style="color: var(--accent-color); font-size: 1.3rem;">
+            {% if quantity > 1 %}
+                {{ total_estimated_cost|floatformat:2 }} ISK
+            {% else %}
+                {{ estimated_cost|floatformat:2 }} ISK
+            {% endif %}
+        </span>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+{% if most_expensive_materials %}
+<!-- Most Expensive Materials -->
+<div class="card">
+    <h2>Top 5 Most Expensive Materials{% if quantity > 1 %} (for {{ quantity }} runs){% endif %}</h2>
+
+    <table class="expensive-materials-table">
+        <thead>
+            <tr>
+                <th style="width: 40%;">Material</th>
+                <th style="width: 15%; text-align: center;">Quantity</th>
+                <th style="width: 15%; text-align: right;">Unit Price</th>
+                <th style="width: 15%; text-align: right;">Total Cost</th>
+                <th style="width: 15%; text-align: right;">% of Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for material in most_expensive_materials %}
+            <tr>
+                <td>
+                    <a href="{% url 'core:sde_item_detail' material.type_id %}" style="font-weight: 500; text-decoration: none; color: var(--accent-color);">
+                        {{ material.name }}
+                    </a>
+                </td>
+                <td style="text-align: center; font-family: monospace;">
+                    {{ material.total_quantity|floatformat:0 }}
+                </td>
+                <td style="text-align: right; font-family: monospace; color: var(--text-secondary);">
+                    {{ material.base_price|floatformat:2 }} ISK
+                </td>
+                <td style="text-align: right; font-family: monospace; font-weight: 600; color: var(--accent-color);">
+                    {{ material.total_cost|floatformat:0 }} ISK
+                </td>
+                <td style="text-align: right;">
+                    <div style="font-family: monospace; font-size: 0.9rem;">{{ material.cost_percentage|floatformat:1 }}%</div>
+                    <div class="cost-bar-container">
+                        <div class="cost-bar" style="width: {{ material.cost_percentage }}%;"></div>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div style="margin-top: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: 4px; border-left: 3px solid var(--accent-color);">
+        <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Cost Concentration</div>
+        <div style="font-size: 1rem;">
+            These {{ most_expensive_materials|length }} materials account for
+            <strong>{% widthratio most_expensive_materials|length 1 total_materials_count %}%</strong> of material types but
+            <strong>{% if total_estimated_cost > 0 %}
+                {% widthratio most_expensive_materials|sum:'total_cost' total_estimated_cost 100 %}
+            {% else %}0{% endif %}%</strong> of total cost.
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if shopping_list_by_category %}
+<!-- Shopping List -->
+<div class="card">
+    <h2>Shopping List{% if quantity > 1 %} (for {{ quantity }} runs){% endif %}</h2>
+
+    <div class="shopping-list-container">
+        <h3 style="margin-bottom: 1rem;">Copy & Paste Format</h3>
+        <textarea id="shoppingListText" class="shopping-list-textarea" readonly>{{ shopping_list_plain }}</textarea>
+        <button class="copy-button" onclick="copyShoppingList()">
+            <span id="copyButtonText">Copy Shopping List</span>
+        </button>
+    </div>
+
+    <div style="margin-top: 2rem;">
+        <h3 style="margin-bottom: 1rem;">Materials by Category</h3>
+
+        {% for category_name, items in shopping_list_by_category.items %}
+        <div style="margin-bottom: 1.5rem;">
+            <span class="category-badge">{{ category_name }}</span>
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 0.5rem;">
+                {% for item in items %}
+                <div style="padding: 0.5rem 0.75rem; background: var(--bg-primary); border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
+                    <a href="{% url 'core:sde_item_detail' item.type_id %}" style="text-decoration: none; color: var(--text-primary); font-weight: 500;">
+                        {{ item.name }}
+                    </a>
+                    <span style="font-family: monospace; color: var(--accent-color); font-weight: 600;">
+                        x {{ item.quantity_formatted }}
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% if blueprint_attributes %}
+<!-- Blueprint Attributes -->
+<div class="card">
+    <h2>Blueprint Attributes</h2>
+
+    <div class="attribute-grid">
+        {% for attr_id, attr in blueprint_attributes.items %}
+        <div class="attribute-item">
+            <div class="attribute-label">{{ attr.name }}</div>
+            <div class="attribute-value">
+                {% if attr.formatted_value %}
+                    {{ attr.formatted_value }}
+                {% elif attr.value %}
+                    {{ attr.value }}
+                {% else %}
+                    -
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% if is_t2_blueprint and invention_info %}
+<!-- Invention Information -->
+<div class="card">
+    <h2>Invention Information</h2>
+
+    <p style="margin-bottom: 1rem;">
+        This is a Tech II blueprint. It can be invented from the Tech I version:
+    </p>
+
+    <div style="display: flex; gap: 1rem; align-items: center;">
+        <a href="{% url 'core:sde_blueprint_detail' invention_info.t1_blueprint.type_id %}"
+           class="btn" style="text-decoration: none;">
+            {{ invention_info.t1_blueprint.name }}
+        </a>
+        <span style="color: var(--text-secondary);">&rarr;</span>
+        <strong>{{ invention_info.t1_product.name }}</strong>
+    </div>
+</div>
+{% endif %}
+
+{% if related_blueprints %}
+<!-- Related Blueprints -->
+<div class="card">
+    <h2>Related Blueprints</h2>
+    <p style="margin-bottom: 1rem;">Other blueprints in the same group:</p>
+
+    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+        {% for bp in related_blueprints %}
+        <a href="{% url 'core:sde_blueprint_detail' bp.type_id %}"
+           style="padding: 0.5rem 1rem; background: var(--bg-primary); border-radius: 4px; border: 1px solid var(--border-color); text-decoration: none;">
+            {{ bp.name }}
+        </a>
+        {% endfor %}
+    </div>
+
+    <div style="margin-top: 1rem;">
+        <a href="{% url 'core:sde_group_detail' blueprint.group_id %}" class="btn">View all {{ blueprint.group.group_name }}</a>
+    </div>
+</div>
+{% endif %}
+
+<script>
+function updateQuantity(newQty) {
+    const qty = parseInt(newQty);
+    if (qty >= 1 && qty <= 1000) {
+        const url = new URL(window.location);
+        url.searchParams.set('qty', qty);
+        window.location = url.toString();
+    }
+}
+
+function copyShoppingList() {
+    const textarea = document.getElementById('shoppingListText');
+    const button = document.querySelector('.copy-button');
+    const buttonText = document.getElementById('copyButtonText');
+
+    textarea.select();
+    textarea.setSelectionRange(0, 99999); // For mobile devices
+
+    try {
+        document.execCommand('copy');
+        button.classList.add('copied');
+        buttonText.textContent = 'Copied!';
+
+        setTimeout(() => {
+            button.classList.remove('copied');
+            buttonText.textContent = 'Copy Shopping List';
+        }, 2000);
+    } catch (err) {
+        console.error('Failed to copy:', err);
+        buttonText.textContent = 'Copy Failed';
+    }
+}
+
+// Allow Enter key to trigger calculation
+document.addEventListener('DOMContentLoaded', function() {
+    const qtyInput = document.getElementById('quantity');
+    if (qtyInput) {
+        qtyInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                updateQuantity(this.value);
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

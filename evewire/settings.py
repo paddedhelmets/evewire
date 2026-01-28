@@ -68,7 +68,7 @@ WSGI_APPLICATION = 'evewire.wsgi.application'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 # Single database for both app data and SDE reference data
 # SDE tables use core_ prefix (e.g., core_itemtype) to avoid conflicts
-DATABASE_PATH = Path('~/data/evewire/evewire_app.sqlite3').expanduser()
+DATABASE_PATH = Path('~/data/evewire/eve_sde.sqlite3').expanduser()
 
 DATABASES = {
     'default': {

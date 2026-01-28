@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}{{ certificate.name }} - Certificate - SDE Browser{% endblock %}
+
+{% block content %}
+<div class="card">
+    <nav style="margin-bottom: 1rem; font-size: 0.9rem;">
+        <a href="{% url 'core:sde_index' %}">SDE</a> &gt;
+        <strong>{{ certificate.name }}</strong>
+    </nav>
+
+    <h1>{{ certificate.name }}</h1>
+    {% if certificate.description %}
+    <p style="color: var(--text-secondary); margin-top: 0.5rem;">{{ certificate.description }}</p>
+    {% endif %}
+
+    <div style="margin-top: 1rem; display: flex; gap: 2rem; flex-wrap: wrap;">
+        <div><strong>Certificate ID:</strong> {{ certificate.cert_id }}</div>
+        <div><strong>Group ID:</strong> {{ certificate.group_id }}</div>
+        <div><strong>Skill Requirements:</strong> {{ total_skill_reqs }}</div>
+        <div><strong>Mastery Ships:</strong> {{ total_mastery_ships }}</div>
+    </div>
+</div>
+
+{% if skill_requirements %}
+<div class="card">
+    <h2>Skill Requirements by Level</h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">Skills required for each certificate level:</p>
+
+    {% for level in cert_levels %}
+    {% if skill_requirements|lookup:level %}
+    <div style="margin-bottom: 2rem;">
+        <h3 style="color: var(--link-color); font-size: 1.1rem; margin-bottom: 0.75rem;">
+            Level {{ level }} - {{ level_names|lookup:level }}
+        </h3>
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 2px solid var(--border-color);">
+                    <th style="padding: 0.5rem; text-align: left;">Skill</th>
+                    <th style="padding: 0.5rem; text-align: center;">Required Level</th>
+                    <th style="padding: 0.5rem; text-align: left;">Group</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for req in skill_requirements|lookup:level %}
+                <tr style="border-bottom: 1px solid var(--table-border);">
+                    <td style="padding: 0.5rem;">
+                        <a href="{% url 'core:sde_skill_detail' req.skill_id %}" style="font-weight: 500;">
+                            {{ req.name }}
+                        </a>
+                    </td>
+                    <td style="padding: 0.5rem; text-align: center;">
+                        <span style="background: var(--bg-secondary); padding: 0.25rem 0.5rem; border-radius: 4px;">
+                            {{ req.required_level }}
+                        </span>
+                    </td>
+                    <td style="padding: 0.5rem; color: var(--text-secondary);">
+                        {{ req.group }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endfor %}
+</div>
+{% else %}
+<div class="card">
+    <h2>Skill Requirements</h2>
+    <p style="color: var(--text-secondary);">No skill requirements found for this certificate.</p>
+</div>
+{% endif %}
+
+{% if mastery_ships %}
+<div class="card">
+    <h2>Ships Requiring This Certificate</h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">Ships that require this certificate for mastery levels:</p>
+
+    {% for level in cert_levels %}
+    {% if mastery_ships|lookup:level %}
+    <div style="margin-bottom: 1.5rem;">
+        <h3 style="color: var(--link-color); font-size: 1.1rem; margin-bottom: 0.75rem;">
+            Mastery Level {{ level }}
+        </h3>
+        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+            {% for ship in mastery_ships|lookup:level %}
+            <a href="{% url 'core:sde_item_detail' ship.type_id %}"
+               style="padding: 0.4rem 0.75rem; background: var(--bg-primary); border-radius: 4px; border: 1px solid var(--border-color); text-decoration: none;">
+                {{ ship.name }}
+                <span style="color: var(--text-secondary); font-size: 0.8rem;">({{ ship.group }})</span>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="card">
+    <a href="{% url 'core:sde_index' %}" class="btn">&larr; Back to SDE Browser</a>
+</div>
+{% endblock %}

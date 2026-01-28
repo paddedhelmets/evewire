@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}{{ faction.faction_name }} - SDE Browser{% endblock %}
+
+{% block content %}
+<style]
+.corp-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+.corp-item {
+    padding: 0.75rem;
+    background: var(--bg-secondary);
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+}
+.corp-name {
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+}
+.corp-stats {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+.system-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+</style>
+
+<div class="card">
+    <nav style="margin-bottom: 1rem; font-size: 0.9rem;">
+        <a href="{% url 'core:sde_index' %}">SDE</a> &gt;
+        <a href="{% url 'core:sde_faction_list' %}">Factions</a> &gt;
+        <strong>{{ faction.faction_name }}</strong>
+    </nav>
+
+    <h1>{{ faction.faction_name }}</h1>
+
+    {% if faction.description %}
+    <p style="color: var(--text-secondary); margin-top: 1rem; line-height: 1.6;">
+        {{ faction.description }}
+    </p>
+    {% endif %}
+
+    <div style="margin-top: 1.5rem; display: flex; gap: 2rem; flex-wrap: wrap;">
+        <div><strong>Faction ID:</strong> {{ faction.faction_id }}</div>
+        {% if faction.solar_system_id %}
+        <div><strong>Home System:</strong> {{ faction.solar_system_id }}</div>
+        {% endif %}
+        {% if faction.station_count %}
+        <div><strong>Stations:</strong> {{ faction.station_count }}</div>
+        {% endif %}
+        {% if militia_corp_name %}
+        <div><strong>Militia Corp:</strong> <a href="{% url 'core:sde_corporation_detail' militia_corp.corporation_id %}">{{ militia_corp_name }}</a></div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <h2>Member Corporations ({{ corporations|length }})</h2>
+    <div class="corp-grid">
+        {% for corp in corporations %}
+        <div class="corp-item">
+            <a href="{% url 'core:sde_corporation_detail' corp.corporation.corporation_id %}" style="text-decoration: none;">
+                <div class="corp-name">{{ corp.name }}</div>
+                <div class="corp-stats">
+                    ID: {{ corp.corporation.corporation_id }}
+                    {% if corp.agent_count %}• {{ corp.agent_count }} Agents{% endif %}
+                </div>
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{% if controlled_systems %}
+<div class="card">
+    <h2>Controlled Systems ({{ controlled_systems|length }} shown, max 20)</h2>
+    <div class="system-list">
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 2px solid var(--border-color);">
+                    <th style="padding: 0.5rem; text-align: left;">System</th>
+                    <th style="padding: 0.5rem; text-align: right;">Security</th>
+                    <th style="padding: 0.5rem; text-align: left;">Region</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for system in controlled_systems %}
+                <tr style="border-bottom: 1px solid var(--table-border);">
+                    <td style="padding: 0.5rem;">
+                        <a href="{% url 'core:sde_system_detail' system.system_id %}">{{ system.system_name }}</a>
+                    </td>
+                    <td style="padding: 0.5rem; text-align: right;">
+                        {% if system.security >= 0.45 %}
+                            <span style="color: #2ecc71;">{{ system.security|floatformat:1 }}</span>
+                        {% elif system.security >= 0.05 %}
+                            <span style="color: #f39c12;">{{ system.security|floatformat:1 }}</span>
+                        {% else %}
+                            <span style="color: #e74c3c;">{{ system.security|floatformat:1 }}</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 0.5rem;">
+                        <a href="{% url 'core:sde_region_detail' system.region_id %}">{{ system.region.region_name }}</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<div class="card">
+    <a href="{% url 'core:sde_faction_list' %}" class="btn">&larr; Back to Factions</a>
+</div>
+{% endblock %}

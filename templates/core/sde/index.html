@@ -1,0 +1,278 @@
+{% extends "base.html" %}
+
+{% block title %}SDE Browser - evewire{% endblock %}
+
+{% block content %}
+<style>
+.browse-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+.browse-item {
+    padding: 1rem;
+    background: var(--bg-primary);
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    transition: all 0.2s;
+}
+.browse-item:hover {
+    border-color: var(--link-color);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+.browse-item a {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    text-decoration: none;
+}
+.browse-item-name {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+.browse-item-count {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    background: var(--bg-secondary);
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
+}
+.quick-links {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-top: 1rem;
+}
+.quick-link {
+    padding: 0.75rem 1.25rem;
+    background: var(--btn-primary);
+    color: white;
+    border-radius: 6px;
+    text-decoration: none;
+    transition: background 0.2s;
+}
+.quick-link:hover {
+    background: var(--btn-primary-hover);
+    text-decoration: none;
+    color: white;
+}
+.section-title {
+    font-size: 1.3rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--border-color);
+}
+</style>
+
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <div>
+            <h1 style="margin: 0;">SDE Browser</h1>
+            <p style="margin: 0.25rem 0 0 0;">Explore EVE Online's Static Data Export</p>
+        </div>
+        <a href="{% url 'core:sde_sitemap' %}" class="btn" style="background: var(--link-color);">
+            <i class="fas fa-sitemap"></i> Full Sitemap
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Statistics</h2>
+    <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
+        <div><strong>{{ stats.total_items }}</strong> Items</div>
+        <div><strong>{{ stats.total_ships }}</strong> Ships</div>
+        <div><strong>{{ stats.total_modules }}</strong> Modules</div>
+        <div><strong>{{ stats.total_systems }}</strong> Solar Systems</div>
+        <div><strong>{{ stats.total_regions }}</strong> Regions</div>
+    </div>
+</div>
+
+<div class="card">
+    <h2 class="section-title">Universe</h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+        Explore factions, corporations, and agents throughout New Eden
+    </p>
+    <div class="browse-grid">
+        <div class="browse-item">
+            <a href="{% url 'core:sde_faction_list' %}">
+                <span class="browse-item-name">Factions</span>
+                <span class="browse-item-count">{{ factions_count }}</span>
+            </a>
+        </div>
+        <div class="browse-item">
+            <a href="{% url 'core:sde_faction_list' %}#corporations">
+                <span class="browse-item-name">Corporations</span>
+                <span class="browse-item-count">{{ corporations_count }}</span>
+            </a>
+        </div>
+        <div class="browse-item">
+            <a href="{% url 'core:sde_faction_list' %}#agents">
+                <span class="browse-item-name">Agents</span>
+                <span class="browse-item-count">{{ agents_count }}</span>
+            </a>
+        </div>
+        <div class="browse-item">
+            <a href="{% url 'core:sde_route_planner' %}" style="background: linear-gradient(135deg, #667eea, #764ba2); border: none;">
+                <span style="color: white;">Route Planner</span>
+                <span class="browse-item-count" style="background: rgba(255,255,255,0.2); color: white;">
+                    <i class="fas fa-route"></i>
+                </span>
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Search</h2>
+    <form action="{% url 'core:sde_search' %}" method="get" style="display: flex; gap: 0.5rem;">
+        <input type="text" name="q" placeholder="Search items..." style="padding: 0.5rem; min-width: 300px; flex: 1;" required>
+        <button type="submit" class="btn">Search</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2 class="section-title">Skills</h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+        Comprehensive browser for {{ skills_count }} skills across all skill groups.
+        Filter by attributes, rank, and explore skill prerequisites.
+    </p>
+    <div class="browse-grid">
+        <div class="browse-item">
+            <a href="{% url 'core:sde_skills_directory' %}" style="background: linear-gradient(135deg, var(--link-color), var(--btn-primary)); border: none;">
+                <span style="color: white;">Skills Directory</span>
+                <span class="browse-item-count" style="background: rgba(255,255,255,0.2); color: white;">{{ skills_count }}</span>
+            </a>
+        </div>
+        <div class="browse-item">
+            <a href="{% url 'core:sde_skills_directory' %}?primary=intelligence">
+                <span class="browse-item-name">Intelligence Skills</span>
+            </a>
+        </div>
+        <div class="browse-item">
+            <a href="{% url 'core:sde_skills_directory' %}?primary=perception">
+                <span class="browse-item-name">Perception Skills</span>
+            </a>
+        </div>
+        <div class="browse-item">
+            <a href="{% url 'core:sde_skills_directory' %}?primary=willpower">
+                <span class="browse-item-name">Willpower Skills</span>
+            </a>
+        </div>
+        <div class="browse-item">
+            <a href="{% url 'core:sde_skills_directory' %}?primary=memory">
+                <span class="browse-item-name">Memory Skills</span>
+            </a>
+        </div>
+        <div class="browse-item">
+            <a href="{% url 'core:sde_skills_directory' %}?primary=charisma">
+                <span class="browse-item-name">Charisma Skills</span>
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h2 class="section-title">Quick Links</h2>
+    <div class="quick-links">
+        <a href="{% url 'core:sde_skills_directory' %}" class="quick-link" style="background: var(--link-color);">
+            Skills Directory ({{ skills_count }})
+        </a>
+        <a href="{% url 'core:sde_category_detail' 16 %}" class="quick-link">
+            Skills by Category
+        </a>
+        <a href="{% url 'core:sde_category_detail' 3 %}" class="quick-link">
+            Materials
+        </a>
+        <a href="{% url 'core:sde_category_detail' 6 %}" class="quick-link">
+            Ships
+        </a>
+        <a href="{% url 'core:sde_category_detail' 7 %}" class="quick-link">
+            Modules
+        </a>
+        <a href="{% url 'core:sde_industry_activities' %}" class="quick-link">
+            Industry Activities
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <h2 class="section-title">Certificates</h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+        Professional certifications with {{ certificates_count }} total certificates available.
+        Each certificate has 5 levels (Basic to Elite) with increasing skill requirements.
+    </p>
+    <div class="browse-grid">
+        {% for cert in certificates %}
+        <div class="browse-item">
+            <a href="{% url 'core:sde_certificate_detail' cert.cert_id %}">
+                <span class="browse-item-name">{{ cert.name }}</span>
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+    {% if certificates_count > 20 %}
+    <p style="margin-top: 1rem; color: var(--text-secondary); font-size: 0.9rem;">
+        Showing 20 of {{ certificates_count }} certificates.
+    </p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2 class="section-title">Browse by Market Group</h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">Market hierarchy for buy/sell orders</p>
+    <div class="browse-grid">
+        {% for group in top_market_groups %}
+        <div class="browse-item">
+            <a href="{% url 'core:sde_market_group_detail' group.market_group_id %}">
+                <span class="browse-item-name">{{ group.market_group_name }}</span>
+                <span class="browse-item-count">{{ group.item_count|default:0 }}</span>
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="card">
+    <h2 class="section-title">Browse by Category</h2>
+    <div class="browse-grid">
+        {% for cat in all_categories %}
+        <div class="browse-item">
+            <a href="{% url 'core:sde_category_detail' cat.category_id %}">
+                <span class="browse-item-name">{{ cat.category_name }}</span>
+                <span class="browse-item-count">{{ cat.item_count|default:0 }}</span>
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="card">
+    <h2 class="section-title">Browse by Meta Group</h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">Item variants organized by technology level</p>
+    <div class="browse-grid">
+        {% for meta in meta_groups %}
+        <div class="browse-item">
+            <span style="display: flex; justify-content: space-between; align-items: center;">
+                <span class="browse-item-name">{{ meta.meta_group_name }}</span>
+                <span class="browse-item-count">{{ meta.item_count|default:0 }}</span>
+            </span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="card">
+    <h2 class="section-title">Browse by Ship Class</h2>
+    <div class="browse-grid">
+        {% for group in ship_groups %}
+        <div class="browse-item">
+            <a href="{% url 'core:sde_group_detail' group.group_id %}">
+                <span class="browse-item-name">{{ group.group_name }}</span>
+                <span class="browse-item-count">{{ group.item_count|default:0 }}</span>
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
