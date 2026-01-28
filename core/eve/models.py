@@ -515,7 +515,7 @@ class LoyaltyStoreOffer(models.Model):
             offer_id=offer_data.get('offer_id'),
             corporation_id=corporation_id,
             type_id=offer_data.get('type_id'),
-            loyalty_points=offer_data.get('loyalty_points'),
+            loyalty_points=offer_data.get('lp_cost', 0),  # ESI uses 'lp_cost'
             isk_cost=offer_data.get('isk_cost', 0),
             required_standing=offer_data.get('required_standing', 0),
             quantity=offer_data.get('quantity', 1),
