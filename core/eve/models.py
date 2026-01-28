@@ -495,7 +495,6 @@ class LoyaltyStoreOffer(models.Model):
     isk_cost = models.BigIntegerField(default=0)
     ak_cost = models.BigIntegerField(default=0, help_text='Alternative currency cost (e.g., PLEX)')
     required_items = models.JSONField(default=list, help_text='Required items for exchange')
-    required_standing = models.FloatField(default=0)  # NOTE: ESI does not currently provide this field
     quantity = models.IntegerField(default=1)
     cached_at = models.DateTimeField(auto_now_add=True)
 
@@ -532,7 +531,6 @@ class LoyaltyStoreOffer(models.Model):
             isk_cost=offer_data.get('isk_cost', 0),
             ak_cost=offer_data.get('ak_cost', 0),  # Alternative currency (PLEX)
             required_items=offer_data.get('required_items', []),  # Required items for exchange
-            required_standing=offer_data.get('required_standing', 0),  # NOTE: ESI doesn't currently provide this
             quantity=offer_data.get('quantity', 1),
         )
 

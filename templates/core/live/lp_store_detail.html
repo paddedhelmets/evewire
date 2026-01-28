@@ -135,7 +135,6 @@
                         <th style="text-align: right;">LP Cost</th>
                         <th style="text-align: right;">ISK Cost</th>
                         <th style="text-align: center;">Required Items</th>
-                        <th style="text-align: center;">Standing</th>
                         <th style="text-align: center;">Quantity</th>
                     </tr>
                 </thead>
@@ -163,13 +162,6 @@
                                         <div>{{ item.quantity }}× {{ item.name }}</div>
                                     {% endfor %}
                                 </div>
-                            {% else %}
-                                <span style="color: var(--text-secondary);">None</span>
-                            {% endif %}
-                        </td>
-                        <td style="text-align: center;">
-                            {% if offer.required_standing > 0 %}
-                                <span class="standing-req">{{ offer.required_standing|floatformat:2 }}</span>
                             {% else %}
                                 <span style="color: var(--text-secondary);">None</span>
                             {% endif %}
