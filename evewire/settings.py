@@ -148,7 +148,7 @@ Q_CLUSTER = {
     'cpu_affinity': config('Q_CPU_AFFINITY', default=1, cast=int),
     'label': 'Django Q2',
     'orm': 'default',  # Use database broker with 'default' connection
-    'sync': False,  # Run scheduler async (separate from workers)
+    'sync': True,  # Run scheduler inline with workers
     'schedule': [
         # Character metadata (location, wallet, orders) - 10 min
         {
