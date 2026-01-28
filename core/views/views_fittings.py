@@ -133,8 +133,13 @@ def fittings_list(request: HttpRequest, character_id: int = None) -> HttpRespons
 
 @login_required
 def fitting_detail(request: HttpRequest, fitting_id: int) -> HttpResponse:
-    """View fitting details with module layout and fleet readiness."""
-    from core.doctrines.models import Fitting, FittingMatch
+    """View fitting details with module layout and fleet readiness.
+
+    Matches are calculated JIT (just-in-time) rather than cached.
+    """
+    from core.doctrines.models import Fitting
+    from core.doctrines.services import AssetFitExtractor
+    from core.character.models import CharacterAsset
     from core.models import Character
     from core.eve.models import ItemType, Station, SolarSystem
 
@@ -148,65 +153,112 @@ def fitting_detail(request: HttpRequest, fitting_id: int) -> HttpResponse:
     # Get slots
     slots = fitting.get_slots()
 
-    # Get ALL matching assets for current user's characters (not just perfect matches)
+    # Get fitting requirements (module type IDs)
+    fitting_modules = set()
+    for entry in fitting.entries.all():
+        fitting_modules.add(entry.module_type_id)
+
+    # Get ALL matching assets for current user's characters (JIT calculation)
     matching_assets = []
-    character_readiness = []  # For readiness summary
+    character_readiness = []
 
     if request.user.is_authenticated:
+        # Extract fitted ships for all characters
+        extractor = AssetFitExtractor()
+        all_fitted_ships = {}
         for character in request.user.characters.all():
-            # Get all matches for this character (partial + perfect)
-            matches = FittingMatch.objects.filter(
-                character=character,
-                fitting=fitting
-            ).select_related('character').order_by('-match_score')
+            ships = extractor.extract_ships(character)
+            all_fitted_ships.update({ship.asset_id: (character, ship) for ship in ships})
 
-            # Get character's current location
-            char_location = character.location_name if hasattr(character, 'location_name') else "Unknown"
+        # Get all assets of this ship type for location info
+        ship_assets = CharacterAsset.objects.filter(
+            character__in=request.user.characters.all(),
+            type_id=fitting.ship_type_id
+        ).select_related('character')
 
-            # Build readiness info for this character
-            best_match = matches.first() if matches.exists() else None
-            if best_match and best_match.match_score >= 1.0:
-                readiness_status = "ready"
-            elif best_match and best_match.match_score > 0:
-                readiness_status = "partial"
+        # Process each ship asset
+        for asset in ship_assets:
+            char = asset.character
+
+            # Calculate readiness JIT
+            if asset.is_singleton:
+                fitted_ship_data = all_fitted_ships.get(asset.item_id)
+                if fitted_ship_data:
+                    _, fitted_ship = fitted_ship_data
+                    fitted_modules = fitted_ship.get_fitted_modules()
+                    missing_modules = fitting_modules - fitted_modules
+                    if not missing_modules:
+                        match_score = 1.0
+                        readiness_status = "ready"
+                        missing_module_ids = []
+                    else:
+                        match_score = (len(fitting_modules) - len(missing_modules)) / len(fitting_modules)
+                        readiness_status = "partial"
+                        missing_module_ids = list(missing_modules)
+                else:
+                    match_score = 0.0
+                    readiness_status = "none"
+                    missing_module_ids = list(fitting_modules)
+            else:
+                # Packaged ship
+                match_score = 0.0
+                readiness_status = "none"
+                missing_module_ids = list(fitting_modules)
+
+            # Get asset location
+            asset_location = asset.location_name if hasattr(asset, 'location_name') else "Unknown"
+            asset_location_type = asset.location_type
+
+            # Resolve missing module IDs to names
+            missing_module_names = []
+            for module_id in missing_module_ids:
+                try:
+                    module = ItemType.objects.get(id=module_id)
+                    missing_module_names.append(module.name)
+                except ItemType.DoesNotExist:
+                    missing_module_names.append(f"Module {module_id}")
+
+            # Build match-like object for template compatibility
+            matching_assets.append({
+                'match': type('Match', (), {
+                    'asset_id': asset.item_id,
+                    'character': char,
+                    'is_match': match_score >= 1.0,
+                    'match_score': match_score,
+                })(),
+                'asset_location': asset_location,
+                'asset_location_type': asset_location_type,
+                'missing_module_names': missing_module_names,
+                'match_percent': match_score * 100,
+            })
+
+        # Build character readiness summary
+        character_best_matches = {}
+        for ma in matching_assets:
+            char = ma['match'].character
+            if char.id not in character_best_matches:
+                character_best_matches[char.id] = ma
+            else:
+                if ma['match'].match_score > character_best_matches[char.id]['match'].match_score:
+                    character_best_matches[char.id] = ma
+
+        for char in request.user.characters.all():
+            best = character_best_matches.get(char.id)
+            if best:
+                if best['match'].match_score >= 1.0:
+                    readiness_status = "ready"
+                elif best['match'].match_score > 0:
+                    readiness_status = "partial"
+                else:
+                    readiness_status = "none"
             else:
                 readiness_status = "none"
 
             character_readiness.append({
-                'character': character,
+                'character': char,
                 'readiness_status': readiness_status,
-                'best_match': best_match,
+                'best_match': best['match'] if best else None,
             })
-
-            # Enrich each match with location info and module names
-            for match in matches:
-                # Get asset location from CharacterAsset
-                try:
-                    from core.character.models import CharacterAsset
-                    asset = CharacterAsset.objects.get(item_id=match.asset_id)
-                    asset_location = asset.location_name if hasattr(asset, 'location_name') else "Unknown"
-                    asset_location_type = asset.location_type
-                except CharacterAsset.DoesNotExist:
-                    asset_location = "Unknown"
-                    asset_location_type = "unknown"
-
-                # Resolve missing module IDs to names
-                missing_module_names = []
-                if match.missing_modules:
-                    for module_id in match.missing_modules:
-                        try:
-                            module = ItemType.objects.get(id=module_id)
-                            missing_module_names.append(module.name)
-                        except ItemType.DoesNotExist:
-                            missing_module_names.append(f"Module {module_id}")
-
-                matching_assets.append({
-                    'match': match,
-                    'asset_location': asset_location,
-                    'asset_location_type': asset_location_type,
-                    'missing_module_names': missing_module_names,
-                    'match_percent': match.match_score * 100,
-                })
 
     # Calculate readiness summary
     total_characters = len(character_readiness)
