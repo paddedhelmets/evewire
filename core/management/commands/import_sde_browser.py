@@ -508,6 +508,16 @@ class Command(BaseCommand):
         # Drop existing table if any
         django_cursor.execute(f"DROP TABLE IF EXISTS {evesde_table}")
 
+        # For Django ORM compatibility, add id column if table has composite PK
+        # and remove the composite PK constraint
+        if 'PRIMARY KEY' in create_sql and ',PRIMARY KEY' in create_sql:
+            # This is a composite key table - add id column and remove PK constraint
+            # Remove the PRIMARY KEY clause
+            create_sql = re.sub(r',\s*PRIMARY KEY \([^)]+\)', '', create_sql, flags=re.IGNORECASE)
+            # Add id column as first column
+            create_sql = create_sql.replace(f'CREATE TABLE {evesde_table} (',
+                                              f'CREATE TABLE {evesde_table} (id INTEGER PRIMARY KEY AUTOINCREMENT, ')
+
         # Create table
         django_cursor.execute(create_sql)
 

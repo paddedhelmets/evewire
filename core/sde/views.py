@@ -214,7 +214,7 @@ def sde_item_detail(request: HttpRequest, type_id: int) -> HttpResponse:
     # Get attributes for this item
     attributes = DgmTypeAttributes.objects.filter(
         type_id=type_id
-    ).select_related('attribute_id')
+    ).select_related('attribute')
 
     # Format attributes with their display names
     formatted_attributes = []

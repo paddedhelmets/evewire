@@ -195,6 +195,7 @@ class DgmTypeAttributes(models.Model):
 
     Actual attribute values for each item type
     """
+    id = models.AutoField(primary_key=True)  # Added for Django compatibility
     type = models.ForeignKey('InvTypes', on_delete=models.DO_NOTHING, db_column='typeID', related_name='attributes')
     attribute = models.ForeignKey('DgmAttributeTypes', on_delete=models.DO_NOTHING, db_column='attributeID', related_name='type_attributes')
     value_int = models.IntegerField(null=True, blank=True, db_column='valueInt')
