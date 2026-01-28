@@ -6,6 +6,7 @@ refreshing various EVE data (structures, market prices, etc.).
 """
 
 import logging
+from django.db import models
 from django.utils import timezone
 from django_q.tasks import async_task
 
@@ -187,3 +188,194 @@ def refresh_all_stale_structures() -> dict:
         'queued': queued,
         'skipped': Structure.objects.count() - total_stale,
     }
+
+
+# ============================================================================
+# CHARACTER REFRESH TASKS
+# ============================================================================
+
+def refresh_stale_characters() -> dict:
+    """
+    Queue background refresh for characters with stale metadata.
+
+    Refreshes: location, wallet, orders, contracts, industry jobs
+    Interval: 10 minutes
+    """
+    from core.models import Character
+    from django.utils import timezone
+
+    stale_cutoff = timezone.now() - timezone.timedelta(minutes=10)
+
+    # Characters that haven't synced in 10 minutes, or never synced
+    stale_characters = Character.objects.filter(
+        models.Q(last_sync__lt=stale_cutoff) | models.Q(last_sync__isnull=True)
+    )
+
+    queued = 0
+    for character in stale_characters:
+        async_task('core.eve.tasks._sync_character_metadata', character.id)
+        queued += 1
+
+    logger.info(f'Character metadata refresh: queued {queued} characters')
+    return {'queued': queued}
+
+
+def _sync_character_metadata(character_id: int) -> bool:
+    """
+    Sync character metadata (location, wallet, orders, contracts, industry).
+
+    This is a lighter sync than full character sync - excludes assets and skills.
+    """
+    from core.models import Character
+    from core.services import (
+        _sync_location, _sync_wallet, _sync_orders,
+        _sync_orders_history, _sync_industry_jobs, _sync_contracts
+    )
+    from requests.exceptions import HTTPError
+
+    try:
+        character = Character.objects.get(id=character_id)
+        logger.info(f'Syncing metadata for character {character_id}')
+
+        # Location might fail with 401 if scope not granted
+        try:
+            _sync_location(character)
+        except HTTPError as e:
+            if e.response is not None and e.response.status_code == 401:
+                logger.warning(f'Location not available for character {character_id} (missing scope)')
+            else:
+                raise
+
+        _sync_wallet(character)
+        _sync_orders(character)
+        _sync_orders_history(character)
+        _sync_industry_jobs(character)
+
+        # Contracts might fail with 401 if scope not granted
+        try:
+            _sync_contracts(character)
+        except HTTPError as e:
+            if e.response is not None and e.response.status_code == 401:
+                logger.warning(f'Contracts not available for character {character_id} (missing scope)')
+            else:
+                raise
+
+        character.last_sync = timezone.now()
+        character.last_sync_status = 'success'
+        character.last_sync_error = ''
+        character.save(update_fields=['last_sync', 'last_sync_status', 'last_sync_error'])
+
+        logger.info(f'Metadata sync complete for character {character_id}')
+        return True
+
+    except Exception as e:
+        logger.error(f'Failed to sync metadata for character {character_id}: {e}')
+        try:
+            character = Character.objects.get(id=character_id)
+            character.last_sync_status = 'failed'
+            character.last_sync_error = str(e)[:500]
+            character.save(update_fields=['last_sync_status', 'last_sync_error'])
+        except:
+            pass
+        return False
+
+
+def refresh_stale_assets() -> dict:
+    """
+    Queue background refresh for characters with stale assets.
+
+    Assets are cached by ESI for 1 hour, so no point checking more often.
+    Interval: 1 hour
+    """
+    from core.models import Character
+    from django.utils import timezone
+
+    stale_cutoff = timezone.now() - timezone.timedelta(hours=1)
+
+    # Characters that haven't had assets synced in 1 hour, or never synced
+    stale_characters = Character.objects.filter(
+        models.Q(assets_synced_at__lt=stale_cutoff) | models.Q(assets_synced_at__isnull=True)
+    )
+
+    queued = 0
+    for character in stale_characters:
+        async_task('core.eve.tasks._sync_character_assets', character.id)
+        queued += 1
+
+    logger.info(f'Asset refresh: queued {queued} characters')
+    return {'queued': queued}
+
+
+def _sync_character_assets(character_id: int) -> bool:
+    """Sync character assets only."""
+    from core.models import Character
+    from core.services import _sync_assets
+
+    try:
+        character = Character.objects.get(id=character_id)
+        logger.info(f'Syncing assets for character {character_id}')
+
+        _sync_assets(character)
+
+        logger.info(f'Asset sync complete for character {character_id}')
+        return True
+
+    except Exception as e:
+        logger.error(f'Failed to sync assets for character {character_id}: {e}')
+        return False
+
+
+def refresh_stale_skills() -> dict:
+    """
+    Queue background refresh for skills/queue when a skill is ending soon.
+
+    Checks if any character has a skill finishing within 2 hours.
+    If so, queues a refresh for that character.
+
+    Interval: 30 minutes (check frequency)
+    """
+    from core.models import Character
+    from core.character.models import SkillQueueItem
+    from django.utils import timezone
+
+    soon_cutoff = timezone.now() + timezone.timedelta(hours=2)
+    queued = 0
+
+    for character in Character.objects.all():
+        # Check if any skill in queue finishes within 2 hours
+        finishing_soon = SkillQueueItem.objects.filter(
+            character=character,
+            finish_date__lte=soon_cutoff
+        ).exists()
+
+        # Also refresh if never synced
+        needs_refresh = finishing_soon or not character.skills_synced_at
+
+        if needs_refresh:
+            async_task('core.eve.tasks._sync_character_skills', character.id)
+            queued += 1
+
+    logger.info(f'Skills refresh: queued {queued} characters')
+    return {'queued': queued}
+
+
+def _sync_character_skills(character_id: int) -> bool:
+    """Sync character skills and skill queue only."""
+    from core.models import Character
+    from core.services import _sync_skills, _sync_skill_queue, _sync_attributes, _sync_implants
+
+    try:
+        character = Character.objects.get(id=character_id)
+        logger.info(f'Syncing skills for character {character_id}')
+
+        _sync_skills(character)
+        _sync_skill_queue(character)
+        _sync_attributes(character)
+        _sync_implants(character)
+
+        logger.info(f'Skill sync complete for character {character_id}')
+        return True
+
+    except Exception as e:
+        logger.error(f'Failed to sync skills for character {character_id}: {e}')
+        return False
