@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block title %}Loyalty Stores - Live Browser{% endblock %}
+
+{% block content %}
+<style>
+.faction-section {
+    margin-bottom: 2rem;
+}
+.faction-header {
+    padding: 1rem;
+    background: var(--bg-secondary);
+    border-radius: 8px 8px 0 0;
+    border: 1px solid var(--border-color);
+    border-bottom: none;
+}
+.faction-name {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0;
+}
+.corp-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 0.5rem;
+    padding: 1rem;
+    background: var(--bg-primary);
+    border-radius: 0 0 8px 8px;
+    border: 1px solid var(--border-color);
+}
+.corp-item {
+    padding: 0.75rem 1rem;
+    background: var(--bg-secondary);
+    border-radius: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.2s;
+}
+.corp-item:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--link-color);
+}
+.corp-item a {
+    text-decoration: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+.corp-name {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+.offer-count {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    background: var(--bg-primary);
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+}
+.empty-state {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-secondary);
+}
+</style>
+
+<div class="card">
+    <nav style="margin-bottom: 1rem; font-size: 0.9rem;">
+        <a href="{% url 'core:sde_index' %}">SDE</a> &gt;
+        <a href="{% url 'core:live_index' %}">Live</a> &gt;
+        <strong>Loyalty Stores</strong>
+    </nav>
+
+    <h1>Loyalty Point Stores</h1>
+    <p style="color: var(--text-secondary);">
+        Browse loyalty point stores across {{ total_corps }} NPC corporations,
+        grouped by faction
+    </p>
+</div>
+
+{% if factions %}
+    {% for faction, corporations in factions %}
+    <div class="faction-section">
+        <div class="faction-header">
+            {% if faction %}
+                <h2 class="faction-name">
+                    <i class="fas fa-flag"></i> {{ faction.name }}
+                    <span style="font-size: 0.9rem; font-weight: 400; color: var(--text-secondary); margin-left: 0.5rem;">
+                        {{ corporations|length }} corporations
+                    </span>
+                </h2>
+            {% else %}
+                <h2 class="faction-name">
+                    <i class="fas fa-question-circle"></i> Unknown Faction
+                    <span style="font-size: 0.9rem; font-weight: 400; color: var(--text-secondary); margin-left: 0.5rem;">
+                        {{ corporations|length }} corporations
+                    </span>
+                </h2>
+            {% endif %}
+        </div>
+        <div class="corp-grid">
+            {% for item in corporations %}
+            <div class="corp-item">
+                <a href="{% url 'core:live_lp_store_detail' item.corporation.id %}">
+                    <span class="corp-name">{{ item.corporation.name }}</span>
+                    <span class="offer-count">{{ item.lp_info.total_offers }} offers</span>
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+
+    <div class="card">
+        <p style="color: var(--text-secondary); font-size: 0.9rem;">
+            <i class="fas fa-info-circle"></i>
+            Showing {{ total_corps }} corporations with loyalty point stores across {{ total_factions }} factions.
+            Data is cached from ESI and refreshed periodically.
+        </p>
+    </div>
+{% else %}
+    <div class="card">
+        <div class="empty-state">
+            <i class="fas fa-store-slash" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+            <h3>No Loyalty Stores Found</h3>
+            <p>No loyalty point store data has been fetched yet.</p>
+            <p style="font-size: 0.9rem;">
+                Run <code>python manage.py fetch_live_data --lp-stores</code> to populate the cache.
+            </p>
+        </div>
+    </div>
+{% endif %}
+{% endblock %}

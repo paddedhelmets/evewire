@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+
+{% block title %}War #{{ war.war_id }} - Live Browser{% endblock %}
+
+{% block content %}
+<style>
+.war-header {
+    padding: 1.5rem;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+}
+.war-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 0 0 0.5rem 0;
+}
+.parties-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+.party-card {
+    padding: 1.25rem;
+    background: var(--bg-primary);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+.party-card.aggressor {
+    border-left: 4px solid #ef4444;
+}
+.party-card.defender {
+    border-left: 4px solid #3b82f6;
+}
+.party-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+}
+.party-name {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+.ally-name {
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+}
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+}
+.info-item {
+    padding: 1rem;
+    background: var(--bg-secondary);
+    border-radius: 6px;
+}
+.info-label {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+}
+.info-value {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+.badge.mutual { background: #fbbf24; color: #78350f; }
+.badge.open { background: #dbeafe; color: #1e40af; }
+.badge.active { background: #d1fae5; color: #065f46; }
+.badge.finished { background: #f3f4f6; color: #374151; }
+</style>
+
+<div class="card">
+    <nav style="margin-bottom: 1rem; font-size: 0.9rem;">
+        <a href="{% url 'core:sde_index' %}">SDE</a> &gt;
+        <a href="{% url 'core:live_index' %}">Live</a> &gt;
+        <a href="{% url 'core:live_wars' %}">Wars</a> &gt;
+        <strong>#{{ war.war_id }}</strong>
+    </nav>
+</div>
+
+<div class="war-header">
+    <h1 class="war-title">War #{{ war.war_id }}</h1>
+    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        {% if war.is_active %}
+            <span class="badge active"><i class="fas fa-circle"></i> Active</span>
+        {% else %}
+            <span class="badge finished"><i class="fas fa-check"></i> {{ war.war_status|title }}</span>
+        {% endif %}
+        {% if war.mutial %}
+            <span class="badge mutual"><i class="fas fa-handshake"></i> Mutual</span>
+        {% endif %}
+        {% if war.open_for_allies %}
+            <span class="badge open"><i class="fas fa-door-open"></i> Open to Allies</span>
+        {% endif %}
+    </div>
+</div>
+
+<div class="parties-grid">
+    <!-- Aggressor -->
+    <div class="party-card aggressor">
+        <div class="party-title">
+            <i class="fas fa-crosshairs"></i> Aggressor
+        </div>
+        <div class="party-name">{{ war.aggressor_name }}</div>
+        {% if aggressor_corp %}
+            <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                {{ aggressor_corp.ticker }}
+            </div>
+        {% endif %}
+        {% if war.ally_name %}
+            <div class="ally-name">
+                <i class="fas fa-handshake"></i> Ally: {{ war.ally_name }}
+            </div>
+        {% endif %}
+        {% if aggressor_ally %}
+            <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                {{ aggressor_ally.ticker }}
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Defender -->
+    <div class="party-card defender">
+        <div class="party-title">
+            <i class="fas fa-shield-alt"></i> Defender
+        </div>
+        <div class="party-name">{{ war.defender_name }}</div>
+        {% if defender_corp %}
+            <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                {{ defender_corp.ticker }}
+            </div>
+        {% endif %}
+        {% if war.defender_ally_name %}
+            <div class="ally-name">
+                <i class="fas fa-handshake"></i> Ally: {{ war.defender_ally_name }}
+            </div>
+        {% endif %}
+        {% if defender_ally %}
+            <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                {{ defender_ally.ticker }}
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <h2>War Details</h2>
+    <div class="info-grid">
+        <div class="info-item">
+            <div class="info-label">Declared</div>
+            <div class="info-value">{{ war.declared|date:"Y-m-d H:i" }}</div>
+        </div>
+        {% if war.started %}
+        <div class="info-item">
+            <div class="info-label">Started</div>
+            <div class="info-value">{{ war.started|date:"Y-m-d H:i" }}</div>
+        </div>
+        {% endif %}
+        {% if war.finished %}
+        <div class="info-item">
+            <div class="info-label">Finished</div>
+            <div class="info-value">{{ war.finished|date:"Y-m-d H:i" }}</div>
+        </div>
+        {% endif %}
+        {% if war.prize_ship %}
+        <div class="info-item">
+            <div class="info-label">Prize Ship</div>
+            <div class="info-value">Type ID {{ war.prize_ship }}</div>
+        </div>
+        {% endif %}
+        <div class="info-item">
+            <div class="info-label">Time Active</div>
+            <div class="info-value">
+                {% if war.finished %}
+                    {{ war.declared|timesince:war.finished }}
+                {% else %}
+                    {{ war.declared|timesince }} (ongoing)
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <p style="color: var(--text-secondary); font-size: 0.9rem;">
+        <i class="fas fa-info-circle"></i>
+        War data cached from ESI. Last updated: {{ war.last_updated|date:"Y-m-d H:i" }}
+    </p>
+</div>
+{% endblock %}

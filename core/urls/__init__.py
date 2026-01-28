@@ -6,6 +6,7 @@ from django.urls import path
 from core import views
 from core.views import api
 from core.sde import views as sde_views
+from core.live import views as live_views
 
 app_name = 'core'
 
@@ -164,6 +165,29 @@ urlpatterns = [
     path('sde/corporation/<int:corporation_id>/', sde_views.sde_corporation_detail, name='sde_corporation_detail'),
     path('sde/agent/<int:agent_id>/', sde_views.sde_agent_detail, name='sde_agent_detail'),
     path('sde/ship/<int:ship_id>/fittings/', sde_views.sde_ship_fittings, name='sde_ship_fittings'),
+
+    # Live Universe Browser (ESI data)
+    path('live/', live_views.live_index, name='live_index'),
+
+    # Loyalty Stores
+    path('live/loyalty/', live_views.live_lp_stores, name='live_lp_stores'),
+    path('live/loyalty/corporation/<int:corporation_id>/', live_views.live_lp_store_detail, name='live_lp_store_detail'),
+
+    # Markets
+    path('live/markets/', live_views.live_markets, name='live_markets'),
+
+    # Incursions
+    path('live/incursions/', live_views.live_incursions, name='live_incursions'),
+
+    # Wars
+    path('live/wars/', live_views.live_wars, name='live_wars'),
+    path('live/wars/<int:war_id>/', live_views.live_war_detail, name='live_war_detail'),
+
+    # Sovereignty
+    path('live/sovereignty/', live_views.live_sovereignty, name='live_sovereignty'),
+
+    # Faction Warfare
+    path('live/faction-warfare/', live_views.live_faction_warfare, name='live_faction_warfare'),
 
     # API endpoints
     path('api/assets/locations/', api.api_asset_locations, name='api_asset_locations'),

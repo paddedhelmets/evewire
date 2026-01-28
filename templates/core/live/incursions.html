@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block title %}Incursions - Live Browser{% endblock %}
+
+{% block content %}
+<style>
+.incursion-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+.incursion-card {
+    padding: 1.25rem;
+    background: var(--bg-primary);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    border-left: 4px solid;
+}
+.incursion-card.established { border-left-color: #ef4444; }
+.incursion-card.mobilizing { border-left-color: #f59e0b; }
+.incursion-card.withdrawing { border-left-color: #10b981; }
+
+.incursion-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0.75rem;
+}
+.incursion-constellation {
+    font-size: 1.2rem;
+    font-weight: 600;
+}
+.incursion-state {
+    padding: 0.35rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+.state-established { background: #fecaca; color: #991b1b; }
+.state-mobilizing { background: #fed7aa; color: #9a3412; }
+.state-withdrawing { background: #d1fae5; color: #065f46; }
+
+.incursion-faction {
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+.incursion-details {
+    display: flex;
+    gap: 1.5rem;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+.incursion-detail {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.boss-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+.state-section {
+    margin-bottom: 2rem;
+}
+.state-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.empty-state {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-secondary);
+}
+</style>
+
+<div class="card">
+    <nav style="margin-bottom: 1rem; font-size: 0.9rem;">
+        <a href="{% url 'core:sde_index' %}">SDE</a> &gt;
+        <a href="{% url 'core:live_index' %}">Live</a> &gt;
+        <strong>Incursions</strong>
+    </nav>
+
+    <h1>Active Incursions</h1>
+    <p style="color: var(--text-secondary);">
+        {{ total }} incursion{{ total|pluralize }} threatening constellation{{ total|pluralize }}
+    </p>
+</div>
+
+{% if incursions %}
+    {% for state, state_incursions in incursions_by_state.items %}
+    <div class="state-section">
+        <div class="state-title">
+            {% if state == 'established' %}
+                <i class="fas fa-exclamation-triangle" style="color: #ef4444;"></i>
+                Established ({{ state_incursions|length }})
+            {% elif state == 'mobilizing' %}
+                <i class="fas fa-hourglass-half" style="color: #f59e0b;"></i>
+                Mobilizing ({{ state_incursions|length }})
+            {% elif state == 'withdrawing' %}
+                <i class="fas fa-check-circle" style="color: #10b981;"></i>
+                Withdrawing ({{ state_incursions|length }})
+            {% endif %}
+        </div>
+        <div class="incursion-list">
+            {% for inc in state_incursions %}
+            <div class="incursion-card {{ inc.state }}">
+                <div class="incursion-header">
+                    <div>
+                        <div class="incursion-constellation">
+                            {{ inc.constellation_name }}
+                        </div>
+                        <div class="incursion-faction">
+                            <i class="fas fa-users"></i> {{ inc.faction_name }}
+                            {% if inc.constellation.region %}
+                                <span style="margin: 0 0.5rem;">&bull;</span>
+                                {{ inc.constellation.region.name }}
+                            {% endif %}
+                        </div>
+                    </div>
+                    <span class="incursion-state state-{{ inc.state }}">
+                        {{ inc.state }}
+                    </span>
+                </div>
+                <div class="incursion-details">
+                    <div class="incursion-detail">
+                        <i class="fas fa-crosshairs"></i>
+                        Type: {{ inc.type_id }}
+                    </div>
+                    {% if inc.has_boss %}
+                    <div class="incursion-detail">
+                        <span class="boss-badge">
+                            <i class="fas fa-skull"></i> Boss Spawned
+                        </span>
+                    </div>
+                    {% endif %}
+                    {% if inc.staged %}
+                    <div class="incursion-detail">
+                        <i class="fas fa-layer-group"></i> Staged
+                    </div>
+                    {% endif %}
+                    <div class="incursion-detail">
+                        <i class="fas fa-clock"></i>
+                        {{ inc.last_updated|timesince }} ago
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+
+    <div class="card">
+        <p style="color: var(--text-secondary); font-size: 0.9rem;">
+            <i class="fas fa-info-circle"></i>
+            Incursions spawn and despawn periodically. Data refreshed from ESI.
+            <strong>Established</strong>: Full penalty, <strong>Mobilizing</strong>: Increasing penalty,
+            <strong>Withdrawing</strong>: Decreasing penalty.
+        </p>
+    </div>
+{% else %}
+    <div class="card">
+        <div class="empty-state">
+            <i class="fas fa-meteor" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+            <h3>No Active Incursions</h3>
+            <p>There are no incursions currently active in New Eden.</p>
+            <p style="font-size: 0.9rem;">
+                Run <code>python manage.py fetch_live_data --incursions</code> to refresh.
+            </p>
+        </div>
+    </div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+
+{% block title %}{{ corporation.name }} LP Store - Live Browser{% endblock %}
+
+{% block content %}
+<style}
+.offers-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+}
+.offers-table th {
+    background: var(--bg-secondary);
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid var(--border-color);
+}
+.offers-table td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+.offers-table tr:hover {
+    background: var(--bg-secondary);
+}
+.lp-cost {
+    font-weight: 600;
+    color: #f59e0b;
+}
+.isk-cost {
+    color: var(--text-secondary);
+}
+.item-name {
+    font-weight: 500;
+}
+.item-group {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+.standing-req {
+    font-size: 0.85rem;
+    padding: 0.25rem 0.5rem;
+    background: var(--bg-secondary);
+    border-radius: 4px;
+}
+.empty-state {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-secondary);
+}
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+.info-item {
+    padding: 1rem;
+    background: var(--bg-secondary);
+    border-radius: 6px;
+}
+.info-label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.25rem;
+}
+.info-value {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+</style>
+
+<div class="card">
+    <nav style="margin-bottom: 1rem; font-size: 0.9rem;">
+        <a href="{% url 'core:sde_index' %}">SDE</a> &gt;
+        <a href="{% url 'core:live_index' %}">Live</a> &gt;
+        <a href="{% url 'core:live_lp_stores' %}">Loyalty Stores</a> &gt;
+        <strong>{{ corporation.name }}</strong>
+    </nav>
+
+    <h1>{{ corporation.name }}</h1>
+    <p style="color: var(--text-secondary);">
+        Loyalty Point Store - {{ lp_info.total_offers }} offers available
+    </p>
+</div>
+
+<div class="card">
+    <h2>Store Information</h2>
+    <div class="info-grid">
+        <div class="info-item">
+            <div class="info-label">Corporation</div>
+            <div class="info-value">{{ corporation.name }}</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Ticker</div>
+            <div class="info-value">{{ corporation.ticker }}</div>
+        </div>
+        {% if corporation.faction_id %}
+        <div class="info-item">
+            <div class="info-label">Faction</div>
+            <div class="info-value">ID {{ corporation.faction_id }}</div>
+        </div>
+        {% endif %}
+        <div class="info-item">
+            <div class="info-label">Total Offers</div>
+            <div class="info-value">{{ lp_info.total_offers }}</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Last Updated</div>
+            <div class="info-value" style="font-size: 0.9rem;">{{ lp_info.last_updated|date:"Y-m-d H:i" }}</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Sync Status</div>
+            <div class="info-value">
+                {% if lp_info.last_sync_status == 'ok' %}
+                    <span style="color: #10b981;"><i class="fas fa-check-circle"></i> OK</span>
+                {% elif lp_info.last_sync_status == 'error' %}
+                    <span style="color: #ef4444;"><i class="fas fa-exclamation-circle"></i> Error</span>
+                {% else %}
+                    <span style="color: var(--text-secondary);">{{ lp_info.last_sync_status|title }}</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if offers %}
+    <div class="card">
+        <h2>Loyalty Store Offers</h2>
+        <div style="overflow-x: auto;">
+            <table class="offers-table">
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th style="text-align: right;">LP Cost</th>
+                        <th style="text-align: right;">ISK Cost</th>
+                        <th style="text-align: center;">Standing</th>
+                        <th style="text-align: center;">Quantity</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for offer in offers %}
+                    <tr>
+                        <td>
+                            <div class="item-name">{{ offer.item_type.name }}</div>
+                            <div class="item-group">{{ offer.item_type.group.name }}</div>
+                        </td>
+                        <td style="text-align: right;">
+                            <span class="lp-cost">{{ offer.loyalty_points|floatformat:0 }} LP</span>
+                        </td>
+                        <td style="text-align: right;">
+                            {% if offer.isk_cost > 0 %}
+                                <span class="isk-cost">{{ offer.isk_cost|floatformat:0 }} ISK</span>
+                            {% else %}
+                                <span style="color: var(--text-secondary);">-</span>
+                            {% endif %}
+                        </td>
+                        <td style="text-align: center;">
+                            {% if offer.required_standing > 0 %}
+                                <span class="standing-req">{{ offer.required_standing|floatformat:2 }}</span>
+                            {% else %}
+                                <span style="color: var(--text-secondary);">None</span>
+                            {% endif %}
+                        </td>
+                        <td style="text-align: center;">{{ offer.quantity }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p style="margin-top: 1rem; color: var(--text-secondary); font-size: 0.9rem;">
+            <i class="fas fa-info-circle"></i>
+            Showing {{ offers|length }} offers. Data cached from ESI.
+        </p>
+    </div>
+{% else %}
+    <div class="card">
+        <div class="empty-state">
+            <i class="fas fa-box-open" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+            <h3>No Offers Found</h3>
+            <p>This corporation's loyalty store has no offers cached.</p>
+        </div>
+    </div>
+{% endif %}
+{% endblock %}

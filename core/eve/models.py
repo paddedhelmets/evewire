@@ -9,6 +9,8 @@ Models use SDE column names via db_column for direct compatibility.
 
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from django.utils import timezone
+from datetime import timedelta
 
 
 class ItemTypeManager(models.Manager):
@@ -327,6 +329,63 @@ class TypeAttribute(models.Model):
             return f"Type {self.type_id}: attr_{self.attribute_id} = {self.value_int or self.value_float}"
 
 
+class ESICachedMixin(models.Model):
+    """
+    Mixin for models caching ESI data with staleness tracking.
+
+    Provides common fields and methods for tracking when data was fetched
+    from ESI and whether it needs to be refreshed.
+    """
+    first_seen = models.DateTimeField(auto_now_add=True)
+    last_updated = models.DateTimeField(auto_now=True)
+    last_sync_status = models.CharField(
+        max_length=20,
+        choices=[
+            ('pending', 'Pending'),
+            ('ok', 'OK'),
+            ('error', 'Error'),
+            ('stale', 'Stale'),
+        ],
+        default='pending'
+    )
+    last_sync_error = models.TextField(blank=True, null=True)
+
+    class Meta:
+        abstract = True
+
+    def is_stale(self, max_age_seconds=3600) -> bool:
+        """
+        Check if cached data is stale.
+
+        Args:
+            max_age_seconds: Maximum age in seconds before data is considered stale (default: 1 hour)
+
+        Returns:
+            True if data is stale and should be refreshed
+        """
+        if self.last_sync_status == 'error':
+            # Errors are stale after 1 hour (retry quickly)
+            return self.last_updated < timezone.now() - timedelta(hours=1)
+        return self.last_updated < timezone.now() - timedelta(seconds=max_age_seconds)
+
+    def mark_ok(self):
+        """Mark sync as successful."""
+        self.last_sync_status = 'ok'
+        self.last_sync_error = None
+        self.save(update_fields=['last_updated', 'last_sync_status', 'last_sync_error'])
+
+    def mark_error(self, error: str):
+        """Mark sync as failed with error message."""
+        self.last_sync_status = 'error'
+        self.last_sync_error = error
+        self.save(update_fields=['last_updated', 'last_sync_status', 'last_sync_error'])
+
+    def mark_stale(self):
+        """Mark data as stale (needs refresh)."""
+        self.last_sync_status = 'stale'
+        self.save(update_fields=['last_updated', 'last_sync_status'])
+
+
 class Structure(models.Model):
     """
     A player-owned structure in EVE (Citadel, Engineering Complex, etc.).
@@ -350,7 +409,7 @@ class Structure(models.Model):
     # Metadata
     first_seen = models.DateTimeField(auto_now_add=True)
     last_updated = models.DateTimeField(auto_now=True)
-    last_sync_status = models.CharField(max_length=20, default='pending')  # pending, ok, error
+    last_sync_status = models.CharField(max_length=20, default='pending')  # pending, ok, error, inaccessible
     last_sync_error = models.TextField(blank=True)
 
     class Meta:
@@ -380,3 +439,347 @@ class Structure(models.Model):
             return (timezone.now() - self.last_updated).total_seconds() > 3600
 
         return (timezone.now() - self.last_updated).total_seconds() > 604800  # 7 days
+
+
+# ============================================================================
+# Live Universe Browser - ESI Cache Models
+# ============================================================================
+
+class CorporationLPStoreInfo(ESICachedMixin, models.Model):
+    """
+    Metadata about loyalty point stores from ESI.
+
+    ESI Endpoint: GET /loyalty/stores/
+    Cached to track which corporations have LP stores and offer counts.
+    """
+    corporation_id = models.BigIntegerField(primary_key=True)
+    has_loyalty_store = models.BooleanField(default=False)
+    total_offers = models.IntegerField(default=0)
+    last_offer_ids = models.JSONField(default=list, help_text='For change detection')
+
+    class Meta:
+        db_table = 'eve_corporation_lp_store_info'
+        verbose_name = _('LP Store Info')
+        verbose_name_plural = _('LP Store Infos')
+        indexes = [
+            models.Index(fields=['has_loyalty_store']),
+            models.Index(fields=['last_updated']),
+        ]
+
+    def __str__(self) -> str:
+        return f"Corp {self.corporation_id}: {self.total_offers} offers"
+
+
+class LoyaltyStoreOffer(models.Model):
+    """
+    Individual loyalty point store offers from ESI.
+
+    ESI Endpoint: GET /loyalty/stores/{corporation_id}/offers/
+    Cached to avoid repeated ESI calls for store browsing.
+    """
+    offer_id = models.BigIntegerField(primary_key=True)
+    corporation = models.ForeignKey(
+        CorporationLPStoreInfo,
+        on_delete=models.CASCADE,
+        related_name='offers',
+        db_column='corporation_id'
+    )
+    type_id = models.IntegerField(db_index=True, help_text='Links to SDE InvTypes')
+    offer_name = models.TextField(blank=True)
+    loyalty_points = models.IntegerField()
+    isk_cost = models.BigIntegerField(default=0)
+    required_standing = models.FloatField(default=0)
+    quantity = models.IntegerField(default=1)
+    cached_at = models.DateTimeField(auto_now_add=True)
+
+    # Link to SDE (populated in view)
+    item_type = None
+
+    class Meta:
+        db_table = 'eve_loyalty_store_offers'
+        verbose_name = _('LP Store Offer')
+        verbose_name_plural = _('LP Store Offers')
+        indexes = [
+            models.Index(fields=['corporation', 'cached_at']),
+            models.Index(fields=['type_id']),
+            models.Index(fields=['cached_at']),
+        ]
+
+    def __str__(self) -> str:
+        return f"Offer {self.offer_id}: {self.loyalty_points} LP"
+
+    @classmethod
+    def from_esi(cls, corporation_id: int, offer_data: dict) -> 'LoyaltyStoreOffer':
+        """Create offer from ESI response data."""
+        return cls(
+            offer_id=offer_data.get('offer_id'),
+            corporation_id=corporation_id,
+            type_id=offer_data.get('type_id'),
+            loyalty_points=offer_data.get('loyalty_points'),
+            isk_cost=offer_data.get('isk_cost', 0),
+            required_standing=offer_data.get('required_standing', 0),
+            quantity=offer_data.get('quantity', 1),
+        )
+
+
+class RegionMarketSummary(ESICachedMixin, models.Model):
+    """
+    Cached market summary for a region from ESI.
+
+    ESI Endpoint: GET /markets/{region_id}/orders/
+    Tracks order counts and activity for regional markets.
+    """
+    region_id = models.IntegerField(primary_key=True)
+    total_orders = models.IntegerField(default=0)
+    buy_orders = models.IntegerField(default=0)
+    sell_orders = models.IntegerField(default=0)
+    last_order_ids = models.JSONField(default=list, help_text='Sample of order IDs for change detection')
+
+    class Meta:
+        db_table = 'eve_region_market_summary'
+        verbose_name = _('Region Market Summary')
+        verbose_name_plural = _('Region Market Summaries')
+        indexes = [
+            models.Index(fields=['-total_orders']),
+            models.Index(fields=['last_updated']),
+        ]
+
+    def __str__(self) -> str:
+        return f"Region {self.region_id}: {self.total_orders} orders"
+
+
+class ActiveIncursion(ESICachedMixin, models.Model):
+    """
+    Active incursion from ESI.
+
+    ESI Endpoint: GET /incursions/
+    Incursions are dynamic events that spawn and despawn regularly.
+    """
+    incursion_id = models.CharField(max_length=100, primary_key=True)
+    constellation_id = models.IntegerField(db_index=True)
+    constellation_name = models.TextField()
+    faction_id = models.IntegerField(db_index=True)
+    faction_name = models.TextField()
+    state = models.TextField(db_index=True, help_text='"mobilizing", "established", "withdrawing"')
+    type_id = models.IntegerField(help_text='Incursion type')
+    has_boss = models.BooleanField(default=False)
+    staged = models.BooleanField(default=False)
+
+    # SDE links (populated in view)
+    constellation = None
+    faction = None
+
+    class Meta:
+        db_table = 'eve_active_incursions'
+        verbose_name = _('Active Incursion')
+        verbose_name_plural = _('Active Incursions')
+        indexes = [
+            models.Index(fields=['state', '-last_updated']),
+            models.Index(fields=['faction_id']),
+        ]
+        ordering = ['-last_updated']
+
+    def __str__(self) -> str:
+        return f"Incursion in {self.constellation_name} ({self.state})"
+
+
+class ActiveWar(ESICachedMixin, models.Model):
+    """
+    Active war from ESI.
+
+    ESI Endpoint: GET /wars/{war_id}/
+    Wars are declared by entities and can last for varying durations.
+    """
+    war_id = models.BigIntegerField(primary_key=True)
+    declared = models.DateTimeField(db_index=True)
+    started = models.DateTimeField(blank=True, null=True)
+    finished = models.DateTimeField(blank=True, null=True)
+    aggressor_id = models.IntegerField(db_index=True)
+    aggressor_name = models.TextField()
+    ally_id = models.IntegerField(blank=True, null=True)
+    ally_name = models.TextField(blank=True, null=True)
+    defender_id = models.IntegerField(db_index=True)
+    defender_name = models.TextField()
+    defender_ally_id = models.IntegerField(blank=True, null=True)
+    defender_ally_name = models.TextField(blank=True, null=True)
+    mutual = models.BooleanField(default=False)
+    open_for_allies = models.BooleanField(default=False)
+    prize_ship = models.BigIntegerField(blank=True, null=True)
+
+    # War status
+    is_active = models.BooleanField(default=True, db_index=True)
+    war_status = models.TextField(default='active', help_text='active, finished, retracted')
+
+    class Meta:
+        db_table = 'eve_active_wars'
+        verbose_name = _('Active War')
+        verbose_name_plural = _('Active Wars')
+        indexes = [
+            models.Index(fields=['is_active', '-declared']),
+            models.Index(fields=['aggressor_id']),
+            models.Index(fields=['defender_id']),
+        ]
+        ordering = ['-declared']
+
+    def __str__(self) -> str:
+        return f"War {self.war_id}: {self.aggressor_name} vs {self.defender_name}"
+
+
+class SovMapSystem(models.Model):
+    """
+    Sovereignty map by system from ESI.
+
+    ESI Endpoint: GET /sovereignty/map/
+    Shows which alliance controls which nullsec systems.
+    """
+    system_id = models.IntegerField(primary_key=True)
+    alliance_id = models.IntegerField(null=True, blank=True, db_index=True)
+    corporation_id = models.IntegerField(null=True, blank=True)
+    faction_id = models.IntegerField(null=True, blank=True, db_index=True)
+
+    # Metadata
+    first_seen = models.DateTimeField(auto_now_add=True)
+    last_updated = models.DateTimeField(auto_now=True)
+
+    # SDE links (populated in view)
+    solar_system = None
+    alliance = None
+    faction = None
+
+    class Meta:
+        db_table = 'eve_sov_map_system'
+        verbose_name = _('Sov System')
+        verbose_name_plural = _('Sov Systems')
+        indexes = [
+            models.Index(fields=['alliance_id']),
+            models.Index(fields=['faction_id']),
+            models.Index(fields=['-last_updated']),
+        ]
+
+    def __str__(self) -> str:
+        owner = self.alliance_id or self.faction_id or 'None'
+        return f"System {self.system_id}: Owner {owner}"
+
+
+class SovCampaign(models.Model):
+    """
+    Active sovereignty campaigns from ESI.
+
+    ESI Endpoint: GET /sovereignty/campaigns/
+    Shows ongoing structure fights for sovereignty.
+    """
+    campaign_id = models.BigIntegerField(primary_key=True)
+    system_id = models.IntegerField(db_index=True)
+    constellation_id = models.IntegerField()
+    region_id = models.IntegerField()
+
+    # Attacker info
+    attacker_id = models.IntegerField(db_index=True)
+    attacker_name = models.TextField()
+    attacker_score = models.FloatField(default=0.0)
+
+    # Defender info
+    defender_id = models.IntegerField()
+    defender_name = models.TextField()
+    defender_score = models.FloatField(default=0.0)
+
+    # Campaign details
+    campaign_type = models.TextField(help_text='constellation, infrastructure, etc.')
+    start_time = models.DateTimeField(db_index=True)
+
+    # Metadata
+    first_seen = models.DateTimeField(auto_now_add=True)
+    last_updated = models.DateTimeField(auto_now=True)
+
+    # SDE links (populated in view)
+    solar_system = None
+    constellation = None
+    region = None
+
+    class Meta:
+        db_table = 'eve_sov_campaigns'
+        verbose_name = _('Sov Campaign')
+        verbose_name_plural = _('Sov Campaigns')
+        indexes = [
+            models.Index(fields=['system_id']),
+            models.Index(fields=['attacker_id']),
+            models.Index(fields=['start_time']),
+        ]
+        ordering = ['-start_time']
+
+    def __str__(self) -> str:
+        return f"Campaign {self.campaign_id}: {self.attacker_name} attacking {self.system_id}"
+
+
+class FactionWarfareSystem(models.Model):
+    """
+    Faction warfare system ownership from ESI.
+
+    ESI Endpoint: GET /fw/systems/
+    Shows which faction controls each FW system.
+    """
+    system_id = models.IntegerField(primary_key=True)
+    faction_id = models.IntegerField(null=True, blank=True, db_index=True)
+    corporation_id = models.IntegerField(null=True, blank=True)
+    solar_system_name = models.TextField()
+
+    # Metadata
+    first_seen = models.DateTimeField(auto_now_add=True)
+    last_updated = models.DateTimeField(auto_now=True)
+
+    # SDE links (populated in view)
+    solar_system = None
+    faction = None
+
+    class Meta:
+        db_table = 'eve_fw_systems'
+        verbose_name = _('FW System')
+        verbose_name_plural = _('FW Systems')
+        indexes = [
+            models.Index(fields=['faction_id']),
+            models.Index(fields=['-last_updated']),
+        ]
+        ordering = ['solar_system_name']
+
+    def __str__(self) -> str:
+        return f"FW System {self.solar_system_name}: Faction {self.faction_id}"
+
+
+class FactionWarfareStats(models.Model):
+    """
+    Faction warfare stats from ESI.
+
+    ESI Endpoint: GET /fw/stats/
+    Shows kills, victories, and pilot counts for each faction.
+    """
+    faction_id = models.IntegerField(primary_key=True)
+    faction_name = models.TextField()
+
+    # Combat stats
+    kills_last_week = models.IntegerField(default=0)
+    kills_total = models.IntegerField(default=0)
+    victory_points_last_week = models.IntegerField(default=0)
+    victory_points_total = models.IntegerField(default=0)
+
+    # Pilots
+    pilots_last_week = models.IntegerField(default=0)
+    pilots_total = models.IntegerField(default=0)
+
+    # Systems controlled
+    systems_controlled = models.IntegerField(default=0)
+
+    # Metadata
+    first_seen = models.DateTimeField(auto_now_add=True)
+    last_updated = models.DateTimeField(auto_now=True)
+
+    # SDE links (populated in view)
+    faction = None
+
+    class Meta:
+        db_table = 'eve_fw_stats'
+        verbose_name = _('FW Stats')
+        verbose_name_plural = _('FW Stats')
+        ordering = ['-victory_points_last_week']
+
+    def __str__(self) -> str:
+        return f"FW {self.faction_name}: {self.victory_points_last_week} VP"

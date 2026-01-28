@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block title %}Sovereignty - Live Browser{% endblock %}
+
+{% block content %}
+<style>
+.campaigns-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+.campaign-card {
+    padding: 1.25rem;
+    background: var(--bg-primary);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    border-left: 4px solid;
+}
+.campaign-card.constellation { border-left-color: #8b5cf6; }
+.campaign-card.infrastructure { border-left-color: #3b82f6; }
+.campaign-card.defense { border-left-color: #10b981; }
+
+.campaign-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0.75rem;
+}
+.campaign-id {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+.campaign-type {
+    padding: 0.35rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+.type-constellation { background: #ddd6fe; color: #5b21b6; }
+.type-infrastructure { background: #bfdbfe; color: #1e40af; }
+.type-defense { background: #d1fae5; color: #065f46; }
+
+.campaign-attackers {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+    background: var(--bg-secondary);
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+}
+.attacker-info {
+    flex: 1;
+}
+.attacker-name {
+    font-weight: 600;
+}
+.score-bar {
+    display: flex;
+    height: 8px;
+    background: var(--bg-primary);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 0.5rem;
+}
+.score-attacker {
+    background: linear-gradient(90deg, #ef4444, #f87171);
+    transition: width 0.3s;
+}
+.score-defender {
+    background: linear-gradient(90deg, #3b82f6, #60a5fa);
+    transition: width 0.3s;
+}
+.score-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 0.25rem;
+}
+.campaign-meta {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+.empty-state {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-secondary);
+}
+</style>
+
+<div class="card">
+    <nav style="margin-bottom: 1rem; font-size: 0.9rem;">
+        <a href="{% url 'core:sde_index' %}">SDE</a> &gt;
+        <a href="{% url 'core:live_index' %}">Live</a> &gt;
+        <strong>Sovereignty</strong>
+    </nav>
+
+    <h1>Sovereignty Campaigns</h1>
+    <p style="color: var(--text-secondary);">
+        {{ total_campaigns }} active structure fight{{ total_campaigns|pluralize }}
+    </p>
+</div>
+
+{% if campaigns %}
+    <div class="campaigns-list">
+        {% for campaign in campaigns %}
+        <div class="campaign-card {{ campaign.campaign_type }}">
+            <div class="campaign-header">
+                <div>
+                    <div class="campaign-id">Campaign #{{ campaign.campaign_id }}</div>
+                    <div style="font-size: 0.9rem; color: var(--text-secondary);">
+                        <i class="fas fa-map-marker-alt"></i> System ID {{ campaign.system_id }}
+                    </div>
+                </div>
+                <span class="campaign-type type-{{ campaign.campaign_type }}">
+                    {{ campaign.campaign_type }}
+                </span>
+            </div>
+
+            <div class="campaign-attackers">
+                <div class="attacker-info">
+                    <div class="attacker-name">
+                        <i class="fas fa-crosshairs"></i> {{ campaign.attacker_name|default:"Unknown" }}
+                    </div>
+                </div>
+                <div style="text-align: right;">
+                    <div style="font-weight: 600;">{{ campaign.attacker_score|floatformat:1 }}%</div>
+                </div>
+            </div>
+
+            <div class="score-bar">
+                <div class="score-attacker" style="width: {{ campaign.attacker_score }}%;"></div>
+                <div class="score-defender" style="width: {{ campaign.defender_score }}%;"></div>
+            </div>
+            <div class="score-labels">
+                <span>Attacker</span>
+                <span>{{ campaign.attacker_score|floatformat:1 }}% - {{ campaign.defender_score|floatformat:1 }}%</span>
+                <span>Defender ({{ campaign.defender_name|default:"Unknown" }})</span>
+            </div>
+
+            <div class="campaign-meta">
+                <div><i class="fas fa-clock"></i> Started {{ campaign.start_time|timesince }}</div>
+                <div><i class="fas fa-crosshairs"></i> Constellation: {{ campaign.constellation_id }}</div>
+                <div><i class="fas fa-globe"></i> Region: {{ campaign.region_id }}</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="card" style="margin-top: 1rem;">
+        <p style="color: var(--text-secondary); font-size: 0.9rem;">
+            <i class="fas fa-info-circle"></i>
+            Sovereignty campaigns represent active structure fights for territorial control.
+            Attackers must score nodes to capture or contest the system.
+        </p>
+    </div>
+{% else %}
+    <div class="card">
+        <div class="empty-state">
+            <i class="fas fa-globe" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+            <h3>No Active Campaigns</h3>
+            <p>There are no active sovereignty campaigns at this time.</p>
+            <p style="font-size: 0.9rem;">
+                Run <code>python manage.py fetch_live_data --sovereignty</code> to refresh.
+            </p>
+        </div>
+    </div>
+{% endif %}
+{% endblock %}

@@ -420,3 +420,487 @@ def _sync_character_skills(character_id: int) -> bool:
     except Exception as e:
         logger.error(f'Failed to sync skills for character {character_id}: {e}')
         return False
+
+
+# ============================================================================
+# LIVE UNIVERSE BROWSER - ESI REFRESH TASKS
+# ============================================================================
+
+def queue_esi_refresh(task_path: str, *args, jitter_range: tuple = (0, 30), **kwargs):
+    """
+    Queue an ESI refresh task with random jitter to spread load.
+
+    Args:
+        task_path: Dotted path to the task function (e.g., 'core.eve.tasks.refresh_incursions')
+        *args: Arguments to pass to the task
+        jitter_range: Tuple of (min_seconds, max_seconds) for random jitter
+        **kwargs: Keyword arguments to pass to the task
+
+    Returns:
+        The task ID from async_task
+    """
+    jitter_seconds = random.randint(*jitter_range)
+    scheduled_time = timezone.now() + timedelta(seconds=jitter_seconds)
+
+    return async_task(
+        task_path,
+        *args,
+        schedule=schedule(scheduled_time),
+        **kwargs
+    )
+
+
+def refresh_all_lp_stores() -> dict:
+    """
+    Discover all loyalty stores and queue individual refreshes.
+
+    ESI Endpoint: GET /loyalty/stores/
+    Returns list of corporation IDs that have LP stores.
+
+    This should be called periodically (e.g., daily via cron).
+
+    Returns:
+        Dict with status and count of queued refreshes
+    """
+    from core.services import ESIClient
+
+    client = ESIClient()
+    response = client.get_loyalty_stores()
+
+    if not response or not response.data:
+        logger.warning('No loyalty store data from ESI')
+        return {'status': 'error', 'message': 'No data from ESI'}
+
+    count = 0
+    for corporation_id in response.data:
+        queue_esi_refresh(
+            'core.eve.tasks.refresh_corporation_lp_store',
+            corporation_id,
+            jitter_range=(0, 60)
+        )
+        count += 1
+
+    logger.info(f'Queued {count} LP store refresh tasks')
+    return {'status': 'queued', 'count': count}
+
+
+def refresh_corporation_lp_store(corporation_id: int) -> dict:
+    """
+    Refresh loyalty store offers for a corporation.
+
+    ESI Endpoint: GET /loyalty/stores/{corporation_id}/offers/
+
+    Args:
+        corporation_id: The corporation ID to fetch offers for
+
+    Returns:
+        Dict with status and offer count
+    """
+    from core.services import ESIClient
+    from core.eve.models import CorporationLPStoreInfo, LoyaltyStoreOffer
+
+    client = ESIClient()
+    response = client.get_loyalty_store_offers(corporation_id)
+
+    if not response or not response.data:
+        logger.warning(f'Failed to fetch LP store for corp {corporation_id}')
+        return {'status': 'error', 'message': 'ESI request failed', 'corporation_id': corporation_id}
+
+    # Update or create metadata
+    lp_info, created = CorporationLPStoreInfo.objects.get_or_create(
+        corporation_id=corporation_id,
+        defaults={'has_loyalty_store': True}
+    )
+
+    # Clear old offers
+    LoyaltyStoreOffer.objects.filter(corporation=lp_info).delete()
+
+    # Create new offers
+    offers = []
+    for offer_data in response.data:
+        offer = LoyaltyStoreOffer.from_esi(corporation_id, offer_data)
+        offer.corporation_id = lp_info.corporation_id
+        offers.append(offer)
+
+    LoyaltyStoreOffer.objects.bulk_create(offers)
+
+    lp_info.total_offers = len(offers)
+    lp_info.last_offer_ids = [o.offer_id for o in offers]
+    lp_info.mark_ok()
+
+    logger.info(f'Refreshed LP store for corp {corporation_id}: {len(offers)} offers')
+    return {'status': 'ok', 'corporation_id': corporation_id, 'offers': len(offers)}
+
+
+def refresh_incursions() -> dict:
+    """
+    Refresh active incursions from ESI.
+
+    ESI Endpoint: GET /incursions/
+    Incursions spawn and despawn regularly, so this should be called frequently.
+
+    Returns:
+        Dict with status and incursion count
+    """
+    from core.services import ESIClient
+    from core.eve.models import ActiveIncursion
+
+    client = ESIClient()
+    response = client.get_incursions()
+
+    if not response or not response.data:
+        logger.warning('No incursion data from ESI')
+        return {'status': 'error', 'message': 'No data from ESI'}
+
+    # Clear old incursions
+    ActiveIncursion.objects.all().delete()
+
+    # Create new records
+    incursions = []
+    for inc_data in response.data:
+        incursions.append(ActiveIncursion(
+            incursion_id=f"{inc_data.get('constellation_id')}-{inc_data.get('faction_id')}-{inc_data.get('state')}",
+            constellation_id=inc_data.get('constellation_id'),
+            constellation_name=inc_data.get('constellation_name', ''),
+            faction_id=inc_data.get('faction_id'),
+            faction_name=inc_data.get('faction_name', ''),
+            state=inc_data.get('state'),
+            type_id=inc_data.get('type_id'),
+            has_boss=inc_data.get('has_boss', False),
+            staged=inc_data.get('staged', False),
+        ))
+
+    ActiveIncursion.objects.bulk_create(incursions)
+
+    # Mark all as OK
+    for inc in incursions:
+        inc.mark_ok()
+
+    logger.info(f'Refreshed incursions: {len(incursions)} active')
+    return {'status': 'ok', 'count': len(incursions)}
+
+
+def refresh_wars(max_war_id: int = None) -> dict:
+    """
+    Refresh active wars from ESI.
+
+    ESI Endpoint: GET /wars/
+    Returns list of war IDs. Use max_war_id for incremental updates.
+
+    This fetches war IDs and queues individual war detail refreshes.
+
+    Args:
+        max_war_id: Optional max war ID for incremental updates
+
+    Returns:
+        Dict with status and count of queued war detail fetches
+    """
+    from core.services import ESIClient
+    from core.eve.models import ActiveWar
+
+    client = ESIClient()
+    response = client.get_wars(max_war_id=max_war_id)
+
+    if not response or not response.data:
+        logger.warning('No war data from ESI')
+        return {'status': 'error', 'message': 'No data from ESI'}
+
+    # Get war IDs
+    war_ids = response.data
+
+    # Mark all existing wars as potentially stale (only on full refresh)
+    if max_war_id is None:
+        ActiveWar.objects.filter(is_active=True).update(is_active=False, war_status='stale')
+
+    # Queue detail fetches for each war
+    for war_id in war_ids:
+        queue_esi_refresh(
+            'core.eve.tasks.refresh_war_detail',
+            war_id,
+            jitter_range=(0, 10)
+        )
+
+    logger.info(f'Queued {len(war_ids)} war detail refresh tasks')
+    return {'status': 'queued', 'count': len(war_ids)}
+
+
+def refresh_war_detail(war_id: int) -> dict:
+    """
+    Refresh details for a specific war.
+
+    ESI Endpoint: GET /wars/{war_id}/
+
+    Args:
+        war_id: The war ID to fetch details for
+
+    Returns:
+        Dict with status and war info
+    """
+    from core.services import ESIClient
+    from core.eve.models import ActiveWar
+
+    client = ESIClient()
+    response = client.get_war(war_id)
+
+    if not response or not response.data:
+        logger.warning(f'Failed to fetch war {war_id} details')
+        return {'status': 'error', 'message': 'ESI request failed', 'war_id': war_id}
+
+    data = response.data
+
+    # Extract ally (aggressor's ally) from data
+    ally = data.get('aggressor', {}).get('ally')
+    ally_id = ally.get('id') if ally else None
+    ally_name = ally.get('name') if ally else ''
+
+    # Extract defender_ally from data
+    defender_ally = data.get('defender', {}).get('ally')
+    defender_ally_id = defender_ally.get('id') if defender_ally else None
+    defender_ally_name = defender_ally.get('name') if defender_ally else ''
+
+    war, created = ActiveWar.objects.update_or_create(
+        war_id=war_id,
+        defaults={
+            'declared': data.get('declared'),
+            'started': data.get('started'),
+            'finished': data.get('finished'),
+            'aggressor_id': data.get('aggressor', {}).get('id'),
+            'aggressor_name': data.get('aggressor', {}).get('name', ''),
+            'ally_id': ally_id,
+            'ally_name': ally_name,
+            'defender_id': data.get('defender', {}).get('id'),
+            'defender_name': data.get('defender', {}).get('name', ''),
+            'defender_ally_id': defender_ally_id,
+            'defender_ally_name': defender_ally_name,
+            'mutual': data.get('mutual', False),
+            'open_for_allies': data.get('open_for_allies', False),
+            'prize_ship': data.get('prize_ship'),
+            'is_active': data.get('finished') is None,
+            'war_status': 'active' if data.get('finished') is None else 'finished',
+        }
+    )
+
+    war.mark_ok()
+
+    logger.info(f'Refreshed war {war_id} (created: {created})')
+    return {'status': 'ok', 'war_id': war_id, 'created': created}
+
+
+def refresh_sov_map() -> dict:
+    """
+    Refresh sovereignty map from ESI.
+
+    ESI Endpoint: GET /sovereignty/map/
+    Shows which alliance controls each nullsec system.
+
+    Returns:
+        Dict with status and system count
+    """
+    from core.services import ESIClient
+    from core.eve.models import SovMapSystem
+
+    client = ESIClient()
+    response = client.get_sov_map()
+
+    if not response or not response.data:
+        logger.warning('No sov map data from ESI')
+        return {'status': 'error', 'message': 'No data from ESI'}
+
+    # Clear old data
+    SovMapSystem.objects.all().delete()
+
+    # Create new records
+    systems = []
+    for sys_data in response.data:
+        systems.append(SovMapSystem(
+            system_id=sys_data.get('system_id'),
+            alliance_id=sys_data.get('alliance_id'),
+            corporation_id=sys_data.get('corporation_id'),
+            faction_id=sys_data.get('faction_id'),
+        ))
+
+    SovMapSystem.objects.bulk_create(systems, batch_size=1000)
+
+    logger.info(f'Refreshed sov map: {len(systems)} systems')
+    return {'status': 'ok', 'count': len(systems)}
+
+
+def refresh_sov_campaigns() -> dict:
+    """
+    Refresh active sovereignty campaigns from ESI.
+
+    ESI Endpoint: GET /sovereignty/campaigns/
+    Shows ongoing structure fights for sovereignty.
+
+    Returns:
+        Dict with status and campaign count
+    """
+    from core.services import ESIClient
+    from core.eve.models import SovCampaign
+
+    client = ESIClient()
+    response = client.get_sov_campaigns()
+
+    if not response or not response.data:
+        logger.warning('No sov campaigns data from ESI')
+        return {'status': 'error', 'message': 'No data from ESI'}
+
+    # Clear old campaigns
+    SovCampaign.objects.all().delete()
+
+    # Create new records
+    campaigns = []
+    for camp_data in response.data:
+        campaigns.append(SovCampaign(
+            campaign_id=camp_data.get('campaign_id'),
+            system_id=camp_data.get('solar_system_id'),
+            constellation_id=camp_data.get('constellation_id'),
+            region_id=camp_data.get('region_id'),
+            attacker_id=camp_data.get('attacker_id'),
+            attacker_name='',  # Would need separate lookup
+            attacker_score=camp_data.get('attacker_score', 0.0),
+            defender_id=camp_data.get('defender_id'),
+            defender_name='',  # Would need separate lookup
+            defender_score=camp_data.get('defender_score', 0.0),
+            campaign_type=camp_data.get('campaign_type'),
+            start_time=camp_data.get('start_time'),
+        ))
+
+    SovCampaign.objects.bulk_create(campaigns)
+
+    logger.info(f'Refreshed sov campaigns: {len(campaigns)} active')
+    return {'status': 'ok', 'count': len(campaigns)}
+
+
+def refresh_fw_stats() -> dict:
+    """
+    Refresh faction warfare stats from ESI.
+
+    ESI Endpoint: GET /fw/stats/
+    Shows kills, victories, and pilot counts for each faction.
+
+    Returns:
+        Dict with status and faction count
+    """
+    from core.services import ESIClient
+    from core.eve.models import FactionWarfareStats
+
+    client = ESIClient()
+    response = client.get_fw_stats()
+
+    if not response or not response.data:
+        logger.warning('No FW stats data from ESI')
+        return {'status': 'error', 'message': 'No data from ESI'}
+
+    # Update or create stats for each faction
+    count = 0
+    for faction_data in response.data:
+        stats, created = FactionWarfareStats.objects.update_or_create(
+            faction_id=faction_data.get('faction_id'),
+            defaults={
+                'faction_name': '',  # Would need SDE lookup
+                'kills_last_week': faction_data.get('kills', {}).get('last_week', 0),
+                'kills_total': faction_data.get('kills', {}).get('total', 0),
+                'victory_points_last_week': faction_data.get('victory_points', {}).get('last_week', 0),
+                'victory_points_total': faction_data.get('victory_points', {}).get('total', 0),
+                'pilots_last_week': faction_data.get('pilots', {}).get('last_week', 0),
+                'pilots_total': faction_data.get('pilots', {}).get('total', 0),
+                'systems_controlled': faction_data.get('systems_controlled', 0),
+            }
+        )
+        count += 1
+
+    logger.info(f'Refreshed FW stats for {count} factions')
+    return {'status': 'ok', 'count': count}
+
+
+def refresh_fw_systems() -> dict:
+    """
+    Refresh faction warfare system ownership from ESI.
+
+    ESI Endpoint: GET /fw/systems/
+    Shows which faction controls each FW system.
+
+    Returns:
+        Dict with status and system count
+    """
+    from core.services import ESIClient
+    from core.eve.models import FactionWarfareSystem
+
+    client = ESIClient()
+    response = client.get_fw_systems()
+
+    if not response or not response.data:
+        logger.warning('No FW systems data from ESI')
+        return {'status': 'error', 'message': 'No data from ESI'}
+
+    # Clear old data
+    FactionWarfareSystem.objects.all().delete()
+
+    # Create new records
+    systems = []
+    for sys_data in response.data:
+        systems.append(FactionWarfareSystem(
+            system_id=sys_data.get('solar_system_id'),
+            faction_id=sys_data.get('faction_id'),
+            corporation_id=sys_data.get('corporation_id'),
+            solar_system_name=sys_data.get('solar_system_name', ''),
+        ))
+
+    FactionWarfareSystem.objects.bulk_create(systems)
+
+    logger.info(f'Refreshed FW systems: {len(systems)} systems')
+    return {'status': 'ok', 'count': len(systems)}
+
+
+def refresh_region_market_summary(region_id: int) -> dict:
+    """
+    Refresh market summary for a region.
+
+    ESI Endpoint: GET /markets/{region_id}/orders/
+
+    Args:
+        region_id: The region ID to fetch market data for
+
+    Returns:
+        Dict with status and order counts
+    """
+    from core.services import ESIClient
+    from core.eve.models import RegionMarketSummary
+
+    client = ESIClient()
+
+    # Fetch all pages of orders
+    all_orders = []
+    page = 1
+    while True:
+        response = client.get_market_orders(region_id, page=page)
+        if not response or not response.data:
+            break
+        all_orders.extend(response.data)
+        if len(response.data) < 1000:  # Less than full page = last page
+            break
+        page += 1
+
+    # Update or create summary
+    summary, created = RegionMarketSummary.objects.get_or_create(
+        region_id=region_id,
+        defaults={
+            'total_orders': len(all_orders),
+            'buy_orders': sum(1 for o in all_orders if o.get('is_buy_order')),
+            'sell_orders': sum(1 for o in all_orders if not o.get('is_buy_order')),
+        }
+    )
+
+    # Update existing summary
+    if not created:
+        summary.total_orders = len(all_orders)
+        summary.buy_orders = sum(1 for o in all_orders if o.get('is_buy_order'))
+        summary.sell_orders = sum(1 for o in all_orders if not o.get('is_buy_order'))
+        summary.last_order_ids = [o.get('order_id') for o in all_orders[:100]]  # Sample for change detection
+        summary.save()
+
+    summary.mark_ok()
+
+    logger.info(f'Refreshed market summary for region {region_id}: {len(all_orders)} orders')
+    return {'status': 'ok', 'region_id': region_id, 'orders': len(all_orders)}

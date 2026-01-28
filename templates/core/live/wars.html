@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% block title %}Wars - Live Browser{% endblock %}
+
+{% block content %}
+<style>
+.wars-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.wars-table th {
+    background: var(--bg-secondary);
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid var(--border-color);
+}
+.wars-table td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+.wars-table tr:hover {
+    background: var(--bg-secondary);
+}
+.war-link {
+    font-weight: 500;
+    color: var(--link-color);
+}
+.aggressor { color: #ef4444; }
+.defender { color: #3b82f6; }
+.mutual-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    background: #fbbf24;
+    color: #78350f;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+.empty-state {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-secondary);
+}
+.stats-bar {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}
+.stat-item {
+    padding: 0.5rem 1rem;
+    background: var(--bg-secondary);
+    border-radius: 6px;
+}
+</style>
+
+<div class="card">
+    <nav style="margin-bottom: 1rem; font-size: 0.9rem;">
+        <a href="{% url 'core:sde_index' %}">SDE</a> &gt;
+        <a href="{% url 'core:live_index' %}">Live</a> &gt;
+        <strong>Wars</strong>
+    </nav>
+
+    <h1>Active Wars</h1>
+    <p style="color: var(--text-secondary);">
+        Active conflicts between corporations and alliances
+    </p>
+
+    <div class="stats-bar">
+        <div class="stat-item">
+            <strong>{{ total_wars }}</strong> Active War{{ total_wars|pluralize }}
+        </div>
+    </div>
+</div>
+
+{% if wars %}
+    <div class="card">
+        <div style="overflow-x: auto;">
+            <table class="wars-table">
+                <thead>
+                    <tr>
+                        <th>War ID</th>
+                        <th>Aggressor</th>
+                        <th>Defender</th>
+                        <th>Declared</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for war in wars %}
+                    <tr>
+                        <td>
+                            <a href="{% url 'core:live_war_detail' war.war_id %}" class="war-link">
+                                #{{ war.war_id }}
+                            </a>
+                        </td>
+                        <td class="aggressor">
+                            {{ war.aggressor_name }}
+                            {% if war.ally_name %}
+                                <br><small style="color: var(--text-secondary);">+ {{ war.ally_name }}</small>
+                            {% endif %}
+                        </td>
+                        <td class="defender">
+                            {{ war.defender_name }}
+                            {% if war.defender_ally_name %}
+                                <br><small style="color: var(--text-secondary);">+ {{ war.defender_ally_name }}</small>
+                            {% endif %}
+                        </td>
+                        <td>{{ war.declared|date:"Y-m-d" }}</td>
+                        <td>
+                            {% if war.mutual %}
+                                <span class="mutual-badge"><i class="fas fa-handshake"></i> Mutual</span>
+                            {% else %}
+                                <span style="color: var(--text-secondary);">Standard</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if total_wars > 100 %}
+        <p style="margin-top: 1rem; color: var(--text-secondary); font-size: 0.9rem;">
+            <i class="fas fa-info-circle"></i>
+            Showing 100 of {{ total_wars }} active wars.
+        </p>
+        {% endif %}
+    </div>
+{% else %}
+    <div class="card">
+        <div class="empty-state">
+            <i class="fas fa-fighter-jet" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+            <h3>No Active Wars</h3>
+            <p>There are no active wars currently tracked.</p>
+            <p style="font-size: 0.9rem;">
+                Run <code>python manage.py fetch_live_data --wars</code> to populate.
+            </p>
+        </div>
+    </div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block title %}Markets - Live Browser{% endblock %}
+
+{% block content %}
+<style>
+.region-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem;
+}
+.region-item {
+    padding: 1.25rem;
+    background: var(--bg-primary);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    transition: all 0.2s;
+}
+.region-item:hover {
+    border-color: var(--link-color);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+.region-name {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+}
+.order-stats {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.9rem;
+}
+.order-stat {
+    display: flex;
+    flex-direction: column;
+}
+.order-stat-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+}
+.order-stat-value {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+.buy-stat { color: #10b981; }
+.sell-stat { color: #ef4444; }
+.empty-state {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-secondary);
+}
+</style>
+
+<div class="card">
+    <nav style="margin-bottom: 1rem; font-size: 0.9rem;">
+        <a href="{% url 'core:sde_index' %}">SDE</a> &gt;
+        <a href="{% url 'core:live_index' %}">Live</a> &gt;
+        <strong>Markets</strong>
+    </nav>
+
+    <h1>Regional Markets</h1>
+    <p style="color: var(--text-secondary);">
+        Market activity and order statistics across regions
+    </p>
+</div>
+
+{% if regions %}
+    <div class="region-grid">
+        {% for item in regions %}
+        <div class="region-item">
+            <div class="region-name">{{ item.region.name }}</div>
+            <div class="order-stats">
+                <div class="order-stat">
+                    <span class="order-stat-label">Total</span>
+                    <span class="order-stat-value">{{ item.summary.total_orders|floatformat:0 }}</span>
+                </div>
+                <div class="order-stat buy-stat">
+                    <span class="order-stat-label">Buy Orders</span>
+                    <span class="order-stat-value">{{ item.summary.buy_orders|floatformat:0 }}</span>
+                </div>
+                <div class="order-stat sell-stat">
+                    <span class="order-stat-label">Sell Orders</span>
+                    <span class="order-stat-value">{{ item.summary.sell_orders|floatformat:0 }}</span>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="card" style="margin-top: 1rem;">
+        <p style="color: var(--text-secondary); font-size: 0.9rem;">
+            <i class="fas fa-info-circle"></i>
+            Showing market data for {{ regions|length }} regions. Data is cached from ESI and refreshed periodically.
+        </p>
+    </div>
+{% else %}
+    <div class="card">
+        <div class="empty-state">
+            <i class="fas fa-chart-line" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+            <h3>No Market Data</h3>
+            <p>No regional market data has been fetched yet.</p>
+            <p style="font-size: 0.9rem;">
+                Market data requires manual refresh via management command.
+            </p>
+        </div>
+    </div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+
+{% block title %}Live Universe Browser - evewire{% endblock %}
+
+{% block content %}
+<style>
+.browse-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+.browse-item {
+    padding: 1.25rem;
+    background: var(--bg-primary);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    transition: all 0.2s;
+}
+.browse-item:hover {
+    border-color: var(--link-color);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+}
+.browse-item a {
+    display: flex;
+    flex-direction: column;
+    text-decoration: none;
+    height: 100%;
+}
+.browse-item-icon {
+    font-size: 2rem;
+    margin-bottom: 0.75rem;
+    color: var(--link-color);
+}
+.browse-item-name {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+.browse-item-desc {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    margin-bottom: 0.75rem;
+}
+.browse-item-count {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    background: var(--bg-secondary);
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    align-self: flex-start;
+}
+.stat-badge {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    background: var(--bg-secondary);
+    border-radius: 6px;
+    margin: 0.25rem;
+}
+.stat-badge strong {
+    font-size: 1.25rem;
+    color: var(--link-color);
+}
+.data-source-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+}
+.pulse-dot {
+    width: 8px;
+    height: 8px;
+    background: #4ade80;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+}
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+</style>
+
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <div>
+            <h1 style="margin: 0;">Live Universe Browser</h1>
+            <p style="margin: 0.25rem 0 0 0;">Real-time EVE Online data from ESI</p>
+        </div>
+        <div class="data-source-badge">
+            <span class="pulse-dot"></span>
+            <span>Live from ESI</span>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Quick Stats</h2>
+    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+        <span class="stat-badge"><strong>{{ lp_store_count }}</strong> LP Stores</span>
+        <span class="stat-badge"><strong>{{ incursion_count }}</strong> Active Incursions</span>
+        <span class="stat-badge"><strong>{{ war_count }}</strong> Active Wars</span>
+        <span class="stat-badge"><strong>{{ campaign_count }}</strong> Sov Campaigns</span>
+        <span class="stat-badge"><strong>{{ fw_system_count }}</strong> FW Systems</span>
+    </div>
+    <p style="margin-top: 1rem; color: var(--text-secondary); font-size: 0.9rem;">
+        <i class="fas fa-info-circle"></i> Data cached from ESI and refreshed periodically
+    </p>
+</div>
+
+<div class="card">
+    <h2>Browse Live Data</h2>
+    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+        Explore real-time EVE universe data from public ESI endpoints.
+        Each section provides dynamic information that changes as the universe evolves.
+    </p>
+    <div class="browse-grid">
+        <!-- Loyalty Stores -->
+        <div class="browse-item">
+            <a href="{% url 'core:live_lp_stores' %}">
+                <div class="browse-item-icon"><i class="fas fa-store"></i></div>
+                <div class="browse-item-name">Loyalty Stores</div>
+                <div class="browse-item-desc">
+                    Browse loyalty point stores across all NPC corporations.
+                    View LP costs, ISK requirements, and available items.
+                </div>
+                <span class="browse-item-count">{{ lp_store_count }} Stores</span>
+            </a>
+        </div>
+
+        <!-- Markets -->
+        <div class="browse-item">
+            <a href="{% url 'core:live_markets' %}">
+                <div class="browse-item-icon"><i class="fas fa-chart-line"></i></div>
+                <div class="browse-item-name">Markets</div>
+                <div class="browse-item-desc">
+                    Regional market activity and order statistics.
+                    Track buy/sell orders across New Eden's trade hubs.
+                </div>
+                <span class="browse-item-count">Regional Data</span>
+            </a>
+        </div>
+
+        <!-- Incursions -->
+        <div class="browse-item">
+            <a href="{% url 'core:live_incursions' %}">
+                <div class="browse-item-icon"><i class="fas fa-meteor"></i></div>
+                <div class="browse-item-name">Incursions</div>
+                <div class="browse-item-desc">
+                    Active incursions threatening constellation security.
+                    Check spawn locations, states, and boss availability.
+                </div>
+                <span class="browse-item-count">{{ incursion_count }} Active</span>
+            </a>
+        </div>
+
+        <!-- Wars -->
+        <div class="browse-item">
+            <a href="{% url 'core:live_wars' %}">
+                <div class="browse-item-icon"><i class="fas fa-fighter-jet"></i></div>
+                <div class="browse-item-name">Wars</div>
+                <div class="browse-item-desc">
+                    Active wars between corporations and alliances.
+                    View aggressors, defenders, and war declarations.
+                </div>
+                <span class="browse-item-count">{{ war_count }} Wars</span>
+            </a>
+        </div>
+
+        <!-- Sovereignty -->
+        <div class="browse-item">
+            <a href="{% url 'core:live_sovereignty' %}">
+                <div class="browse-item-icon"><i class="fas fa-globe"></i></div>
+                <div class="browse-item-name">Sovereignty</div>
+                <div class="browse-item-desc">
+                    Nullsec sovereignty map and active campaigns.
+                    Track alliance territorial control and structure fights.
+                </div>
+                <span class="browse-item-count">{{ campaign_count }} Campaigns</span>
+            </a>
+        </div>
+
+        <!-- Faction Warfare -->
+        <div class="browse-item">
+            <a href="{% url 'core:live_faction_warfare' %}">
+                <div class="browse-item-icon"><i class="fas fa-flag"></i></div>
+                <div class="browse-item-name">Faction Warfare</div>
+                <div class="browse-item-desc">
+                    Militia statistics and system control in Factional Warfare.
+                    Victory points, kills, and pilot counts per faction.
+                </div>
+                <span class="browse-item-count">{{ fw_system_count }} Systems</span>
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>About Live Data</h2>
+    <p style="color: var(--text-secondary); line-height: 1.6;">
+        The <strong>Live Universe Browser</strong> complements the <a href="{% url 'core:sde_index' %}">SDE Browser</a>
+        by providing real-time data from EVE Online's public API (ESI). While the SDE contains static
+        reference data (item stats, map topology, NPC information), the Live Browser shows the dynamic
+        state of the universe as it evolves.
+    </p>
+    <ul style="color: var(--text-secondary); line-height: 1.8; margin-top: 1rem;">
+        <li><strong>Loyalty Stores</strong>: Static offer lists, refreshed daily</li>
+        <li><strong>Incursions</strong>: Real-time spawns, refreshed every 5 minutes</li>
+        <li><strong>Wars</strong>: Active conflicts, refreshed hourly</li>
+        <li><strong>Sovereignty</strong>: Territory control, refreshed every 15 minutes</li>
+        <li><strong>Faction Warfare</strong>: Militia stats, refreshed every 10 minutes</li>
+    </ul>
+</div>
+{% endblock %}

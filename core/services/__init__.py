@@ -589,6 +589,85 @@ class ESIClient:
         """Get item type information."""
         return cls.get_public(f'/universe/types/{type_id}/')
 
+    # Live Universe Browser - Public ESI endpoints
+
+    @classmethod
+    def get_loyalty_stores(cls) -> ESIResponse:
+        """Get all corporations with loyalty stores."""
+        return cls.get_public('/loyalty/stores/')
+
+    @classmethod
+    def get_loyalty_store_offers(cls, corporation_id: int) -> ESIResponse:
+        """Get loyalty store offers for a corporation."""
+        return cls.get_public(f'/loyalty/stores/{corporation_id}/offers/')
+
+    @classmethod
+    def get_market_orders(cls, region_id: int, type_id: int = None, page: int = 1) -> ESIResponse:
+        """Get market orders in a region."""
+        endpoint = f'/markets/{region_id}/orders/'
+        params = {}
+        if type_id:
+            params['type_id'] = type_id
+        if page > 1:
+            params['page'] = page
+        return cls.get_public(endpoint, params=params)
+
+    @classmethod
+    def get_market_history(cls, region_id: int, type_id: int) -> ESIResponse:
+        """Get market history for an item in a region."""
+        return cls.get_public(f'/markets/{region_id}/history/', params={'type_id': type_id})
+
+    @classmethod
+    def get_market_groups(cls) -> ESIResponse:
+        """Get market item groups."""
+        return cls.get_public('/markets/groups/')
+
+    @classmethod
+    def get_market_group(cls, market_group_id: int) -> ESIResponse:
+        """Get market group details."""
+        return cls.get_public(f'/markets/groups/{market_group_id}/')
+
+    @classmethod
+    def get_incursions(cls) -> ESIResponse:
+        """Get active incursions."""
+        return cls.get_public('/incursions/')
+
+    @classmethod
+    def get_wars(cls, max_war_id: int = None) -> ESIResponse:
+        """Get war IDs. Use max_war_id for incremental updates."""
+        params = {'max_war_id': max_war_id} if max_war_id else {}
+        return cls.get_public('/wars/', params=params)
+
+    @classmethod
+    def get_war(cls, war_id: int) -> ESIResponse:
+        """Get war details."""
+        return cls.get_public(f'/wars/{war_id}/')
+
+    @classmethod
+    def get_sov_map(cls) -> ESIResponse:
+        """Get sovereignty map by system."""
+        return cls.get_public('/sovereignty/map/')
+
+    @classmethod
+    def get_sov_campaigns(cls) -> ESIResponse:
+        """Get active sovereignty campaigns."""
+        return cls.get_public('/sovereignty/campaigns/')
+
+    @classmethod
+    def get_fw_stats(cls) -> ESIResponse:
+        """Get faction warfare stats."""
+        return cls.get_public('/fw/stats/')
+
+    @classmethod
+    def get_fw_systems(cls) -> ESIResponse:
+        """Get faction warfare system ownership."""
+        return cls.get_public('/fw/systems/')
+
+    @classmethod
+    def get_fw_factions(cls) -> ESIResponse:
+        """Get faction warfare factions overview."""
+        return cls.get_public('/fw/wars/')
+
 
 class AuthService:
     """Service for handling EVE SSO authentication flow."""

@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+
+{% block title %}Faction Warfare - Live Browser{% endblock %}
+
+{% block content %}
+<style>
+.faction-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 1.5rem;
+}
+.faction-card {
+    padding: 1.5rem;
+    background: var(--bg-primary);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+.faction-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+.faction-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: white;
+}
+.faction-icon.caldrari { background: linear-gradient(135deg, #3b82f6, #1d4ed8); }
+.faction-icon.minmatar { background: linear-gradient(135deg, #ef4444, #b91c1c); }
+.faction-icon.amarr { background: linear-gradient(135deg, #fbbf24, #d97706); }
+.faction-icon.gallente { background: linear-gradient(135deg, #10b981, #059669); }
+
+.faction-name {
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+}
+.stat-item {
+    padding: 0.75rem;
+    background: var(--bg-secondary);
+    border-radius: 6px;
+}
+.stat-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+}
+.stat-value {
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+.vp-bar {
+    height: 8px;
+    background: var(--bg-primary);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 0.5rem;
+}
+.vp-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #10b981, #34d399);
+    transition: width 0.3s;
+}
+.empty-state {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-secondary);
+}
+.summary-bar {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+.summary-item {
+    padding: 0.75rem 1.25rem;
+    background: var(--bg-secondary);
+    border-radius: 6px;
+}
+</style>
+
+<div class="card">
+    <nav style="margin-bottom: 1rem; font-size: 0.9rem;">
+        <a href="{% url 'core:sde_index' %}">SDE</a> &gt;
+        <a href="{% url 'core:live_index' %}">Live</a> &gt;
+        <strong>Faction Warfare</strong>
+    </nav>
+
+    <h1>Faction Warfare</h1>
+    <p style="color: var(--text-secondary);">
+        Militia statistics and system control in Factional Warfare
+    </p>
+
+    <div class="summary-bar">
+        <div class="summary-item">
+            <strong>{{ stats|length }}</strong> Militia{{ stats|pluralize }}
+        </div>
+        <div class="summary-item">
+            <strong>{{ fw_system_count }}</strong> FW System{{ fw_system_count|pluralize }}
+        </div>
+    </div>
+</div>
+
+{% if stats %}
+    <div class="faction-grid">
+        {% for stat in stats %}
+        <div class="faction-card">
+            <div class="faction-header">
+                <div class="faction-icon caldrari">
+                    <i class="fas fa-shield-alt"></i>
+                </div>
+                <div class="faction-name">
+                    {% if stat.faction %}
+                        {{ stat.faction.name }}
+                    {% else %}
+                        Faction {{ stat.faction_id }}
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-label">Victory Points (Week)</div>
+                    <div class="stat-value">{{ stat.victory_points_last_week|floatformat:0 }}</div>
+                    <div class="vp-bar">
+                        <div class="vp-fill" style="width: min(100%, {{ stat.victory_points_last_week|floatformat:0 }}%);"></div>
+                    </div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Kills (Week)</div>
+                    <div class="stat-value">{{ stat.kills_last_week|floatformat:0 }}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Pilots (Week)</div>
+                    <div class="stat-value">{{ stat.pilots_last_week|floatformat:0 }}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Systems Controlled</div>
+                    <div class="stat-value">{{ stat.systems_controlled }}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Total VP</div>
+                    <div class="stat-value" style="font-size: 1rem;">{{ stat.victory_points_total|floatformat:0 }}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Total Kills</div>
+                    <div class="stat-value" style="font-size: 1rem;">{{ stat.kills_total|floatformat:0 }}</div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="card" style="margin-top: 1.5rem;">
+        <p style="color: var(--text-secondary); font-size: 0.9rem;">
+            <i class="fas fa-info-circle"></i>
+            Faction warfare data shows militia performance in the ongoing war between
+            the four empires. Victory points are earned by capturing complexes and killing enemy pilots.
+        </p>
+    </div>
+{% else %}
+    <div class="card">
+        <div class="empty-state">
+            <i class="fas fa-flag" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+            <h3>No Faction Warfare Data</h3>
+            <p>No faction warfare statistics have been fetched yet.</p>
+            <p style="font-size: 0.9rem;">
+                Run <code>python manage.py fetch_live_data --fw</code> to populate.
+            </p>
+        </div>
+    </div>
+{% endif %}
+{% endblock %}
