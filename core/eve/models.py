@@ -561,7 +561,7 @@ class ActiveIncursion(ESICachedMixin, models.Model):
     faction_id = models.IntegerField(db_index=True)
     faction_name = models.TextField()
     state = models.TextField(db_index=True, help_text='"mobilizing", "established", "withdrawing"')
-    type_id = models.IntegerField(help_text='Incursion type')
+    type_id = models.IntegerField(blank=True, null=True, help_text='Incursion type (optional)')
     has_boss = models.BooleanField(default=False)
     staged = models.BooleanField(default=False)
 
@@ -669,23 +669,21 @@ class SovCampaign(models.Model):
     Shows ongoing structure fights for sovereignty.
     """
     campaign_id = models.BigIntegerField(primary_key=True)
-    system_id = models.IntegerField(db_index=True)
+    system_id = models.IntegerField(db_index=True, help_text='solar_system_id from ESI')
     constellation_id = models.IntegerField()
-    region_id = models.IntegerField()
+    region_id = models.IntegerField(blank=True, null=True, help_text='Not provided by ESI, can be looked up')
 
-    # Attacker info
-    attacker_id = models.IntegerField(db_index=True)
-    attacker_name = models.TextField()
-    attacker_score = models.FloatField(default=0.0)
-
-    # Defender info
-    defender_id = models.IntegerField()
-    defender_name = models.TextField()
+    # Score (ESI uses "attackers_score" and "defender_score")
+    attackers_score = models.FloatField(default=0.0)
+    defender_id = models.IntegerField(db_index=True)
     defender_score = models.FloatField(default=0.0)
 
     # Campaign details
-    campaign_type = models.TextField(help_text='constellation, infrastructure, etc.')
+    event_type = models.TextField(blank=True, default='', help_text='ihub_defense, tcu_defense, etc.')
     start_time = models.DateTimeField(db_index=True)
+
+    # Structure being fought
+    structure_id = models.BigIntegerField(blank=True, null=True, help_text='The structure ID being contested')
 
     # Metadata
     first_seen = models.DateTimeField(auto_now_add=True)
@@ -695,6 +693,7 @@ class SovCampaign(models.Model):
     solar_system = None
     constellation = None
     region = None
+    defender = None
 
     class Meta:
         db_table = 'eve_sov_campaigns'
@@ -702,13 +701,14 @@ class SovCampaign(models.Model):
         verbose_name_plural = _('Sov Campaigns')
         indexes = [
             models.Index(fields=['system_id']),
-            models.Index(fields=['attacker_id']),
+            models.Index(fields=['defender_id']),
             models.Index(fields=['start_time']),
+            models.Index(fields=['event_type']),
         ]
         ordering = ['-start_time']
 
     def __str__(self) -> str:
-        return f"Campaign {self.campaign_id}: {self.attacker_name} attacking {self.system_id}"
+        return f"Campaign {self.campaign_id}: {self.event_type} in {self.system_id}"
 
 
 class FactionWarfareSystem(models.Model):

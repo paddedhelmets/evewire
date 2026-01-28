@@ -592,13 +592,13 @@ class ESIClient:
     # Live Universe Browser - Public ESI endpoints
 
     @classmethod
-    def get_loyalty_stores(cls) -> ESIResponse:
-        """Get all corporations with loyalty stores."""
-        return cls.get_public('/loyalty/stores/')
-
-    @classmethod
     def get_loyalty_store_offers(cls, corporation_id: int) -> ESIResponse:
-        """Get loyalty store offers for a corporation."""
+        """
+        Get loyalty store offers for a corporation.
+
+        Returns 404 if the corporation doesn't have an LP store.
+        Returns empty array if the corporation has an LP store but no offers.
+        """
         return cls.get_public(f'/loyalty/stores/{corporation_id}/offers/')
 
     @classmethod

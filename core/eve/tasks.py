@@ -7,6 +7,7 @@ refreshing various EVE data (structures, market prices, etc.).
 
 import logging
 import random
+import time
 from datetime import timedelta
 from django.db import models
 from django.utils import timezone
@@ -452,35 +453,56 @@ def queue_esi_refresh(task_path: str, *args, jitter_range: tuple = (0, 30), **kw
 
 def refresh_all_lp_stores() -> dict:
     """
-    Discover all loyalty stores and queue individual refreshes.
+    Discover all loyalty stores by checking NPC corporations.
 
-    ESI Endpoint: GET /loyalty/stores/
-    Returns list of corporation IDs that have LP stores.
+    ESI Endpoint: GET /loyalty/{corporation_id}/offers/
+    Returns list of offers for a specific corporation if they have an LP store.
 
     This should be called periodically (e.g., daily via cron).
+
+    The function queries NPC corporations from SDE and checks which ones have
+    LP stores by attempting to fetch their offers. Corporations with 404 or
+    empty responses are skipped.
 
     Returns:
         Dict with status and count of queued refreshes
     """
     from core.services import ESIClient
+    from core.eve.models import Corporation
 
     client = ESIClient()
-    response = client.get_loyalty_stores()
-
-    if not response or not response.data:
-        logger.warning('No loyalty store data from ESI')
-        return {'status': 'error', 'message': 'No data from ESI'}
-
     count = 0
-    for corporation_id in response.data:
-        queue_esi_refresh(
-            'core.eve.tasks.refresh_corporation_lp_store',
-            corporation_id,
-            jitter_range=(0, 60)
-        )
-        count += 1
+    checked = 0
 
-    logger.info(f'Queued {count} LP store refresh tasks')
+    # Get NPC corporations from SDE
+    npc_corps = Corporation.objects.filter(is_npc=True).values_list('id', flat=True)
+
+    logger.info(f'Checking {len(npc_corps)} NPC corporations for LP stores')
+
+    for corporation_id in npc_corps:
+        checked += 1
+
+        # Try to fetch offers for this corporation
+        # ESI returns 404 for corps without LP stores, 200 with empty array for those with no offers
+        response = client.get_loyalty_store_offers(corporation_id)
+
+        if response and response.status_code == 200:
+            # This corporation has an LP store (even if empty)
+            queue_esi_refresh(
+                'core.eve.tasks.refresh_corporation_lp_store',
+                corporation_id,
+                jitter_range=(0, 60)
+            )
+            count += 1
+
+            if count % 100 == 0:
+                logger.info(f'Found {count} LP stores so far (checked {checked}/{len(npc_corps)})')
+
+        # Rate limiting - brief sleep between checks
+        if checked % 50 == 0:
+            time.sleep(1)
+
+    logger.info(f'Queued {count} LP store refresh tasks from {checked} corporations checked')
     return {'status': 'queued', 'count': count}
 
 
@@ -755,15 +777,13 @@ def refresh_sov_campaigns() -> dict:
             campaign_id=camp_data.get('campaign_id'),
             system_id=camp_data.get('solar_system_id'),
             constellation_id=camp_data.get('constellation_id'),
-            region_id=camp_data.get('region_id'),
-            attacker_id=camp_data.get('attacker_id'),
-            attacker_name='',  # Would need separate lookup
-            attacker_score=camp_data.get('attacker_score', 0.0),
+            region_id=None,  # Not provided by ESI, can be looked up from system
+            attackers_score=camp_data.get('attackers_score', 0.0),
             defender_id=camp_data.get('defender_id'),
-            defender_name='',  # Would need separate lookup
             defender_score=camp_data.get('defender_score', 0.0),
-            campaign_type=camp_data.get('campaign_type'),
+            event_type=camp_data.get('event_type', ''),
             start_time=camp_data.get('start_time'),
+            structure_id=camp_data.get('structure_id'),
         ))
 
     SovCampaign.objects.bulk_create(campaigns)
@@ -803,8 +823,8 @@ def refresh_fw_stats() -> dict:
                 'kills_total': faction_data.get('kills', {}).get('total', 0),
                 'victory_points_last_week': faction_data.get('victory_points', {}).get('last_week', 0),
                 'victory_points_total': faction_data.get('victory_points', {}).get('total', 0),
-                'pilots_last_week': faction_data.get('pilots', {}).get('last_week', 0),
-                'pilots_total': faction_data.get('pilots', {}).get('total', 0),
+                'pilots_last_week': 0,  # ESI doesn't provide weekly pilot count
+                'pilots_total': faction_data.get('pilots', 0),
                 'systems_controlled': faction_data.get('systems_controlled', 0),
             }
         )
