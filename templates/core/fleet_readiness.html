@@ -248,7 +248,7 @@
                         {% if match_data.best_match.is_match %}
                             <span class="pilot-status status-ready">✓ Ready</span>
                         {% else %}
-                            <span class="pilot-status status-partial">{{ match_data.best_match.match_score|mul:100|floatformat:0 }}%</span>
+                            <span class="pilot-status status-partial">{{ match_data.match_percent|floatformat:0 }}%</span>
                         {% endif %}
                     {% else %}
                         <span class="pilot-status status-none">No ship</span>
@@ -284,7 +284,7 @@
                                 <p style="margin: 0.25rem 0;">
                                     Get <strong>{{ match_data.character.character_name }}</strong> to 100%
                                     <span style="color: #888; font-size: 0.85rem;">
-                                        ({{ match_data.best_match.match_score|mul:100|floatformat:0 }}% → 100%)
+                                        ({{ match_data.match_percent|floatformat:0 }}% → 100%)
                                     </span>
                                 </p>
                             {% endif %}

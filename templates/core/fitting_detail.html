@@ -212,14 +212,14 @@
                         <span style="color: #080; font-weight: bold;">✓ Ready</span>
                     {% else %}
                         <span style="color: {% if match.match.match_score >= 0.8 %}#cc0{% else %}#c00{% endif %}; font-weight: bold;">
-                            {{ match.match.match_score|mul:100|floatformat:0 }}%
+                            {{ match.match_percent|floatformat:0 }}%
                         </span>
                     {% endif %}
                 </div>
 
                 <!-- Match Score Bar -->
                 <div style="width: 100%; height: 6px; background: var(--border-color); border-radius: 3px; margin-bottom: 0.25rem;">
-                    <div style="width: {{ match.match.match_score|mul:100 }}%; height: 100%; background: {% if match.match.is_match %}#080{% elif match.match.match_score >= 0.8 %}#cc0{% else %}#c00{% endif %}; border-radius: 3px; transition: width 0.3s ease;"></div>
+                    <div style="width: {{ match.match_percent }}%; height: 100%; background: {% if match.match.is_match %}#080{% elif match.match.match_score >= 0.8 %}#cc0{% else %}#c00{% endif %}; border-radius: 3px; transition: width 0.3s ease;"></div>
                 </div>
 
                 <!-- Missing Modules -->
