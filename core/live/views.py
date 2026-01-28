@@ -175,22 +175,13 @@ def live_incursions(request):
 
     Displays all active incursions with their state, faction, and location.
     """
-    from core.eve.models import ActiveIncursion
-    from core.eve.models import SolarSystem, Constellation, Region, Faction
+    from core.eve.models import ActiveIncursion, Faction
 
     incursions = ActiveIncursion.objects.filter(
         last_sync_status='ok'
     ).order_by('-last_updated')
 
-    # Enrich with SDE data
-    constellation_ids = [i.constellation_id for i in incursions]
-    constellations_map = {
-        c.id: c
-        for c in Constellation.objects.filter(
-            id__in=constellation_ids
-        ).select_related('region')
-    }
-
+    # Enrich with faction names from SDE
     faction_ids = [i.faction_id for i in incursions]
     factions_map = {
         f.id: f
@@ -199,10 +190,9 @@ def live_incursions(request):
 
     enriched_incursions = []
     for inc in incursions:
-        inc.constellation = constellations_map.get(inc.constellation_id)
         inc.faction = factions_map.get(inc.faction_id)
-        if inc.constellation:
-            enriched_incursions.append(inc)
+        # constellation_name is already stored in the model
+        enriched_incursions.append(inc)
 
     # Group by state
     from collections import defaultdict
