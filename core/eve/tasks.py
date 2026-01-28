@@ -6,9 +6,11 @@ refreshing various EVE data (structures, market prices, etc.).
 """
 
 import logging
+import random
+import time
 from django.db import models
 from django.utils import timezone
-from django_q.tasks import async_task
+from django_q.tasks import async_task, schedule
 
 logger = logging.getLogger('evewire')
 
@@ -200,6 +202,9 @@ def refresh_stale_characters() -> dict:
 
     Refreshes: location, wallet, orders, contracts, industry jobs
     Interval: 10 minutes
+
+    Adds random jitter (0-30 seconds) to each task to prevent thundering herd
+    when multiple characters are queued simultaneously.
     """
     from core.models import Character
     from django.utils import timezone
@@ -207,16 +212,23 @@ def refresh_stale_characters() -> dict:
     stale_cutoff = timezone.now() - timezone.timedelta(minutes=10)
 
     # Characters that haven't synced in 10 minutes, or never synced
-    stale_characters = Character.objects.filter(
+    stale_characters = list(Character.objects.filter(
         models.Q(last_sync__lt=stale_cutoff) | models.Q(last_sync__isnull=True)
-    )
+    ))
 
     queued = 0
-    for character in stale_characters:
-        async_task('core.eve.tasks._sync_character_metadata', character.id)
+    for i, character in enumerate(stale_characters):
+        # Add jitter: spread tasks over 0-30 seconds randomly
+        # This prevents all characters from hitting ESI simultaneously
+        jitter_seconds = random.randint(0, 30)
+        async_task(
+            'core.eve.tasks._sync_character_metadata',
+            character.id,
+            schedule=schedule('now').later(seconds=jitter_seconds)
+        )
         queued += 1
 
-    logger.info(f'Character metadata refresh: queued {queued} characters')
+    logger.info(f'Character metadata refresh: queued {queued} characters with jitter')
     return {'queued': queued}
 
 
@@ -286,6 +298,8 @@ def refresh_stale_assets() -> dict:
 
     Assets are cached by ESI for 1 hour, so no point checking more often.
     Interval: 1 hour
+
+    Adds random jitter (0-60 seconds) to spread out asset fetches.
     """
     from core.models import Character
     from django.utils import timezone
@@ -293,16 +307,22 @@ def refresh_stale_assets() -> dict:
     stale_cutoff = timezone.now() - timezone.timedelta(hours=1)
 
     # Characters that haven't had assets synced in 1 hour, or never synced
-    stale_characters = Character.objects.filter(
+    stale_characters = list(Character.objects.filter(
         models.Q(assets_synced_at__lt=stale_cutoff) | models.Q(assets_synced_at__isnull=True)
-    )
+    ))
 
     queued = 0
     for character in stale_characters:
-        async_task('core.eve.tasks._sync_character_assets', character.id)
+        # Assets are heavier, spread over 0-60 seconds
+        jitter_seconds = random.randint(0, 60)
+        async_task(
+            'core.eve.tasks._sync_character_assets',
+            character.id,
+            schedule=schedule('now').later(seconds=jitter_seconds)
+        )
         queued += 1
 
-    logger.info(f'Asset refresh: queued {queued} characters')
+    logger.info(f'Asset refresh: queued {queued} characters with jitter')
     return {'queued': queued}
 
 
@@ -333,6 +353,8 @@ def refresh_stale_skills() -> dict:
     If so, queues a refresh for that character.
 
     Interval: 30 minutes (check frequency)
+
+    Adds random jitter (0-20 seconds) to spread out skill fetches.
     """
     from core.models import Character
     from core.character.models import SkillQueueItem
@@ -352,10 +374,16 @@ def refresh_stale_skills() -> dict:
         needs_refresh = finishing_soon or not character.skills_synced_at
 
         if needs_refresh:
-            async_task('core.eve.tasks._sync_character_skills', character.id)
+            # Skills are light, spread over 0-20 seconds
+            jitter_seconds = random.randint(0, 20)
+            async_task(
+                'core.eve.tasks._sync_character_skills',
+                character.id,
+                schedule=schedule('now').later(seconds=jitter_seconds)
+            )
             queued += 1
 
-    logger.info(f'Skills refresh: queued {queued} characters')
+    logger.info(f'Skills refresh: queued {queued} characters with jitter')
     return {'queued': queued}
 
 
