@@ -447,7 +447,7 @@ class CrpNPCCorporations(models.Model):
     corridor = models.BooleanField(null=True, blank=True, db_column='corridor')
     hub = models.BooleanField(null=True, blank=True, db_column='hub')
     border = models.BooleanField(null=True, blank=True, db_column='border')
-    faction_id = models.IntegerField(null=True, blank=True, db_column='factionID')
+    faction = models.ForeignKey('ChrFactions', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='factionID', related_name='+')
     size_factor = models.FloatField(null=True, blank=True, db_column='sizeFactor')
     station_count = models.IntegerField(null=True, blank=True, db_column='stationCount')
     station_system_count = models.IntegerField(null=True, blank=True, db_column='stationSystemCount')
