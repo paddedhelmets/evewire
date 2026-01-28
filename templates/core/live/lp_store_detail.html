@@ -134,6 +134,7 @@
                         <th>Item</th>
                         <th style="text-align: right;">LP Cost</th>
                         <th style="text-align: right;">ISK Cost</th>
+                        <th style="text-align: right;">AK Cost</th>
                         <th style="text-align: center;">Required Items</th>
                         <th style="text-align: center;">Quantity</th>
                     </tr>
@@ -155,11 +156,18 @@
                                 <span style="color: var(--text-secondary);">-</span>
                             {% endif %}
                         </td>
+                        <td style="text-align: right;">
+                            {% if offer.ak_cost > 0 %}
+                                <span style="color: #a855f7;">{{ offer.ak_cost|floatformat:0 }} AK</span>
+                            {% else %}
+                                <span style="color: var(--text-secondary);">-</span>
+                            {% endif %}
+                        </td>
                         <td style="text-align: center;">
                             {% if offer.required_items_enriched %}
                                 <div style="font-size: 0.85rem;">
                                     {% for item in offer.required_items_enriched %}
-                                        <div>{{ item.quantity }}× {{ item.name }}</div>
+                                        <div>{{ item.quantity }}× <a href="{% url 'core:sde_item_detail' item.type_id %}" style="color: var(--link-color);">{{ item.name }}</a></div>
                                     {% endfor %}
                                 </div>
                             {% else %}
