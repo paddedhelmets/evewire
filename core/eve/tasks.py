@@ -549,6 +549,7 @@ def refresh_corporation_lp_store(corporation_id: int) -> dict:
 
     lp_info.total_offers = len(offers)
     lp_info.last_offer_ids = [o.offer_id for o in offers]
+    lp_info.save(update_fields=['total_offers', 'last_offer_ids', 'last_updated_at'])
     lp_info.mark_ok()
 
     logger.info(f'Refreshed LP store for corp {corporation_id}: {len(offers)} offers')
