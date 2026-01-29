@@ -24,6 +24,48 @@ from core.sde.models import (
     RamTypeRequirements,
 )
 
+# Attribute ID constants ( EVE SDE dgmTypeAttributes table)
+# Required skill levels for ships/modules
+REQUIRED_SKILL_LEVEL_1 = 182
+REQUIRED_SKILL_LEVEL_2 = 183
+REQUIRED_SKILL_LEVEL_3 = 184
+REQUIRED_SKILL_LEVEL_4 = 277
+REQUIRED_SKILL_LEVEL_5 = 278
+REQUIRED_SKILL_LEVEL_6 = 279
+SECONDARY_SKILL_LEVEL_1 = 1289
+SECONDARY_SKILL_LEVEL_2 = 1290
+REQUIRED_SKILL_ATTR_IDS = [
+    REQUIRED_SKILL_LEVEL_1, REQUIRED_SKILL_LEVEL_2, REQUIRED_SKILL_LEVEL_3,
+    REQUIRED_SKILL_LEVEL_4, REQUIRED_SKILL_LEVEL_5, REQUIRED_SKILL_LEVEL_6,
+    SECONDARY_SKILL_LEVEL_1, SECONDARY_SKILL_LEVEL_2,
+]
+
+# Fitting attribute IDs
+FITTING_SLOT_ATTR_IDS = [12, 13, 14, 970, 1169]  # low, med, high, rig, subsystem
+FITTING_RESOURCE_ATTR_IDS = [7, 26, 965, 65, 64]  # power, cpu, upgrade, turret, launcher
+FITTING_DRONE_ATTR_IDS = [232, 1086]  # drone capacity, bandwidth
+FITTING_CAPACITOR_ATTR_IDS = [414, 30]  # capacity, recharge
+FITTING_TANK_ATTR_IDS = [212, 214, 6]  # shield, armor, structure
+FITTING_MOBILITY_ATTR_IDS = [20, 40, 516]  # speed, agility, warp
+ALL_FITTING_ATTR_IDS = (
+    FITTING_SLOT_ATTR_IDS + FITTING_RESOURCE_ATTR_IDS + FITTING_DRONE_ATTR_IDS +
+    FITTING_CAPACITOR_ATTR_IDS + FITTING_TANK_ATTR_IDS + FITTING_MOBILITY_ATTR_IDS
+)
+
+# Industry attribute IDs (for blueprints)
+INDUSTRY_ATTR_IDS = [33, 128, 727, 728, 1318, 1319, 1320,
+                     1321, 1322, 1323, 1324, 1325, 1326, 1327, 1328]
+
+
+# Dataclass for certificate information
+class CertificateInfo:
+    """Simple data container for certificate information."""
+    def __init__(self, cert_id: int, name: str, description: str, group_id: int):
+        self.cert_id = cert_id
+        self.name = name
+        self.description = description
+        self.group_id = group_id
+
 
 def sde_index(request: HttpRequest) -> HttpResponse:
     """SDE Browser homepage."""
@@ -511,28 +553,17 @@ def get_skill_prereqs_sql(skill_id: int):
 
 def get_ship_fitting(ship_id: int) -> dict:
     """Get all fitting attributes for a ship, with correct slot mapping."""
-    # Critical: attributes 12/13/14 are low/med/hi slots (NOT what SDE names them)
-    fitting_attr_ids = [
-        12, 13, 14, 970, 1169,  # Slots (charge=low, powerToSpeed=med, speedFactor=hi)
-        7, 26, 965,            # Resources
-        65, 64,                # Hardpoints
-        232, 1086,             # Drones
-        414, 30,               # Capacitor
-        212, 214, 6,           # Tank
-        20, 40, 516,           # Mobility
-    ]
-
     with connection.cursor() as cursor:
-        attr_ids_str = ','.join(map(str, fitting_attr_ids))
-        # Use %s placeholders and format the query directly
+        attr_ids_str = ','.join(['%s'] * len(ALL_FITTING_ATTR_IDS))
+        # Use parameterized query with proper placeholders
         query = """
             SELECT ta.attributeid, at.attributename, ta.valueint, ta.valuefloat
             FROM evesde_dgmtypeattributes ta
             JOIN evesde_dgmattributetypes at ON ta.attributeid = at.attributeid
             WHERE ta.typeid = %s AND ta.attributeid IN (%s)
             ORDER BY ta.attributeid
-        """ % (ship_id, attr_ids_str)
-        cursor.execute(query)
+        """ % ('%s', attr_ids_str)
+        cursor.execute(query, [ship_id] + ALL_FITTING_ATTR_IDS)
         
         # Map to friendly names (correcting for SDE mislabeling)
         attr_map = {
@@ -878,6 +909,27 @@ def get_ship_mastery_data(ship_id: int) -> dict:
 
         mastery_rows = cursor.fetchall()
 
+    # Collect all cert IDs for batch fetching skills
+    cert_ids = [row[1] for row in mastery_rows]
+
+    # Fetch all certificate skills in a single query (N+1 fix)
+    cert_skills_map = {}
+    if cert_ids:
+        placeholders = ','.join(['%s'] * len(cert_ids))
+        with connection.cursor() as cursor:
+            cursor.execute(f"""
+                SELECT cs.certid, cs.skillid, cs.skilllevel, cs.certlevelint, cs.certleveltext
+                FROM evesde_certskills cs
+                WHERE cs.certid IN ({placeholders})
+                ORDER BY cs.certid, cs.certlevelint, cs.skilllevel
+            """, cert_ids)
+
+            for row in cursor.fetchall():
+                cert_id, skill_id, skill_level, cert_level_int, cert_level_text = row
+                if cert_id not in cert_skills_map:
+                    cert_skills_map[cert_id] = []
+                cert_skills_map[cert_id].append((skill_id, skill_level, cert_level_int, cert_level_text))
+
     # Process each mastery level
     for mastery_row in mastery_rows:
         mastery_level, cert_id, cert_name, cert_desc, cert_group = mastery_row
@@ -885,16 +937,8 @@ def get_ship_mastery_data(ship_id: int) -> dict:
         if mastery_level not in mastery_data:
             mastery_data[mastery_level] = []
 
-        # Get skills required for this certificate
-        with connection.cursor() as cursor:
-            cursor.execute("""
-                SELECT cs.skillid, cs.skilllevel, cs.certlevelint, cs.certleveltext
-                FROM evesde_certskills cs
-                WHERE cs.certid = %s
-                ORDER BY cs.certlevelint, cs.skilllevel
-            """, [cert_id])
-
-            skill_rows = cursor.fetchall()
+        # Get skills from pre-fetched map
+        skill_rows = cert_skills_map.get(cert_id, [])
 
         skills = []
         for skill_row in skill_rows:
@@ -909,15 +953,8 @@ def get_ship_mastery_data(ship_id: int) -> dict:
             except InvTypes.DoesNotExist:
                 pass
 
-        # Create a simple certificate object
-        class SimpleCert:
-            def __init__(self, cert_id, cert_name, cert_desc, cert_group):
-                self.cert_id = cert_id
-                self.name = cert_name
-                self.description = cert_desc
-                self.group_id = cert_group
-
-        cert = SimpleCert(cert_id, cert_name, cert_desc, cert_group)
+        # Create certificate object
+        cert = CertificateInfo(cert_id, cert_name, cert_desc, cert_group)
 
         mastery_data[mastery_level].append({
             'certificate': cert,
@@ -959,7 +996,10 @@ def sde_ship_detail(request: HttpRequest, ship_id: int) -> HttpResponse:
     # Calculate capacitor regeneration rate (capacity / rechargeRate * 5)
     # EVE formula: (capacity / rechargeRate) * 5 = GJ/s
     if fitting.get('capacitorCapacity') and fitting.get('rechargeRate'):
-        fitting['capacitorRegen'] = fitting['capacitorCapacity'] / fitting['rechargeRate'] * 5
+        if fitting['rechargeRate'] != 0:
+            fitting['capacitorRegen'] = fitting['capacitorCapacity'] / fitting['rechargeRate'] * 5
+        else:
+            fitting['capacitorRegen'] = None
     else:
         fitting['capacitorRegen'] = None
 
@@ -969,9 +1009,7 @@ def sde_ship_detail(request: HttpRequest, ship_id: int) -> HttpResponse:
     # Get required skills (from attributes)
     required_skills = []
     with connection.cursor() as cursor:
-        # Required skills are stored in attributes 182, 183, 184, 277, 278, 279, 1289, 1290
-        req_attr_ids = [182, 183, 184, 277, 278, 279, 1289, 1290]
-        placeholders = ','.join(str(x) for x in req_attr_ids)
+        placeholders = ','.join(['%s'] * len(REQUIRED_SKILL_ATTR_IDS))
 
         cursor.execute("""
             SELECT ta.attributeid, ta.valueint, t.typename, t.typeid, g.groupname
@@ -980,11 +1018,12 @@ def sde_ship_detail(request: HttpRequest, ship_id: int) -> HttpResponse:
             JOIN evesde_invgroups g ON t.groupid = g.groupid
             WHERE ta.typeid = %s AND ta.attributeid IN (%s)
             ORDER BY ta.attributeid
-        """ % (ship_id, placeholders))
+        """ % ('%s', placeholders), [ship_id] + REQUIRED_SKILL_ATTR_IDS)
 
         skill_attr_map = {
-            182: 1, 183: 2, 184: 3, 277: 4, 278: 5, 279: 6,
-            1289: 1, 1290: 2  # Secondary skills
+            REQUIRED_SKILL_LEVEL_1: 1, REQUIRED_SKILL_LEVEL_2: 2, REQUIRED_SKILL_LEVEL_3: 3,
+            REQUIRED_SKILL_LEVEL_4: 4, REQUIRED_SKILL_LEVEL_5: 5, REQUIRED_SKILL_LEVEL_6: 6,
+            SECONDARY_SKILL_LEVEL_1: 1, SECONDARY_SKILL_LEVEL_2: 2  # Secondary skills
         }
 
         for attr_id, skill_type_id, skill_name, type_id, group_name in cursor.fetchall():
@@ -1120,18 +1159,14 @@ def sde_blueprint_detail(request: HttpRequest, blueprint_id: int) -> HttpRespons
     settings.DEBUG = False
     try:
         with connection.cursor() as cursor:
-            # Industry-related attribute IDs
-            industry_attr_ids = [33, 128, 727, 728, 1318, 1319, 1320,
-                                1321, 1322, 1323, 1324, 1325, 1326, 1327, 1328]
-
-            placeholders = ','.join(str(x) for x in industry_attr_ids)
+            placeholders = ','.join(['%s'] * len(INDUSTRY_ATTR_IDS))
             cursor.execute("""
                 SELECT ta.attributeid, at.attributename, ta.valueint, ta.valuefloat, at.displayname
                 FROM evesde_dgmtypeattributes ta
                 JOIN evesde_dgmattributetypes at ON ta.attributeid = at.attributeid
                 WHERE ta.typeid = %s AND ta.attributeid IN (""" + placeholders + """)
                 ORDER BY ta.attributeid
-            """, [blueprint_id])
+            """, [blueprint_id] + INDUSTRY_ATTR_IDS)
 
             for attr_id, attr_name, val_int, val_float, display_name in cursor.fetchall():
                 value = val_float if val_float is not None else val_int
@@ -1402,6 +1437,26 @@ def sde_faction_list(request: HttpRequest) -> HttpResponse:
     return render(request, 'core/sde/faction_list.html', {
         'factions': factions,
         'faction_stats': faction_stats,
+    })
+
+
+def sde_corporation_list(request: HttpRequest) -> HttpResponse:
+    """List all NPC corporations."""
+    corporations = CrpNPCCorporations.objects.select_related(
+        'faction'
+    ).all().order_by('corporation_id')
+
+    return render(request, 'core/sde/corporation_list.html', {
+        'corporations': corporations,
+    })
+
+
+def sde_agent_list(request: HttpRequest) -> HttpResponse:
+    """List all agents."""
+    agents = AgtAgents.objects.all().order_by('level', 'quality')
+
+    return render(request, 'core/sde/agent_list.html', {
+        'agents': agents,
     })
 
 

@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Corporations - SDE Browser{% endblock %}
+
+{% block content %}
+<style>
+.corp-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+.corp-item {
+    padding: 1rem;
+    background: var(--bg-primary);
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    transition: all 0.2s;
+}
+.corp-item:hover {
+    border-color: var(--link-color);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+.corp-name {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+.corp-faction {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+</style>
+
+<div class="card">
+    <nav style="margin-bottom: 1rem; font-size: 0.9rem;">
+        <a href="{% url 'core:sde_index' %}">SDE</a> &gt;
+        <strong>Corporations</strong>
+    </nav>
+
+    <h1>NPCCorporations</h1>
+    <p style="color: var(--text-secondary);">
+        All {{ corporations|length }} NPC corporations in EVE Online
+    </p>
+</div>
+
+<div class="card">
+    <div class="corp-grid">
+        {% for corp in corporations %}
+        <div class="corp-item">
+            <a href="{% url 'core:sde_corporation_detail' corp.corporation_id %}" style="text-decoration: none;">
+                <div class="corp-name">{{ corp.name }}</div>
+                {% if corp.faction %}
+                <div class="corp-faction">{{ corp.faction.faction_name }}</div>
+                {% endif %}
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

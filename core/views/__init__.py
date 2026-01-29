@@ -565,7 +565,8 @@ def toggle_theme(request: HttpRequest) -> HttpResponse:
     from django.contrib import messages
 
     themes = ['light', 'dark', 'solarized-light', 'solarized-dark']
-    current_theme = request.user.settings.get('theme', 'light')
+    user_settings = request.user.settings or {}
+    current_theme = user_settings.get('theme', 'light')
 
     # Check if a specific theme was requested
     requested_theme = request.POST.get('theme')
@@ -580,6 +581,9 @@ def toggle_theme(request: HttpRequest) -> HttpResponse:
         except ValueError:
             new_theme = 'light'
 
+    # Ensure settings dict exists before assignment
+    if request.user.settings is None:
+        request.user.settings = {}
     request.user.settings['theme'] = new_theme
     request.user.save(update_fields=['settings'])
 
@@ -592,7 +596,10 @@ def toggle_theme(request: HttpRequest) -> HttpResponse:
     }
 
     messages.success(request, f'Theme changed to {theme_names.get(new_theme, new_theme)}.')
-    return redirect(request.META.get('HTTP_REFERER', 'dashboard'))
+    referer = request.META.get('HTTP_REFERER')
+    if referer:
+        return redirect(referer)
+    return redirect(reverse('core:dashboard'))
 
 
 @login_required

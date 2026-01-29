@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}Agents - SDE Browser{% endblock %}
+
+{% block content %}
+<style>
+.agent-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+.agent-item {
+    padding: 1rem;
+    background: var(--bg-primary);
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    transition: all 0.2s;
+}
+.agent-item:hover {
+    border-color: var(--link-color);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+.agent-name {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+.agent-info {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+.agent-badge {
+    padding: 0.15rem 0.5rem;
+    background: var(--bg-secondary);
+    border-radius: 4px;
+}
+</style>
+
+<div class="card">
+    <nav style="margin-bottom: 1rem; font-size: 0.9rem;">
+        <a href="{% url 'core:sde_index' %}">SDE</a> &gt;
+        <strong>Agents</strong>
+    </nav>
+
+    <h1>Agents</h1>
+    <p style="color: var(--text-secondary);">
+        All {{ agents|length }} agents in EVE Online
+    </p>
+</div>
+
+<div class="card">
+    <div class="agent-grid">
+        {% for agent in agents %}
+        <div class="agent-item">
+            <a href="{% url 'core:sde_agent_detail' agent.agent_id %}" style="text-decoration: none;">
+                <div class="agent-name">
+                    Agent {{ agent.agent_id }} - Level {{ agent.level }}
+                </div>
+                <div class="agent-info">
+                    <span class="agent-badge">Level {{ agent.level }}</span>
+                    <span class="agent-badge">Quality: {{ agent.quality }}</span>
+                    <span class="agent-badge">Corp ID: {{ agent.corporation_id }}</span>
+                </div>
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

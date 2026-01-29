@@ -304,3 +304,15 @@ def to_int(value):
         return int(value)
     except (ValueError, TypeError):
         return 0
+
+
+@register.filter
+def theme_icon(theme):
+    """Return the emoji icon for a theme."""
+    theme_icons = {
+        'light': '☀️',
+        'dark': '🌙',
+        'solarized-light': '🌅',
+        'solarized-dark': '🌃',
+    }
+    return theme_icons.get(theme, '☀️')

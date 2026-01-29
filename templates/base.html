@@ -232,12 +232,7 @@
                         {% if user.is_authenticated %}
                             <div class="theme-dropdown">
                                 <div class="theme-current" title="Current theme: {{ user.settings.theme|default:'light' }}">
-                                    <span class="theme-icon">
-                                        {% if user.settings.theme == 'light' %}☀️
-                                        {% elif user.settings.theme == 'dark' %}🌙
-                                        {% elif user.settings.theme == 'solarized-light' %}🌅
-                                        {% else %}🌃{% endif %}
-                                    </span>
+                                    <span class="theme-icon">{{ user.settings.theme|default:'light'|theme_icon }}</span>
                                     <span>Theme</span>
                                     <span style="font-size: 0.7rem;">▼</span>
                                 </div>
@@ -245,19 +240,19 @@
                                     <form method="post" action="{% url 'core:toggle_theme' %}" style="display: block;">
                                         {% csrf_token %}
                                         <button type="submit" name="theme" value="light" class="theme-option {% if user.settings.theme == 'light' or user.settings.theme == None %}active{% endif %}">
-                                            <span class="theme-icon">☀️</span>
+                                            <span class="theme-icon">{{ 'light'|theme_icon }}</span>
                                             <span>Light</span>
                                         </button>
                                         <button type="submit" name="theme" value="dark" class="theme-option {% if user.settings.theme == 'dark' %}active{% endif %}">
-                                            <span class="theme-icon">🌙</span>
+                                            <span class="theme-icon">{{ 'dark'|theme_icon }}</span>
                                             <span>Dark</span>
                                         </button>
                                         <button type="submit" name="theme" value="solarized-light" class="theme-option {% if user.settings.theme == 'solarized-light' %}active{% endif %}">
-                                            <span class="theme-icon">🌅</span>
+                                            <span class="theme-icon">{{ 'solarized-light'|theme_icon }}</span>
                                             <span>Solarized</span>
                                         </button>
                                         <button type="submit" name="theme" value="solarized-dark" class="theme-option {% if user.settings.theme == 'solarized-dark' %}active{% endif %}">
-                                            <span class="theme-icon">🌃</span>
+                                            <span class="theme-icon">{{ 'solarized-dark'|theme_icon }}</span>
                                             <span>Solarized Dark</span>
                                         </button>
                                     </form>

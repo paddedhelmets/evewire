@@ -163,7 +163,9 @@ urlpatterns = [
     path('sde/skills/', sde_views.sde_skills_directory, name='sde_skills_directory'),
     path('sde/factions/', sde_views.sde_faction_list, name='sde_faction_list'),
     path('sde/faction/<int:faction_id>/', sde_views.sde_faction_detail, name='sde_faction_detail'),
+    path('sde/corporations/', sde_views.sde_corporation_list, name='sde_corporation_list'),
     path('sde/corporation/<int:corporation_id>/', sde_views.sde_corporation_detail, name='sde_corporation_detail'),
+    path('sde/agents/', sde_views.sde_agent_list, name='sde_agent_list'),
     path('sde/agent/<int:agent_id>/', sde_views.sde_agent_detail, name='sde_agent_detail'),
     path('sde/ship/<int:ship_id>/fittings/', sde_views.sde_ship_fittings, name='sde_ship_fittings'),
 
