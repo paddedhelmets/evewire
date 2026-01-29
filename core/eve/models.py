@@ -35,14 +35,14 @@ class ItemType(models.Model):
     Represents all types of items in EVE: ships, modules, ammo, materials, etc.
     """
 
-    id = models.BigIntegerField(primary_key=True, db_column='typeID')
-    name = models.CharField(max_length=255, db_index=True, db_column='typeName')
+    id = models.BigIntegerField(primary_key=True, db_column='typeid')
+    name = models.CharField(max_length=255, db_index=True, db_column='typename')
     description = models.TextField(blank=True)
-    group_id = models.IntegerField(db_index=True, null=True, db_column='groupID')
+    group_id = models.IntegerField(db_index=True, null=True, db_column='groupid')
     mass = models.FloatField(null=True, blank=True)
     volume = models.FloatField(null=True, blank=True)
     capacity = models.FloatField(null=True, blank=True)
-    portion_size = models.IntegerField(null=True, blank=True, db_column='portionSize')
+    portion_size = models.IntegerField(null=True, blank=True, db_column='portionsize')
     published = models.BooleanField(default=True)
 
     objects = ItemTypeManager()
@@ -83,11 +83,11 @@ class SolarSystem(models.Model):
     EVE Online solar system (from mapSolarSystems table in SDE).
     """
 
-    id = models.BigIntegerField(primary_key=True, db_column='solarSystemID')
-    name = models.CharField(max_length=255, db_index=True, db_column='solarSystemName')
-    constellation_id = models.IntegerField(null=True, blank=True, db_column='constellationID')
-    region_id = models.IntegerField(db_index=True, null=True, db_column='regionID')
-    security_class = models.CharField(max_length=10, blank=True, db_column='securityClass')
+    id = models.BigIntegerField(primary_key=True, db_column='solarsystemid')
+    name = models.CharField(max_length=255, db_index=True, db_column='solarsystemname')
+    constellation_id = models.IntegerField(null=True, blank=True, db_column='constellationid')
+    region_id = models.IntegerField(db_index=True, null=True, db_column='regionid')
+    security_class = models.CharField(max_length=10, blank=True, db_column='securityclass')
     security = models.FloatField(null=True, blank=True)
     x = models.FloatField(null=True, blank=True)
     y = models.FloatField(null=True, blank=True)
@@ -120,12 +120,12 @@ class Station(models.Model):
     EVE Online station (from staStations table in SDE).
     """
 
-    id = models.BigIntegerField(primary_key=True, db_column='stationID')
-    name = models.CharField(max_length=255, db_column='stationName')
-    solar_system_id = models.IntegerField(db_index=True, db_column='solarSystemID')
-    corporation_id = models.IntegerField(null=True, blank=True, db_column='corporationID')
-    region_id = models.IntegerField(null=True, blank=True, db_column='regionID')
-    type_id = models.IntegerField(null=True, blank=True, db_column='stationTypeID')
+    id = models.BigIntegerField(primary_key=True, db_column='stationid')
+    name = models.CharField(max_length=255, db_column='stationname')
+    solar_system_id = models.IntegerField(db_index=True, db_column='solarsystemid')
+    corporation_id = models.IntegerField(null=True, blank=True, db_column='corporationid')
+    region_id = models.IntegerField(null=True, blank=True, db_column='regionid')
+    type_id = models.IntegerField(null=True, blank=True, db_column='stationtypeid')
     x = models.FloatField(null=True, blank=True)
     y = models.FloatField(null=True, blank=True)
     z = models.FloatField(null=True, blank=True)
@@ -146,8 +146,8 @@ class Region(models.Model):
     EVE Online region (from mapRegions table in SDE).
     """
 
-    id = models.BigIntegerField(primary_key=True, db_column='regionID')
-    name = models.CharField(max_length=255, db_column='regionName')
+    id = models.BigIntegerField(primary_key=True, db_column='regionid')
+    name = models.CharField(max_length=255, db_column='regionname')
 
     class Meta:
         verbose_name = _('region')
@@ -164,11 +164,11 @@ class Faction(models.Model):
     EVE Online faction (from chrFactions table in SDE).
     """
 
-    id = models.BigIntegerField(primary_key=True, db_column='factionID')
-    name = models.CharField(max_length=255, db_column='factionName')
+    id = models.BigIntegerField(primary_key=True, db_column='factionid')
+    name = models.CharField(max_length=255, db_column='factionname')
     description = models.TextField(blank=True)
-    solar_system_id = models.IntegerField(null=True, blank=True, db_column='solarSystemID')
-    corporation_id = models.IntegerField(null=True, blank=True, db_column='corporationID')
+    solar_system_id = models.IntegerField(null=True, blank=True, db_column='solarsystemid')
+    corporation_id = models.IntegerField(null=True, blank=True, db_column='corporationid')
 
     class Meta:
         verbose_name = _('faction')
@@ -188,10 +188,10 @@ class Corporation(models.Model):
     This model stores basic corporation info for both NPC and player corps.
     """
 
-    id = models.BigIntegerField(primary_key=True, db_column='corporationID')
+    id = models.BigIntegerField(primary_key=True, db_column='corporationid')
     name = models.CharField(max_length=255, db_index=True)
     ticker = models.CharField(max_length=10, blank=True)
-    faction_id = models.IntegerField(null=True, blank=True, db_column='factionID')
+    faction_id = models.IntegerField(null=True, blank=True, db_column='factionid')
     is_npc = models.BooleanField(default=True)
 
     class Meta:
@@ -212,12 +212,12 @@ class Alliance(models.Model):
     fetched from ESI. This model caches alliance information.
     """
 
-    id = models.BigIntegerField(primary_key=True, db_column='allianceID')
+    id = models.BigIntegerField(primary_key=True, db_column='allianceid')
     name = models.CharField(max_length=255, db_index=True)
     ticker = models.CharField(max_length=10, blank=True)
-    creator_corporation_id = models.IntegerField(null=True, blank=True, db_column='creatorCorporationID')
-    creator_id = models.IntegerField(null=True, blank=True, db_column='creatorID')
-    date_founded = models.DateField(null=True, blank=True, db_column='startDate')
+    creator_corporation_id = models.IntegerField(null=True, blank=True, db_column='creatorcorpid')
+    creator_id = models.IntegerField(null=True, blank=True, db_column='creatorid')
+    date_founded = models.DateField(null=True, blank=True, db_column='startdate')
 
     class Meta:
         verbose_name = _('alliance')
@@ -236,9 +236,9 @@ class ItemGroup(models.Model):
     Groups categorize item types (e.g., "Frigates", "Lasers", "Skills").
     """
 
-    id = models.IntegerField(primary_key=True, db_column='groupID')
-    name = models.CharField(max_length=255, db_column='groupName')
-    category_id = models.IntegerField(db_index=True, null=True, db_column='categoryID')
+    id = models.IntegerField(primary_key=True, db_column='groupid')
+    name = models.CharField(max_length=255, db_column='groupname')
+    category_id = models.IntegerField(db_index=True, null=True, db_column='categoryid')
     published = models.BooleanField(default=True)
 
     class Meta:
@@ -258,8 +258,8 @@ class ItemCategory(models.Model):
     Categories are the top-level classification (e.g., "Ships", "Modules", "Skills").
     """
 
-    id = models.IntegerField(primary_key=True, db_column='categoryID')
-    name = models.CharField(max_length=255, db_column='categoryName')
+    id = models.IntegerField(primary_key=True, db_column='categoryid')
+    name = models.CharField(max_length=255, db_column='categoryname')
     published = models.BooleanField(default=True)
 
     class Meta:
@@ -279,16 +279,16 @@ class AttributeType(models.Model):
     Defines what attributes exist and their properties.
     """
 
-    id = models.IntegerField(primary_key=True, db_column='attributeID')
-    name = models.CharField(max_length=255, db_column='attributeName')
+    id = models.IntegerField(primary_key=True, db_column='attributeid')
+    name = models.CharField(max_length=255, db_column='attributename')
     description = models.TextField(blank=True)
-    default_value = models.FloatField(null=True, blank=True, db_column='defaultValue')
+    default_value = models.FloatField(null=True, blank=True, db_column='defaultvalue')
     published = models.BooleanField(default=True)
-    display_name = models.CharField(max_length=255, blank=True, db_column='displayName')
-    icon_id = models.IntegerField(null=True, blank=True, db_column='iconID')
-    unit_id = models.IntegerField(null=True, blank=True, db_column='unitID')
+    display_name = models.CharField(max_length=255, blank=True, db_column='displayname')
+    icon_id = models.IntegerField(null=True, blank=True, db_column='iconid')
+    unit_id = models.IntegerField(null=True, blank=True, db_column='unitid')
     stackable = models.BooleanField(default=True)
-    high_is_good = models.BooleanField(default=True, db_column='highIsGood')
+    high_is_good = models.BooleanField(default=True, db_column='highisgood')
 
     class Meta:
         verbose_name = _('attribute type')
@@ -309,10 +309,10 @@ class TypeAttribute(models.Model):
     """
 
     id = models.BigAutoField(primary_key=True)
-    type_id = models.IntegerField(db_index=True, db_column='typeID')
-    attribute_id = models.IntegerField(db_index=True, db_column='attributeID')
-    value_int = models.IntegerField(null=True, blank=True, db_column='valueInt')
-    value_float = models.FloatField(null=True, blank=True, db_column='valueFloat')
+    type_id = models.IntegerField(db_index=True, db_column='typeid')
+    attribute_id = models.IntegerField(db_index=True, db_column='attributeid')
+    value_int = models.IntegerField(null=True, blank=True, db_column='valueint')
+    value_float = models.FloatField(null=True, blank=True, db_column='valuefloat')
 
     class Meta:
         verbose_name = _('type attribute')

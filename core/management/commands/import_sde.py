@@ -31,18 +31,18 @@ class Command(BaseCommand):
     RELEASES_API = "https://api.github.com/repos/garveen/eve-sde-converter/releases"
 
     # Tables we need for skill plans and basic operations
-    # Maps SDE table name to Django model table name
+    # Maps SDE table name to Django model table name (without core_ prefix, which is added automatically)
     REQUIRED_TABLES = {
-        'invTypes': 'core_itemtype',
-        'invGroups': 'core_itemgroup',
-        'invCategories': 'core_itemcategory',
-        'dgmAttributeTypes': 'core_attributetype',
-        'dgmTypeAttributes': 'core_typeattribute',
-        'chrFactions': 'core_faction',
+        'invTypes': 'itemtype',
+        'invGroups': 'itemgroup',
+        'invCategories': 'itemcategory',
+        'dgmAttributeTypes': 'attributetype',
+        'dgmTypeAttributes': 'typeattribute',
+        'chrFactions': 'faction',
         # Note: chrRaces are already in invTypes, not imported separately
-        'mapSolarSystems': 'core_solarsystem',
-        'mapRegions': 'core_region',
-        'staStations': 'core_station',
+        'mapSolarSystems': 'solarsystem',
+        'mapRegions': 'region',
+        'staStations': 'station',
     }
 
     def add_arguments(self, parser):
@@ -276,8 +276,24 @@ class Command(BaseCommand):
 
                 # Get column names and handle renaming
                 renamed_columns = get_renamed_columns(original_columns)
+
+                # Identify boolean columns that need casting from integer
+                # These are columns that were INTEGER in SDE but BOOLEAN in PostgreSQL
+                boolean_column_names = {'published', 'anchored', 'anchorable', 'fittableNonSingleton',
+                                       'useBasePrice', 'hasTypes', 'scattered'}
+
+                # Build INSERT with cast for boolean columns
+                # For boolean columns, use "::boolean" cast
+                insert_columns = []
+                for col in original_columns:
+                    if col in boolean_column_names:
+                        # Cast integer 0/1 to boolean
+                        insert_columns.append(f"(%s)::boolean")
+                    else:
+                        insert_columns.append('%s')
+
                 columns_str = ', '.join(renamed_columns)
-                placeholders = ', '.join(['%s'] * len(original_columns))
+                placeholders = ', '.join(insert_columns)
 
                 while True:
                     sde_cursor.execute(f"SELECT * FROM {sde_table} LIMIT {batch_size} OFFSET {offset}")
