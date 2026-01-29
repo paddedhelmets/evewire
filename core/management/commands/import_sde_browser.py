@@ -28,6 +28,8 @@ from pathlib import Path
 from django.core.management.base import BaseCommand
 from django.conf import settings
 
+from core.sde_import import get_sde_db_path, table_exists, prepare_sql_for_postgresql, get_renamed_columns
+
 
 class Command(BaseCommand):
     help = 'Import EVE SDE tables for the SDE Browser (evesde_ prefix)'
@@ -452,114 +454,160 @@ class Command(BaseCommand):
 
     def _table_exists(self, table_name: str) -> bool:
         """Check if a table already exists and has data."""
-        import sqlite3
-        db_path = settings.DATABASES['default']['NAME']
-
-        conn = sqlite3.connect(db_path)
-        result = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", [table_name]).fetchone()
-        if result:
-            count_result = conn.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()
-            conn.close()
-            return count_result[0] > 0
-        conn.close()
-        return False
+        # Browser tables use evesde_ prefix - strip it for the check
+        # The table_exists function adds the prefix back
+        if table_name.startswith('evesde_'):
+            base_name = table_name[7:]  # Remove 'evesde_' prefix
+            return table_exists(base_name, table_prefix='evesde_')
+        return table_exists(table_name, table_prefix='evesde_')
 
     def _copy_table(self, sde_path: str, sde_table: str, evesde_table: str) -> int:
-        """Copy a table from SDE database to evesde_ prefixed table."""
-        import sqlite3
-        import re
+        """
+        Copy a table from SDE database to evesde_ prefixed table.
 
-        db_path = settings.DATABASES['default']['NAME']
+        Browser tables use exact 1:1 copies of SDE data (no column renaming via db_column).
+        For PostgreSQL, we rename system columns (xmin, xmax, etc.) and coordinate columns.
+        """
+        import sqlite3
+        from django.db import connection
+
+        db_engine = settings.DATABASES['default']['ENGINE']
 
         # Connect to SDE database
         sde_conn = sqlite3.connect(sde_path)
         sde_conn.row_factory = sqlite3.Row
-
-        # Connect to our Django database
-        django_conn = sqlite3.connect(db_path)
-        django_cursor = django_conn.cursor()
-
-        # Get table schema from SDE
         sde_cursor = sde_conn.cursor()
-        sde_cursor.execute(f"SELECT sql FROM sqlite_master WHERE type='table' AND name='{sde_table}'")
-        schema_row = sde_cursor.fetchone()
 
-        if not schema_row:
-            sde_conn.close()
-            django_conn.close()
-            raise ValueError(f"Table {sde_table} not found in SDE")
-
-        create_sql = schema_row['sql']
-
-        # Clean up SQL for SQLite compatibility
-        create_sql = create_sql.replace('"', '')
-        create_sql = create_sql.replace('COLLATE utf8mb4_unicode_ci', '')
-        create_sql = create_sql.replace('DEFAULT CURRENT_TIMESTAMP', '')
-        create_sql = create_sql.replace('ON UPDATE CURRENT_TIMESTAMP', '')
-
-        # Replace table name with evesde_ prefixed name
-        # Handle both `tablename` and tablename formats
-        create_sql = re.sub(
-            r'CREATE TABLE (?:IF NOT EXISTS )?`?\w+`? \(',
-            f'CREATE TABLE {evesde_table} (',
-            create_sql
-        )
-
-        # Drop existing table if any
-        django_cursor.execute(f"DROP TABLE IF EXISTS {evesde_table}")
-
-        # For Django ORM compatibility, add id column if table has composite PK
-        # and remove the composite PK constraint
-        if 'PRIMARY KEY' in create_sql and ',PRIMARY KEY' in create_sql:
-            # This is a composite key table - add id column and remove PK constraint
-            # Remove the PRIMARY KEY clause
-            create_sql = re.sub(r',\s*PRIMARY KEY \([^)]+\)', '', create_sql, flags=re.IGNORECASE)
-            # Add id column as first column
-            create_sql = create_sql.replace(f'CREATE TABLE {evesde_table} (',
-                                              f'CREATE TABLE {evesde_table} (id INTEGER PRIMARY KEY AUTOINCREMENT, ')
-
-        # Create table
-        django_cursor.execute(create_sql)
-
-        # Get row count from SDE
-        sde_cursor.execute(f"SELECT COUNT(*) as cnt FROM {sde_table}")
-        row_count = sde_cursor.fetchone()[0]
-
-        # Copy data in batches
-        batch_size = 1000
-        offset = 0
-        total_copied = 0
-
-        # Get column names from SDE
+        # Get column names from SDE first (needed for both paths)
         sde_cursor.execute(f"SELECT * FROM {sde_table} LIMIT 1")
         original_columns = [desc[0] for desc in sde_cursor.description]
 
-        while True:
-            sde_cursor.execute(f"SELECT * FROM {sde_table} LIMIT {batch_size} OFFSET {offset}")
-            rows = sde_cursor.fetchall()
+        if 'postgresql' in db_engine:
+            # PostgreSQL path
+            from django.db import connections
 
-            if not rows:
-                break
+            # Get table schema from SDE
+            sde_cursor.execute(f"SELECT sql FROM sqlite_master WHERE type='table' AND name='{sde_table}'")
+            schema_row = sde_cursor.fetchone()
 
-            placeholders = ', '.join(['?'] * len(original_columns))
-            insert_sql = f"INSERT INTO {evesde_table} ({', '.join(original_columns)}) VALUES ({placeholders})"
+            if not schema_row:
+                sde_conn.close()
+                raise ValueError(f"Table {sde_table} not found in SDE")
 
-            django_cursor.executemany(insert_sql, rows)
-            total_copied += len(rows)
-            offset += batch_size
+            create_sql = schema_row['sql']
 
-        django_conn.commit()
-        sde_conn.close()
-        django_conn.close()
+            # Prepare SQL for PostgreSQL
+            # Note: dgmTypeAttributes also needs BIGINT handling
+            is_dgm_type_attributes = (sde_table == 'dgmTypeAttributes')
+            create_sql = prepare_sql_for_postgresql(create_sql, sde_table, evesde_table, is_dgm_type_attributes)
 
-        # Apply factionID sideload for crpNPCCorporations
-        # The garveen SDE has the factionID column but all values are NULL
-        if sde_table == 'crpNPCCorporations':
-            try:
-                from core.data import apply_corp_faction_id_sideload
-                updated = apply_corp_faction_id_sideload(evesde_table)
-                self.stdout.write(f'    Applied factionID sideload: {updated} corporations updated')
-            except Exception as e:
-                self.stdout.write(self.style.WARNING(f'    Failed to apply factionID sideload: {e}'))
+            with connection.cursor() as django_cursor:
+                # Drop and create table
+                django_cursor.execute(f"DROP TABLE IF EXISTS {evesde_table}")
+                django_cursor.execute(create_sql)
 
-        return total_copied
+                # Copy data in batches
+                batch_size = 1000
+                offset = 0
+                total_copied = 0
+
+                # Get renamed column names for PostgreSQL
+                renamed_columns = get_renamed_columns(original_columns)
+                columns_str = ', '.join(renamed_columns)
+                placeholders = ', '.join(['%s'] * len(original_columns))
+
+                while True:
+                    sde_cursor.execute(f"SELECT * FROM {sde_table} LIMIT {batch_size} OFFSET {offset}")
+                    rows = sde_cursor.fetchall()
+
+                    if not rows:
+                        break
+
+                    insert_sql = f"INSERT INTO {evesde_table} ({columns_str}) VALUES ({placeholders})"
+                    rows_to_insert = [tuple(row[col] for col in original_columns) for row in rows]
+                    django_cursor.executemany(insert_sql, rows_to_insert)
+
+                    total_copied += len(rows)
+                    offset += batch_size
+
+            sde_conn.close()
+            return total_copied
+
+        else:
+            # SQLite path (original code)
+            import re
+            db_path = settings.DATABASES['default']['NAME']
+
+            # Connect to our Django database
+            django_conn = sqlite3.connect(db_path)
+            django_cursor = django_conn.cursor()
+
+            # Get table schema from SDE
+            sde_cursor.execute(f"SELECT sql FROM sqlite_master WHERE type='table' AND name='{sde_table}'")
+            schema_row = sde_cursor.fetchone()
+
+            if not schema_row:
+                sde_conn.close()
+                django_conn.close()
+                raise ValueError(f"Table {sde_table} not found in SDE")
+
+            create_sql = schema_row['sql']
+
+            # Clean up SQL for SQLite compatibility
+            create_sql = create_sql.replace('"', '')
+            create_sql = create_sql.replace('COLLATE utf8mb4_unicode_ci', '')
+            create_sql = create_sql.replace('DEFAULT CURRENT_TIMESTAMP', '')
+            create_sql = create_sql.replace('ON UPDATE CURRENT_TIMESTAMP', '')
+
+            # Replace table name with evesde_ prefixed name
+            create_sql = re.sub(
+                r'CREATE TABLE (?:IF NOT EXISTS )?`?\w+`? \(',
+                f'CREATE TABLE {evesde_table} (',
+                create_sql
+            )
+
+            # Drop existing table if any
+            django_cursor.execute(f"DROP TABLE IF EXISTS {evesde_table}")
+
+            # For Django ORM compatibility, add id column if table has composite PK
+            if 'PRIMARY KEY' in create_sql and ',PRIMARY KEY' in create_sql:
+                create_sql = re.sub(r',\s*PRIMARY KEY \([^)]+\)', '', create_sql, flags=re.IGNORECASE)
+                create_sql = create_sql.replace(f'CREATE TABLE {evesde_table} (',
+                                                  f'CREATE TABLE {evesde_table} (id INTEGER PRIMARY KEY AUTOINCREMENT, ')
+
+            # Create table
+            django_cursor.execute(create_sql)
+
+            # Copy data in batches
+            batch_size = 1000
+            offset = 0
+            total_copied = 0
+
+            while True:
+                sde_cursor.execute(f"SELECT * FROM {sde_table} LIMIT {batch_size} OFFSET {offset}")
+                rows = sde_cursor.fetchall()
+
+                if not rows:
+                    break
+
+                placeholders = ', '.join(['?'] * len(original_columns))
+                insert_sql = f"INSERT INTO {evesde_table} ({', '.join(original_columns)}) VALUES ({placeholders})"
+
+                django_cursor.executemany(insert_sql, rows)
+                total_copied += len(rows)
+                offset += batch_size
+
+            django_conn.commit()
+            sde_conn.close()
+            django_conn.close()
+
+            # Apply factionID sideload for crpNPCCorporations
+            if sde_table == 'crpNPCCorporations':
+                try:
+                    from core.data import apply_corp_faction_id_sideload
+                    updated = apply_corp_faction_id_sideload(evesde_table)
+                    self.stdout.write(f'    Applied factionID sideload: {updated} corporations updated')
+                except Exception as e:
+                    self.stdout.write(self.style.WARNING(f'    Failed to apply factionID sideload: {e}'))
+
+            return total_copied
