@@ -215,10 +215,10 @@ def sde_item_detail(request: HttpRequest, type_id: int) -> HttpResponse:
     # Get attributes for this item using raw SQL (ORM has issues with this table)
     with connection.cursor() as cursor:
         cursor.execute("""
-            SELECT ta.attributeID, at.attributeName, at.displayName, ta.valueInt, ta.valueFloat
+            SELECT ta.attributeID, at.attributeName, at.displayName, ta.valueint, ta.valueFloat
             FROM evesde_dgmtypeattributes ta
             JOIN evesde_dgmattributetypes at ON ta.attributeID = at.attributeID
-            WHERE ta.typeID = %s
+            WHERE ta.typeid = %s
             ORDER BY at.attributeName
         """, [type_id])
         attr_rows = cursor.fetchall()
@@ -478,10 +478,10 @@ def get_skill_prereqs_sql(skill_id: int):
         while current_id and current_id not in visited:
             visited.add(current_id)
             cursor.execute("""
-                SELECT t.typeID, t.typeName, g.groupName, t.description
+                SELECT t.typeid, t.typename, g.groupname, t.description
                 FROM evesde_invtypes t
-                LEFT JOIN evesde_invgroups g ON t.groupID = g.groupID
-                WHERE t.typeID = %s
+                LEFT JOIN evesde_invgroups g ON t.groupid = g.groupid
+                WHERE t.typeid = %s
             """, [current_id])
             skill_row = cursor.fetchone()
 
@@ -489,8 +489,8 @@ def get_skill_prereqs_sql(skill_id: int):
                 break
 
             cursor.execute("""
-                SELECT valueInt FROM evesde_dgmtypeattributes
-                WHERE typeID = %s AND attributeID = 182
+                SELECT valueint FROM evesde_dgmtypeattributes
+                WHERE typeid = %s AND attributeID = 182
             """, [current_id])
             prereq_row = cursor.fetchone()
             
@@ -526,10 +526,10 @@ def get_ship_fitting(ship_id: int) -> dict:
         attr_ids_str = ','.join(map(str, fitting_attr_ids))
         # Use %s placeholders and format the query directly
         query = """
-            SELECT ta.attributeID, at.attributeName, ta.valueInt, ta.valueFloat
+            SELECT ta.attributeID, at.attributeName, ta.valueint, ta.valueFloat
             FROM evesde_dgmtypeattributes ta
             JOIN evesde_dgmattributetypes at ON ta.attributeID = at.attributeID
-            WHERE ta.typeID = %s AND ta.attributeID IN (%s)
+            WHERE ta.typeid = %s AND ta.attributeID IN (%s)
             ORDER BY ta.attributeID
         """ % (ship_id, attr_ids_str)
         cursor.execute(query)
@@ -670,9 +670,9 @@ def _get_module_attributes(type_id: int) -> dict:
 
         for name, attr_id in fitting_queries:
             cursor.execute("""
-                SELECT valueInt, valueFloat
+                SELECT valueint, valueFloat
                 FROM evesde_dgmtypeattributes
-                WHERE typeID = ? AND attributeID = ?
+                WHERE typeid = ? AND attributeID = ?
             """, [type_id, attr_id])
             row = cursor.fetchone()
             if row:
@@ -694,9 +694,9 @@ def _get_module_attributes(type_id: int) -> dict:
 
         for name, attr_id in combat_queries:
             cursor.execute("""
-                SELECT valueInt, valueFloat
+                SELECT valueint, valueFloat
                 FROM evesde_dgmtypeattributes
-                WHERE typeID = ? AND attributeID = ?
+                WHERE typeid = ? AND attributeID = ?
             """, [type_id, attr_id])
             row = cursor.fetchone()
             if row:
@@ -949,11 +949,11 @@ def sde_ship_detail(request: HttpRequest, ship_id: int) -> HttpResponse:
         placeholders = ','.join(str(x) for x in req_attr_ids)
 
         cursor.execute("""
-            SELECT ta.attributeID, ta.valueInt, t.typeName, t.typeID, g.groupName
+            SELECT ta.attributeID, ta.valueint, t.typename, t.typeid, g.groupname
             FROM evesde_dgmtypeattributes ta
-            JOIN evesde_invtypes t ON ta.valueInt = t.typeID
-            JOIN evesde_invgroups g ON t.groupID = g.groupID
-            WHERE ta.typeID = %s AND ta.attributeID IN (%s)
+            JOIN evesde_invtypes t ON ta.valueint = t.typeid
+            JOIN evesde_invgroups g ON t.groupid = g.groupid
+            WHERE ta.typeid = %s AND ta.attributeID IN (%s)
             ORDER BY ta.attributeID
         """ % (ship_id, placeholders))
 
@@ -1052,12 +1052,12 @@ def sde_blueprint_detail(request: HttpRequest, blueprint_id: int) -> HttpRespons
         try:
             with connection.cursor() as cursor:
                 cursor.execute("""
-                    SELECT m.materialTypeID, t.typeName, g.groupName, m.quantity, t.volume, t.basePrice
+                    SELECT m.materialTypeID, t.typename, g.groupname, m.quantity, t.volume, t.basePrice
                     FROM evesde_invtypematerials m
-                    JOIN evesde_invtypes t ON m.materialTypeID = t.typeID
-                    JOIN evesde_invgroups g ON t.groupID = g.groupID
-                    WHERE m.typeID = ?
-                    ORDER BY g.groupName, t.typeName
+                    JOIN evesde_invtypes t ON m.materialTypeID = t.typeid
+                    JOIN evesde_invgroups g ON t.groupid = g.groupid
+                    WHERE m.typeid = ?
+                    ORDER BY g.groupname, t.typename
                 """, [product.type_id])
 
                 for row in cursor.fetchall():
@@ -1101,10 +1101,10 @@ def sde_blueprint_detail(request: HttpRequest, blueprint_id: int) -> HttpRespons
 
             placeholders = ','.join(str(x) for x in industry_attr_ids)
             cursor.execute("""
-                SELECT ta.attributeID, at.attributeName, ta.valueInt, ta.valueFloat, at.displayName
+                SELECT ta.attributeID, at.attributeName, ta.valueint, ta.valueFloat, at.displayName
                 FROM dgmTypeAttributes ta
                 JOIN dgmAttributeTypes at ON ta.attributeID = at.attributeID
-                WHERE ta.typeID = ? AND ta.attributeID IN (""" + placeholders + """)
+                WHERE ta.typeid = ? AND ta.attributeID IN (""" + placeholders + """)
                 ORDER BY ta.attributeID
             """, [blueprint_id])
 
@@ -1283,12 +1283,12 @@ def sde_certificate_detail(request: HttpRequest, cert_id: int) -> HttpResponse:
         with connection.cursor() as cursor:
             cursor.execute("""
                 SELECT cs.certLevelInt, cs.skillLevel, cs.certLevelText,
-                       t.typeID, t.typeName, g.groupName, t.description
+                       t.typeid, t.typename, g.groupname, t.description
                 FROM evesde_certskills cs
-                JOIN evesde_invtypes t ON cs.skillID = t.typeID
-                JOIN evesde_invgroups g ON t.groupID = g.groupID
+                JOIN evesde_invtypes t ON cs.skillID = t.typeid
+                JOIN evesde_invgroups g ON t.groupid = g.groupid
                 WHERE cs.certID = ?
-                ORDER BY cs.certLevelInt, t.typeName
+                ORDER BY cs.certLevelInt, t.typename
             """, [cert_id])
 
             for row in cursor.fetchall():
@@ -1313,12 +1313,12 @@ def sde_certificate_detail(request: HttpRequest, cert_id: int) -> HttpResponse:
     try:
         with connection.cursor() as cursor:
             cursor.execute("""
-                SELECT cm.masteryLevel, t.typeID, t.typeName, g.groupName
+                SELECT cm.masteryLevel, t.typeid, t.typename, g.groupname
                 FROM evesde_certmasteries cm
-                JOIN evesde_invtypes t ON cm.typeID = t.typeID
-                JOIN evesde_invgroups g ON t.groupID = g.groupID
-                WHERE cm.certID = ? AND t.published = 1
-                ORDER BY cm.masteryLevel, g.groupName, t.typeName
+                JOIN evesde_invtypes t ON cm.typeid = t.typeid
+                JOIN evesde_invgroups g ON t.groupid = g.groupid
+                WHERE cm.certID = ? AND t.published = TRUE
+                ORDER BY cm.masteryLevel, g.groupname, t.typename
             """, [cert_id])
 
             for row in cursor.fetchall():
@@ -1630,20 +1630,20 @@ def sde_industry_activities(request: HttpRequest) -> HttpResponse:
             # Get all blueprints that have this activity
             cursor.execute("""
                 SELECT DISTINCT
-                    ia.typeID,
-                    t.typeName,
+                    ia.typeid,
+                    t.typename,
                     t.description,
-                    g.groupName,
+                    g.groupname,
                     ia.time,
                     ib.maxProductionLimit
                 FROM evesde_industryactivity ia
-                JOIN evesde_invtypes t ON ia.typeID = t.typeID
-                JOIN evesde_invgroups g ON t.groupID = g.groupID
-                LEFT JOIN evesde_industryblueprints ib ON ia.typeID = ib.typeID
+                JOIN evesde_invtypes t ON ia.typeid = t.typeid
+                JOIN evesde_invgroups g ON t.groupid = g.groupid
+                LEFT JOIN evesde_industryblueprints ib ON ia.typeid = ib.typeid
                 WHERE ia.activityID = ?
-                    AND t.published = 1
-                    AND g.categoryID = 9
-                ORDER BY g.groupName, t.typeName
+                    AND t.published = TRUE
+                    AND g.categoryid = 9
+                ORDER BY g.groupname, t.typename
                 LIMIT 500
             """, [activity_id])
 
@@ -1655,10 +1655,10 @@ def sde_industry_activities(request: HttpRequest) -> HttpResponse:
 
                 # Get product for this activity
                 cursor.execute("""
-                    SELECT iap.productTypeID, t.typeName, iap.quantity
+                    SELECT iap.productTypeID, t.typename, iap.quantity
                     FROM evesde_industryactivityproducts iap
-                    JOIN evesde_invtypes t ON iap.productTypeID = t.typeID
-                    WHERE iap.typeID = ? AND iap.activityID = ?
+                    JOIN evesde_invtypes t ON iap.productTypeID = t.typeid
+                    WHERE iap.typeid = ? AND iap.activityID = ?
                 """, [bp_type_id, activity_id])
 
                 product_row = cursor.fetchone()
@@ -1672,11 +1672,11 @@ def sde_industry_activities(request: HttpRequest) -> HttpResponse:
 
                 # Get top 5 materials for this activity
                 cursor.execute("""
-                    SELECT iam.materialTypeID, t.typeName, g.groupName, iam.quantity
+                    SELECT iam.materialTypeID, t.typename, g.groupname, iam.quantity
                     FROM evesde_industryactivitymaterials iam
-                    JOIN evesde_invtypes t ON iam.materialTypeID = t.typeID
-                    JOIN evesde_invgroups g ON t.groupID = g.groupID
-                    WHERE iam.typeID = ? AND iam.activityID = ?
+                    JOIN evesde_invtypes t ON iam.materialTypeID = t.typeid
+                    JOIN evesde_invgroups g ON t.groupid = g.groupid
+                    WHERE iam.typeid = ? AND iam.activityID = ?
                     ORDER BY iam.quantity DESC
                     LIMIT 5
                 """, [bp_type_id, activity_id])
@@ -1693,12 +1693,12 @@ def sde_industry_activities(request: HttpRequest) -> HttpResponse:
 
                 # Get skill requirements
                 cursor.execute("""
-                    SELECT ias.skillID, t.typeName, g.groupName, ias.level
+                    SELECT ias.skillID, t.typename, g.groupname, ias.level
                     FROM evesde_industryactivityskills ias
-                    JOIN evesde_invtypes t ON ias.skillID = t.typeID
-                    JOIN evesde_invgroups g ON t.groupID = g.groupID
-                    WHERE ias.typeID = ? AND ias.activityID = ?
-                    ORDER BY ias.level DESC, t.typeName
+                    JOIN evesde_invtypes t ON ias.skillID = t.typeid
+                    JOIN evesde_invgroups g ON t.groupid = g.groupid
+                    WHERE ias.typeid = ? AND ias.activityID = ?
+                    ORDER BY ias.level DESC, t.typename
                 """, [bp_type_id, activity_id])
 
                 skill_rows = cursor.fetchall()
@@ -1911,19 +1911,19 @@ def find_route(origin_id: int, destination_id: int, route_type: str) -> list:
                 # This is a simplified version that doesn't use actual stargate connections
                 cursor.execute("""
                     SELECT
-                        s1.solarSystemID,
-                        s2.solarSystemID,
+                        s1.solarsystemid,
+                        s2.solarsystemid,
                         s2.security
                     FROM evesde_mapsolarsystems s1
                     CROSS JOIN evesde_mapsolarsystems s2
-                    WHERE s1.solarSystemID != s2.solarSystemID
+                    WHERE s1.solarsystemid != s2.solarsystemid
                         AND (
                             -- Same constellation (likely connected)
-                            (s1.constellationID = s2.constellationID AND s1.solarSystemID < s2.solarSystemID)
+                            (s1.constellationid = s2.constellationid AND s1.solarsystemid < s2.solarsystemid)
                             OR
                             -- Adjacent constellations in same region
-                            (s1.regionID = s2.regionID AND s1.constellationID != s2.constellationID
-                             AND s1.solarSystemID < s2.solarSystemID
+                            (s1.regionid = s2.regionid AND s1.constellationid != s2.constellationid
+                             AND s1.solarsystemid < s2.solarsystemid
                              AND ABS(s1.security - s2.security) < 0.5)
                         )
                     LIMIT 10000
@@ -1945,7 +1945,7 @@ def find_route(origin_id: int, destination_id: int, route_type: str) -> list:
                         toSolarSystemID,
                         s.security
                     FROM evesde_mapsolarsystemjumps j
-                    JOIN evesde_mapsolarsystems s ON j.toSolarSystemID = s.solarSystemID
+                    JOIN evesde_mapsolarsystems s ON j.toSolarSystemID = s.solarsystemid
                 """)
 
                 # Build graph: {system_id: [(neighbor_id, weight), ...]}
@@ -2227,102 +2227,102 @@ def sde_sitemap(request: HttpRequest) -> HttpResponse:
         with connection.cursor() as cursor:
             # Categories with item counts
             cursor.execute("""
-                SELECT c.categoryID, c.categoryName, COUNT(DISTINCT t.typeID) as item_count
+                SELECT c.categoryid, c.categoryname, COUNT(DISTINCT t.typeid) as item_count
                 FROM evesde_invcategories c
-                LEFT JOIN evesde_invgroups g ON c.categoryID = g.categoryID
-                LEFT JOIN evesde_invtypes t ON g.groupID = t.groupID AND t.published = 1
-                WHERE c.published = 1
-                GROUP BY c.categoryID, c.categoryName
-                ORDER BY c.categoryName
+                LEFT JOIN evesde_invgroups g ON c.categoryid = g.categoryid
+                LEFT JOIN evesde_invtypes t ON g.groupid = t.groupid AND t.published = TRUE
+                WHERE c.published = TRUE
+                GROUP BY c.categoryid, c.categoryname
+                ORDER BY c.categoryname
             """)
             categories = [{'id': row[0], 'name': row[1], 'count': row[2]} for row in cursor.fetchall()]
 
             # Top 50 groups by item count
             cursor.execute("""
-                SELECT g.groupID, g.groupName, c.categoryName, COUNT(DISTINCT t.typeID) as item_count
+                SELECT g.groupid, g.groupname, c.categoryname, COUNT(DISTINCT t.typeid) as item_count
                 FROM evesde_invgroups g
-                JOIN evesde_invcategories c ON g.categoryID = c.categoryID
-                LEFT JOIN evesde_invtypes t ON g.groupID = t.groupID AND t.published = 1
-                WHERE g.published = 1 AND c.published = 1
-                GROUP BY g.groupID, g.groupName, c.categoryName
-                HAVING item_count > 0
-                ORDER BY item_count DESC, g.groupName
+                JOIN evesde_invcategories c ON g.categoryid = c.categoryid
+                LEFT JOIN evesde_invtypes t ON g.groupid = t.groupid AND t.published = TRUE
+                WHERE g.published = TRUE AND c.published = TRUE
+                GROUP BY g.groupid, g.groupname, c.categoryname
+                HAVING COUNT(DISTINCT t.typeid) > 0
+                ORDER BY COUNT(DISTINCT t.typeid) DESC, g.groupname
                 LIMIT 50
             """)
             top_groups = [{'id': row[0], 'name': row[1], 'category': row[2], 'count': row[3]} for row in cursor.fetchall()]
 
             # All market groups (top-level only with counts)
             cursor.execute("""
-                SELECT mg.marketGroupID, mg.marketGroupName,
-                       COUNT(DISTINCT t.typeID) as item_count,
-                       (SELECT COUNT(*) FROM evesde_invmarketgroups WHERE parentGroupID = mg.marketGroupID) as child_count
+                SELECT mg.marketgroupid, mg.marketgroupname,
+                       COUNT(DISTINCT t.typeid) as item_count,
+                       (SELECT COUNT(*) FROM evesde_invmarketgroups WHERE parentgroupid = mg.marketgroupid) as child_count
                 FROM evesde_invmarketgroups mg
-                LEFT JOIN evesde_invtypes t ON mg.marketGroupID = t.marketGroupID AND t.published = 1
-                WHERE mg.parentGroupID IS NULL
-                GROUP BY mg.marketGroupID, mg.marketGroupName
-                ORDER BY mg.marketGroupName
+                LEFT JOIN evesde_invtypes t ON mg.marketgroupid = t.marketgroupid AND t.published = TRUE
+                WHERE mg.parentgroupid IS NULL
+                GROUP BY mg.marketgroupid, mg.marketgroupname
+                ORDER BY mg.marketgroupname
             """)
             market_groups = [{'id': row[0], 'name': row[1], 'count': row[2], 'child_count': row[3]} for row in cursor.fetchall()]
 
             # All meta groups with counts
             cursor.execute("""
-                SELECT mg.metaGroupID, mg.metaGroupName, COUNT(DISTINCT mt.typeID) as item_count
+                SELECT mg.metagroupid, mg.metagroupname, COUNT(DISTINCT mt.typeid) as item_count
                 FROM evesde_invmetagroups mg
-                LEFT JOIN evesde_invmetatypes mt ON mg.metaGroupID = mt.metaGroupID
-                GROUP BY mg.metaGroupID, mg.metaGroupName
-                ORDER BY mg.metaGroupID
+                LEFT JOIN evesde_invmetatypes mt ON mg.metagroupid = mt.metagroupid
+                GROUP BY mg.metagroupid, mg.metagroupname
+                ORDER BY mg.metagroupid
             """)
             meta_groups = [{'id': row[0], 'name': row[1], 'count': row[2]} for row in cursor.fetchall()]
 
             # All factions with corporation counts
             cursor.execute("""
-                SELECT f.factionID, f.factionName,
-                       (SELECT COUNT(*) FROM evesde_crpnpccorporations WHERE factionID = f.factionID) as corp_count,
-                       (SELECT COUNT(*) FROM evesde_chrfactions WHERE factionID = f.factionID) as system_count
+                SELECT f.factionid, f.factionname,
+                       (SELECT COUNT(*) FROM evesde_crpnpccorporations WHERE factionid = f.factionid) as corp_count,
+                       (SELECT COUNT(*) FROM evesde_chrfactions WHERE factionid = f.factionid) as system_count
                 FROM evesde_chrfactions f
-                ORDER BY f.factionName
+                ORDER BY f.factionname
             """)
             factions = [{'id': row[0], 'name': row[1], 'corp_count': row[2], 'system_count': row[3]} for row in cursor.fetchall()]
 
             # Ship classes (groups from Ship category)
             cursor.execute("""
-                SELECT g.groupID, g.groupName, COUNT(DISTINCT t.typeID) as item_count
+                SELECT g.groupid, g.groupname, COUNT(DISTINCT t.typeid) as item_count
                 FROM evesde_invgroups g
-                JOIN evesde_invcategories c ON g.categoryID = c.categoryID
-                LEFT JOIN evesde_invtypes t ON g.groupID = t.groupID AND t.published = 1
-                WHERE c.categoryID = 6 AND g.published = 1
-                GROUP BY g.groupID, g.groupName
-                HAVING item_count > 0
-                ORDER BY g.groupName
+                JOIN evesde_invcategories c ON g.categoryid = c.categoryid
+                LEFT JOIN evesde_invtypes t ON g.groupid = t.groupid AND t.published = TRUE
+                WHERE c.categoryid = 6 AND g.published = TRUE
+                GROUP BY g.groupid, g.groupname
+                HAVING COUNT(DISTINCT t.typeid) > 0
+                ORDER BY g.groupname
             """)
             ship_classes = [{'id': row[0], 'name': row[1], 'count': row[2]} for row in cursor.fetchall()]
 
             # Skill groups
             cursor.execute("""
-                SELECT g.groupID, g.groupName, COUNT(DISTINCT t.typeID) as item_count
+                SELECT g.groupid, g.groupname, COUNT(DISTINCT t.typeid) as item_count
                 FROM evesde_invgroups g
-                LEFT JOIN evesde_invtypes t ON g.groupID = t.groupID AND t.published = 1
-                WHERE g.categoryID = 16 AND g.published = 1
-                GROUP BY g.groupID, g.groupName
-                HAVING item_count > 0
-                ORDER BY g.groupName
+                LEFT JOIN evesde_invtypes t ON g.groupid = t.groupid AND t.published = TRUE
+                WHERE g.categoryid = 16 AND g.published = TRUE
+                GROUP BY g.groupid, g.groupname
+                HAVING COUNT(DISTINCT t.typeid) > 0
+                ORDER BY g.groupname
             """)
             skill_groups = [{'id': row[0], 'name': row[1], 'count': row[2]} for row in cursor.fetchall()]
 
             # Sample regions for sitemap (first 20 alphabetically)
             cursor.execute("""
-                SELECT r.regionID, r.regionName, r.x, r.y, r.z, f.factionName
+                SELECT r.regionid, r.regionname, r.x_coord, r.y_coord, r.z_coord, f.factionname
                 FROM evesde_mapregions r
-                LEFT JOIN evesde_chrfactions f ON r.factionID = f.factionID
-                ORDER BY r.regionName
+                LEFT JOIN evesde_chrfactions f ON r.factionid = f.factionid
+                ORDER BY r.regionname
                 LIMIT 20
             """)
             sample_regions = [{
                 'region_id': row[0],
                 'region_name': row[1],
-                'x': row[2],
-                'y': row[3],
-                'z': row[4],
+                'x': row[2],  # x_coord in DB
+                'y': row[3],  # y_coord in DB
+                'z': row[4],  # z_coord in DB
                 'faction_name': row[5]
             } for row in cursor.fetchall()]
 
