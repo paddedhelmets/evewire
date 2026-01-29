@@ -215,11 +215,11 @@ def sde_item_detail(request: HttpRequest, type_id: int) -> HttpResponse:
     # Get attributes for this item using raw SQL (ORM has issues with this table)
     with connection.cursor() as cursor:
         cursor.execute("""
-            SELECT ta.attributeID, at.attributeName, at.displayName, ta.valueint, ta.valueFloat
+            SELECT ta.attributeid, at.attributename, at.displayname, ta.valueint, ta.valuefloat
             FROM evesde_dgmtypeattributes ta
-            JOIN evesde_dgmattributetypes at ON ta.attributeID = at.attributeID
+            JOIN evesde_dgmattributetypes at ON ta.attributeid = at.attributeid
             WHERE ta.typeid = %s
-            ORDER BY at.attributeName
+            ORDER BY at.attributename
         """, [type_id])
         attr_rows = cursor.fetchall()
 
@@ -490,7 +490,7 @@ def get_skill_prereqs_sql(skill_id: int):
 
             cursor.execute("""
                 SELECT valueint FROM evesde_dgmtypeattributes
-                WHERE typeid = %s AND attributeID = 182
+                WHERE typeid = %s AND attributeid = 182
             """, [current_id])
             prereq_row = cursor.fetchone()
             
@@ -526,11 +526,11 @@ def get_ship_fitting(ship_id: int) -> dict:
         attr_ids_str = ','.join(map(str, fitting_attr_ids))
         # Use %s placeholders and format the query directly
         query = """
-            SELECT ta.attributeID, at.attributeName, ta.valueint, ta.valueFloat
+            SELECT ta.attributeid, at.attributename, ta.valueint, ta.valuefloat
             FROM evesde_dgmtypeattributes ta
-            JOIN evesde_dgmattributetypes at ON ta.attributeID = at.attributeID
-            WHERE ta.typeid = %s AND ta.attributeID IN (%s)
-            ORDER BY ta.attributeID
+            JOIN evesde_dgmattributetypes at ON ta.attributeid = at.attributeid
+            WHERE ta.typeid = %s AND ta.attributeid IN (%s)
+            ORDER BY ta.attributeid
         """ % (ship_id, attr_ids_str)
         cursor.execute(query)
         
@@ -670,9 +670,9 @@ def _get_module_attributes(type_id: int) -> dict:
 
         for name, attr_id in fitting_queries:
             cursor.execute("""
-                SELECT valueint, valueFloat
+                SELECT valueint, valuefloat
                 FROM evesde_dgmtypeattributes
-                WHERE typeid = %s AND attributeID = %s
+                WHERE typeid = %s AND attributeid = %s
             """, [type_id, attr_id])
             row = cursor.fetchone()
             if row:
@@ -694,9 +694,9 @@ def _get_module_attributes(type_id: int) -> dict:
 
         for name, attr_id in combat_queries:
             cursor.execute("""
-                SELECT valueint, valueFloat
+                SELECT valueint, valuefloat
                 FROM evesde_dgmtypeattributes
-                WHERE typeid = %s AND attributeID = %s
+                WHERE typeid = %s AND attributeid = %s
             """, [type_id, attr_id])
             row = cursor.fetchone()
             if row:
@@ -949,12 +949,12 @@ def sde_ship_detail(request: HttpRequest, ship_id: int) -> HttpResponse:
         placeholders = ','.join(str(x) for x in req_attr_ids)
 
         cursor.execute("""
-            SELECT ta.attributeID, ta.valueint, t.typename, t.typeid, g.groupname
+            SELECT ta.attributeid, ta.valueint, t.typename, t.typeid, g.groupname
             FROM evesde_dgmtypeattributes ta
             JOIN evesde_invtypes t ON ta.valueint = t.typeid
             JOIN evesde_invgroups g ON t.groupid = g.groupid
-            WHERE ta.typeid = %s AND ta.attributeID IN (%s)
-            ORDER BY ta.attributeID
+            WHERE ta.typeid = %s AND ta.attributeid IN (%s)
+            ORDER BY ta.attributeid
         """ % (ship_id, placeholders))
 
         skill_attr_map = {
@@ -1052,7 +1052,7 @@ def sde_blueprint_detail(request: HttpRequest, blueprint_id: int) -> HttpRespons
         try:
             with connection.cursor() as cursor:
                 cursor.execute("""
-                    SELECT m.materialtypeid, t.typename, g.groupname, m.quantity, t.volume, t.basePrice
+                    SELECT m.materialtypeid, t.typename, g.groupname, m.quantity, t.volume, t.baseprice
                     FROM evesde_invtypematerials m
                     JOIN evesde_invtypes t ON m.materialtypeid = t.typeid
                     JOIN evesde_invgroups g ON t.groupid = g.groupid
@@ -1101,11 +1101,11 @@ def sde_blueprint_detail(request: HttpRequest, blueprint_id: int) -> HttpRespons
 
             placeholders = ','.join(str(x) for x in industry_attr_ids)
             cursor.execute("""
-                SELECT ta.attributeID, at.attributeName, ta.valueint, ta.valueFloat, at.displayName
-                FROM dgmTypeAttributes ta
-                JOIN dgmAttributeTypes at ON ta.attributeID = at.attributeID
-                WHERE ta.typeid = %s AND ta.attributeID IN (""" + placeholders + """)
-                ORDER BY ta.attributeID
+                SELECT ta.attributeid, at.attributename, ta.valueint, ta.valuefloat, at.displayname
+                FROM evesde_dgmtypeattributes ta
+                JOIN evesde_dgmattributetypes at ON ta.attributeid = at.attributeid
+                WHERE ta.typeid = %s AND ta.attributeid IN (""" + placeholders + """)
+                ORDER BY ta.attributeid
             """, [blueprint_id])
 
             for attr_id, attr_name, val_int, val_float, display_name in cursor.fetchall():
@@ -1313,12 +1313,12 @@ def sde_certificate_detail(request: HttpRequest, cert_id: int) -> HttpResponse:
     try:
         with connection.cursor() as cursor:
             cursor.execute("""
-                SELECT cm.masteryLevel, t.typeid, t.typename, g.groupname
+                SELECT cm.masterylevel, t.typeid, t.typename, g.groupname
                 FROM evesde_certmasteries cm
                 JOIN evesde_invtypes t ON cm.typeid = t.typeid
                 JOIN evesde_invgroups g ON t.groupid = g.groupid
                 WHERE cm.certid = %s AND t.published = TRUE
-                ORDER BY cm.masteryLevel, g.groupname, t.typename
+                ORDER BY cm.masterylevel, g.groupname, t.typename
             """, [cert_id])
 
             for row in cursor.fetchall():
@@ -1901,8 +1901,8 @@ def find_route(origin_id: int, destination_id: int, route_type: str) -> list:
         with connection.cursor() as cursor:
             # First, check if the jump table exists
             cursor.execute("""
-                SELECT name FROM sqlite_master
-                WHERE type='table' AND name='evesde_mapsolarsystemjumps'
+                SELECT table_name FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'evesde_mapsolarsystemjumps'
             """)
             jump_table_exists = cursor.fetchone() is not None
 
@@ -1941,11 +1941,11 @@ def find_route(origin_id: int, destination_id: int, route_type: str) -> list:
                 # Build adjacency list with security weights from actual jump table
                 cursor.execute("""
                     SELECT
-                        fromSolarSystemID,
-                        toSolarSystemID,
+                        fromsolarsystemid,
+                        tosolarsystemid,
                         s.security
                     FROM evesde_mapsolarsystemjumps j
-                    JOIN evesde_mapsolarsystems s ON j.toSolarSystemID = s.solarsystemid
+                    JOIN evesde_mapsolarsystems s ON j.tosolarsystemid = s.solarsystemid
                 """)
 
                 # Build graph: {system_id: [(neighbor_id, weight), ...]}
@@ -2059,52 +2059,52 @@ def sde_skills_directory(request: HttpRequest) -> HttpResponse:
             # Build the query with filters
             sql_query = """
                 SELECT
-                    t.typeID, t.typeName, t.description,
-                    g.groupID, g.groupName,
-                    COALESCE(ta1.valueInt, 0) as primaryAttribute,
-                    COALESCE(ta2.valueInt, 0) as secondaryAttribute,
-                    COALESCE(ta3.valueInt, 1) as skillRank
+                    t.typeid, t.typename, t.description,
+                    g.groupid, g.groupname,
+                    COALESCE(ta1.valueint, 0) as primaryAttribute,
+                    COALESCE(ta2.valueint, 0) as secondaryAttribute,
+                    COALESCE(ta3.valueint, 1) as skillRank
                 FROM evesde_invtypes t
-                JOIN evesde_invgroups g ON t.groupID = g.groupID
-                LEFT JOIN evesde_dgmtypeattributes ta1 ON t.typeID = ta1.typeID AND ta1.attributeID = 180
-                LEFT JOIN evesde_dgmtypeattributes ta2 ON t.typeID = ta2.typeID AND ta2.attributeID = 181
-                LEFT JOIN evesde_dgmtypeattributes ta3 ON t.typeID = ta3.typeID AND ta3.attributeID = 275
-                WHERE g.categoryID = 16 AND t.published = 1
+                JOIN evesde_invgroups g ON t.groupid = g.groupid
+                LEFT JOIN evesde_dgmtypeattributes ta1 ON t.typeid = ta1.typeid AND ta1.attributeid = 180
+                LEFT JOIN evesde_dgmtypeattributes ta2 ON t.typeid = ta2.typeid AND ta2.attributeid = 181
+                LEFT JOIN evesde_dgmtypeattributes ta3 ON t.typeid = ta3.typeid AND ta3.attributeid = 275
+                WHERE g.categoryid = 16 AND t.published = 1
             """
             params = []
 
             # Apply search filter in SQL
             if search_query and len(search_query) >= 2:
-                sql_query += " AND (t.typeName LIKE ? OR t.description LIKE ?)"
+                sql_query += " AND (t.typename LIKE %s OR t.description LIKE %s)"
                 params.extend([f'%{search_query}%', f'%{search_query}%'])
 
             # Apply attribute filters
             if primary_attr and primary_attr in ATTRIBUTE_IDS:
-                sql_query += " AND ta1.valueInt = ?"
+                sql_query += " AND ta1.valueint = %s"
                 params.append(ATTRIBUTE_IDS[primary_attr])
 
             if secondary_attr and secondary_attr in ATTRIBUTE_IDS:
-                sql_query += " AND ta2.valueInt = ?"
+                sql_query += " AND ta2.valueint = %s"
                 params.append(ATTRIBUTE_IDS[secondary_attr])
 
             if rank_filter:
                 try:
                     rank_val = int(rank_filter)
-                    sql_query += " AND ta3.valueInt = ?"
+                    sql_query += " AND ta3.valueint = %s"
                     params.append(rank_val)
                 except ValueError:
                     pass
 
             # Apply sorting
             sort_options = {
-                'name': 't.typeName ASC',
-                'name_desc': 't.typeName DESC',
-                'group': 'g.groupName, t.typeName',
-                'rank': 'ta3.valueInt, t.typeName',
-                'rank_desc': 'ta3.valueInt DESC, t.typeName',
+                'name': 't.typename ASC',
+                'name_desc': 't.typename DESC',
+                'group': 'g.groupname, t.typename',
+                'rank': 'ta3.valueint, t.typename',
+                'rank_desc': 'ta3.valueint DESC, t.typename',
             }
 
-            order_by = sort_options.get(sort_by, 'g.groupName, t.typeName')
+            order_by = sort_options.get(sort_by, 'g.groupname, t.typename')
             sql_query += f" ORDER BY {order_by}"
 
             cursor.execute(sql_query, params)
@@ -2415,39 +2415,39 @@ def sde_ship_fittings(request: HttpRequest, ship_id: int) -> HttpResponse:
             # Build query for modules with fitting requirements
             sql_query = """
                 SELECT DISTINCT
-                    t.typeID, t.typeName, t.description, t.basePrice, t.volume,
-                    g.groupID, g.groupName,
-                    c.categoryID, c.categoryName,
-                    mt.metaGroupID,
-                    COALESCE(ta_cpu.valueFloat, ta_cpu.valueInt) as cpu_req,
-                    COALESCE(ta_pg.valueFloat, ta_pg.valueInt) as pg_req,
-                    COALESCE(ta_cap.valueFloat, ta_cap.valueInt) as cap_req,
-                    COALESCE(ta_cal.valueFloat, ta_cal.valueInt) as cal_req,
-                    ta_slot.valueInt as slot_attr_id
+                    t.typeid, t.typename, t.description, t.baseprice, t.volume,
+                    g.groupid, g.groupname,
+                    c.categoryid, c.categoryname,
+                    mt.metagroupid,
+                    COALESCE(ta_cpu.valuefloat, ta_cpu.valueint) as cpu_req,
+                    COALESCE(ta_pg.valuefloat, ta_pg.valueint) as pg_req,
+                    COALESCE(ta_cap.valuefloat, ta_cap.valueint) as cap_req,
+                    COALESCE(ta_cal.valuefloat, ta_cal.valueint) as cal_req,
+                    ta_slot.valueint as slot_attr_id
                 FROM evesde_invtypes t
-                JOIN evesde_invgroups g ON t.groupID = g.groupID
-                JOIN evesde_invcategories c ON g.categoryID = c.categoryID
-                LEFT JOIN evesde_invmetatypes mt ON t.typeID = mt.typeID
-                LEFT JOIN evesde_dgmtypeattributes ta_cpu ON t.typeID = ta_cpu.typeID AND ta_cpu.attributeID = 50
-                LEFT JOIN evesde_dgmtypeattributes ta_pg ON t.typeID = ta_pg.typeID AND ta_pg.attributeID = 11
-                LEFT JOIN evesde_dgmtypeattributes ta_cap ON t.typeID = ta_cap.typeID AND ta_cap.attributeID = 856
-                LEFT JOIN evesde_dgmtypeattributes ta_cal ON t.typeID = ta_cal.typeID AND ta_cal.attributeID = 1132
-                LEFT JOIN evesde_dgmtypeattributes ta_slot ON t.typeID = ta_slot.typeID AND ta_slot.attributeID IN (12, 13, 14, 970)
-                WHERE c.categoryID IN (7, 8, 32)
+                JOIN evesde_invgroups g ON t.groupid = g.groupid
+                JOIN evesde_invcategories c ON g.categoryid = c.categoryid
+                LEFT JOIN evesde_invmetatypes mt ON t.typeid = mt.typeid
+                LEFT JOIN evesde_dgmtypeattributes ta_cpu ON t.typeid = ta_cpu.typeid AND ta_cpu.attributeid = 50
+                LEFT JOIN evesde_dgmtypeattributes ta_pg ON t.typeid = ta_pg.typeid AND ta_pg.attributeid = 11
+                LEFT JOIN evesde_dgmtypeattributes ta_cap ON t.typeid = ta_cap.typeid AND ta_cap.attributeid = 856
+                LEFT JOIN evesde_dgmtypeattributes ta_cal ON t.typeid = ta_cal.typeid AND ta_cal.attributeid = 1132
+                LEFT JOIN evesde_dgmtypeattributes ta_slot ON t.typeid = ta_slot.typeid AND ta_slot.attributeid IN (12, 13, 14, 970)
+                WHERE c.categoryid IN (7, 8, 32)
                     AND t.published = 1
             """
             params = []
 
             # Filter by slot type
             if slot_type in SLOT_ATTRS:
-                sql_query += " AND ta_slot.attributeID = ?"
+                sql_query += " AND ta_slot.attributeid = %s"
                 params.append(SLOT_ATTRS[slot_type])
 
             # Filter by meta group
             if meta_group_id:
                 try:
                     meta_id = int(meta_group_id)
-                    sql_query += " AND mt.metaGroupID = ?"
+                    sql_query += " AND mt.metagroupid = %s"
                     params.append(meta_id)
                 except ValueError:
                     pass
@@ -2456,7 +2456,7 @@ def sde_ship_fittings(request: HttpRequest, ship_id: int) -> HttpResponse:
             if max_pg and fitting.get('powerOutput'):
                 try:
                     pg_limit = float(max_pg)
-                    sql_query += " AND (ta_pg.valueFloat <= ? OR ta_pg.valueInt <= ? OR ta_pg.valueFloat IS NULL)"
+                    sql_query += " AND (ta_pg.valuefloat <= %s OR ta_pg.valueint <= %s OR ta_pg.valuefloat IS NULL)"
                     params.extend([pg_limit, pg_limit])
                 except ValueError:
                     pass
@@ -2465,12 +2465,12 @@ def sde_ship_fittings(request: HttpRequest, ship_id: int) -> HttpResponse:
             if max_cpu and fitting.get('cpu'):
                 try:
                     cpu_limit = float(max_cpu)
-                    sql_query += " AND (ta_cpu.valueFloat <= ? OR ta_cpu.valueInt <= ? OR ta_cpu.valueFloat IS NULL)"
+                    sql_query += " AND (ta_cpu.valuefloat <= %s OR ta_cpu.valueint <= %s OR ta_cpu.valuefloat IS NULL)"
                     params.extend([cpu_limit, cpu_limit])
                 except ValueError:
                     pass
 
-            sql_query += " ORDER BY g.groupName, t.typeName LIMIT 500"
+            sql_query += " ORDER BY g.groupname, t.typename LIMIT 500"
 
             cursor.execute(sql_query, params)
 
