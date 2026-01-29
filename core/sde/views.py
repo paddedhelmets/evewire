@@ -672,7 +672,7 @@ def _get_module_attributes(type_id: int) -> dict:
             cursor.execute("""
                 SELECT valueint, valueFloat
                 FROM evesde_dgmtypeattributes
-                WHERE typeid = ? AND attributeID = ?
+                WHERE typeid = %s AND attributeID = %s
             """, [type_id, attr_id])
             row = cursor.fetchone()
             if row:
@@ -696,7 +696,7 @@ def _get_module_attributes(type_id: int) -> dict:
             cursor.execute("""
                 SELECT valueint, valueFloat
                 FROM evesde_dgmtypeattributes
-                WHERE typeid = ? AND attributeID = ?
+                WHERE typeid = %s AND attributeID = %s
             """, [type_id, attr_id])
             row = cursor.fetchone()
             if row:
@@ -1052,11 +1052,11 @@ def sde_blueprint_detail(request: HttpRequest, blueprint_id: int) -> HttpRespons
         try:
             with connection.cursor() as cursor:
                 cursor.execute("""
-                    SELECT m.materialTypeID, t.typename, g.groupname, m.quantity, t.volume, t.basePrice
+                    SELECT m.materialtypeid, t.typename, g.groupname, m.quantity, t.volume, t.basePrice
                     FROM evesde_invtypematerials m
-                    JOIN evesde_invtypes t ON m.materialTypeID = t.typeid
+                    JOIN evesde_invtypes t ON m.materialtypeid = t.typeid
                     JOIN evesde_invgroups g ON t.groupid = g.groupid
-                    WHERE m.typeid = ?
+                    WHERE m.typeid = %s
                     ORDER BY g.groupname, t.typename
                 """, [product.type_id])
 
@@ -1104,7 +1104,7 @@ def sde_blueprint_detail(request: HttpRequest, blueprint_id: int) -> HttpRespons
                 SELECT ta.attributeID, at.attributeName, ta.valueint, ta.valueFloat, at.displayName
                 FROM dgmTypeAttributes ta
                 JOIN dgmAttributeTypes at ON ta.attributeID = at.attributeID
-                WHERE ta.typeid = ? AND ta.attributeID IN (""" + placeholders + """)
+                WHERE ta.typeid = %s AND ta.attributeID IN (""" + placeholders + """)
                 ORDER BY ta.attributeID
             """, [blueprint_id])
 
@@ -1282,13 +1282,13 @@ def sde_certificate_detail(request: HttpRequest, cert_id: int) -> HttpResponse:
     try:
         with connection.cursor() as cursor:
             cursor.execute("""
-                SELECT cs.certLevelInt, cs.skillLevel, cs.certLevelText,
+                SELECT cs.certlevelint, cs.skilllevel, cs.certleveltext,
                        t.typeid, t.typename, g.groupname, t.description
                 FROM evesde_certskills cs
-                JOIN evesde_invtypes t ON cs.skillID = t.typeid
+                JOIN evesde_invtypes t ON cs.skillid = t.typeid
                 JOIN evesde_invgroups g ON t.groupid = g.groupid
-                WHERE cs.certID = ?
-                ORDER BY cs.certLevelInt, t.typename
+                WHERE cs.certid = %s
+                ORDER BY cs.certlevelint, t.typename
             """, [cert_id])
 
             for row in cursor.fetchall():
@@ -1317,7 +1317,7 @@ def sde_certificate_detail(request: HttpRequest, cert_id: int) -> HttpResponse:
                 FROM evesde_certmasteries cm
                 JOIN evesde_invtypes t ON cm.typeid = t.typeid
                 JOIN evesde_invgroups g ON t.groupid = g.groupid
-                WHERE cm.certID = ? AND t.published = TRUE
+                WHERE cm.certid = %s AND t.published = TRUE
                 ORDER BY cm.masteryLevel, g.groupname, t.typename
             """, [cert_id])
 
@@ -1640,7 +1640,7 @@ def sde_industry_activities(request: HttpRequest) -> HttpResponse:
                 JOIN evesde_invtypes t ON ia.typeid = t.typeid
                 JOIN evesde_invgroups g ON t.groupid = g.groupid
                 LEFT JOIN evesde_industryblueprints ib ON ia.typeid = ib.typeid
-                WHERE ia.activityID = ?
+                WHERE ia.activityid = %s
                     AND t.published = TRUE
                     AND g.categoryid = 9
                 ORDER BY g.groupname, t.typename
@@ -1655,10 +1655,10 @@ def sde_industry_activities(request: HttpRequest) -> HttpResponse:
 
                 # Get product for this activity
                 cursor.execute("""
-                    SELECT iap.productTypeID, t.typename, iap.quantity
+                    SELECT iap.producttypeid, t.typename, iap.quantity
                     FROM evesde_industryactivityproducts iap
-                    JOIN evesde_invtypes t ON iap.productTypeID = t.typeid
-                    WHERE iap.typeid = ? AND iap.activityID = ?
+                    JOIN evesde_invtypes t ON iap.producttypeid = t.typeid
+                    WHERE iap.typeid = %s AND iap.activityid = %s
                 """, [bp_type_id, activity_id])
 
                 product_row = cursor.fetchone()
@@ -1672,11 +1672,11 @@ def sde_industry_activities(request: HttpRequest) -> HttpResponse:
 
                 # Get top 5 materials for this activity
                 cursor.execute("""
-                    SELECT iam.materialTypeID, t.typename, g.groupname, iam.quantity
+                    SELECT iam.materialtypeid, t.typename, g.groupname, iam.quantity
                     FROM evesde_industryactivitymaterials iam
-                    JOIN evesde_invtypes t ON iam.materialTypeID = t.typeid
+                    JOIN evesde_invtypes t ON iam.materialtypeid = t.typeid
                     JOIN evesde_invgroups g ON t.groupid = g.groupid
-                    WHERE iam.typeid = ? AND iam.activityID = ?
+                    WHERE iam.typeid = %s AND iam.activityid = %s
                     ORDER BY iam.quantity DESC
                     LIMIT 5
                 """, [bp_type_id, activity_id])
@@ -1693,11 +1693,11 @@ def sde_industry_activities(request: HttpRequest) -> HttpResponse:
 
                 # Get skill requirements
                 cursor.execute("""
-                    SELECT ias.skillID, t.typename, g.groupname, ias.level
+                    SELECT ias.skillid, t.typename, g.groupname, ias.level
                     FROM evesde_industryactivityskills ias
-                    JOIN evesde_invtypes t ON ias.skillID = t.typeid
+                    JOIN evesde_invtypes t ON ias.skillid = t.typeid
                     JOIN evesde_invgroups g ON t.groupid = g.groupid
-                    WHERE ias.typeid = ? AND ias.activityID = ?
+                    WHERE ias.typeid = %s AND ias.activityid = %s
                     ORDER BY ias.level DESC, t.typename
                 """, [bp_type_id, activity_id])
 
