@@ -92,25 +92,17 @@ def prepare_sql_for_postgresql(create_sql: str, sde_table: str, django_table: st
     create_sql = re.sub(r'\bcmin\b', 'cmin_coord', create_sql, flags=re.IGNORECASE)
     create_sql = re.sub(r'\bcmax\b', 'cmax_coord', create_sql, flags=re.IGNORECASE)
 
-    # Rename coordinate columns (x, y, z) for consistency
-    create_sql = re.sub(r'\b`x`\b', 'x_coord', create_sql, flags=re.IGNORECASE)
-    create_sql = re.sub(r'\b`y`\b', 'y_coord', create_sql, flags=re.IGNORECASE)
-    create_sql = re.sub(r'\b`z`\b', 'z_coord', create_sql, flags=re.IGNORECASE)
-    create_sql = re.sub(r'\bx\s+double', 'x_coord DOUBLE PRECISION', create_sql, flags=re.IGNORECASE)
-    create_sql = re.sub(r'\by\s+double', 'y_coord DOUBLE PRECISION', create_sql, flags=re.IGNORECASE)
-    create_sql = re.sub(r'\bz\s+double', 'z_coord DOUBLE PRECISION', create_sql, flags=re.IGNORECASE)
-
-    # Replace table name
+    # Replace table name (don't include the opening parenthesis in the match)
     create_sql = re.sub(
-        r'CREATE TABLE (?:IF NOT EXISTS )?\w+\(?',
-        f'CREATE TABLE {django_table} (',
+        r'CREATE TABLE (?:IF NOT EXISTS )?(\w+)',
+        f'CREATE TABLE {django_table}',
         create_sql
     )
 
-    # Type conversions (order matters!)
+    # Type conversions (order matters! Do these BEFORE coordinate renames)
     create_sql = create_sql.replace(' REAL', ' DOUBLE PRECISION')
-    create_sql = re.sub(r' double ', ' DOUBLE PRECISION ', create_sql, flags=re.IGNORECASE)
-    create_sql = re.sub(r' double,', ' DOUBLE PRECISION,', create_sql, flags=re.IGNORECASE)
+    # Be careful not to double-convert DOUBLE PRECISION
+    create_sql = re.sub(r'\bdouble\b', 'DOUBLE PRECISION', create_sql, flags=re.IGNORECASE)
 
     # Handle INTEGER → BIGINT for specific tables that need it
     if is_dgm_type_attributes or 'dgmTypeAttributes' in sde_table:
@@ -118,14 +110,41 @@ def prepare_sql_for_postgresql(create_sql: str, sde_table: str, django_table: st
         create_sql = re.sub(r'\bINTEGER\b', 'BIGINT', create_sql, flags=re.IGNORECASE)
     else:
         # More selective conversions for other tables
+        # IMPORTANT: Do ID-specific conversions FIRST, before the generic PRIMARY KEY replacement
+        create_sql = re.sub(r'\btypeID INTEGER', 'typeID BIGINT', create_sql, flags=re.IGNORECASE)
+        create_sql = re.sub(r'\bvalueInt INTEGER', 'valueInt BIGINT', create_sql, flags=re.IGNORECASE)
+        create_sql = re.sub(r'\bvalue_integer INTEGER', 'value_integer BIGINT', create_sql, flags=re.IGNORECASE)
+        # Corporation and faction tables may have large IDs
+        create_sql = re.sub(r'\bcorporationID INTEGER', 'corporationID BIGINT', create_sql, flags=re.IGNORECASE)
+        create_sql = re.sub(r'\bfactionID INTEGER', 'factionID BIGINT', create_sql, flags=re.IGNORECASE)
+        create_sql = re.sub(r'\bsolarSystemID INTEGER', 'solarSystemID BIGINT', create_sql, flags=re.IGNORECASE)
+        create_sql = re.sub(r'\bregionID INTEGER', 'regionID BIGINT', create_sql, flags=re.IGNORECASE)
+        create_sql = re.sub(r'\bconstellationID INTEGER', 'constellationID BIGINT', create_sql, flags=re.IGNORECASE)
+        create_sql = re.sub(r'\bstationID INTEGER', 'stationID BIGINT', create_sql, flags=re.IGNORECASE)
+        create_sql = re.sub(r'\bceoID INTEGER', 'ceoID BIGINT', create_sql, flags=re.IGNORECASE)
+        create_sql = re.sub(r'\bcreatorID INTEGER', 'creatorID BIGINT', create_sql, flags=re.IGNORECASE)
+        create_sql = re.sub(r'\ballianceID INTEGER', 'allianceID BIGINT', create_sql, flags=re.IGNORECASE)
+        create_sql = re.sub(r'\ballyID INTEGER', 'allyID BIGINT', create_sql, flags=re.IGNORECASE)
+        create_sql = re.sub(r'\b(investorID\d) INTEGER', r'\1 BIGINT', create_sql, flags=re.IGNORECASE)
+        create_sql = re.sub(r'\bfriendID INTEGER', 'friendID BIGINT', create_sql, flags=re.IGNORECASE)
+        create_sql = re.sub(r'\benemyID INTEGER', 'enemyID BIGINT', create_sql, flags=re.IGNORECASE)
+        create_sql = re.sub(r'\biconID INTEGER', 'iconID BIGINT', create_sql, flags=re.IGNORECASE)
+        # Share and price columns can exceed INTEGER range
+        create_sql = re.sub(r'\bpublicShares INTEGER', 'publicShares BIGINT', create_sql, flags=re.IGNORECASE)
+        create_sql = re.sub(r'\b(investorShares\d) INTEGER', r'\1 BIGINT', create_sql, flags=re.IGNORECASE)
+        # Now handle remaining INTEGER PRIMARY KEY → SERIAL (but only if not already converted to BIGINT)
         create_sql = create_sql.replace(' INTEGER PRIMARY KEY', ' SERIAL PRIMARY KEY')
-        create_sql = re.sub(r'\btypeID INTEGER', 'typeID BIGINT', create_sql)
-        create_sql = re.sub(r'\bvalueInt INTEGER', 'valueInt BIGINT', create_sql)
-        create_sql = re.sub(r'\bvalue_integer INTEGER', 'value_integer BIGINT', create_sql)
+        create_sql = create_sql.replace(' BIGINT PRIMARY KEY', ' BIGINT PRIMARY KEY')  # No change, keeps BIGINT
         # Remaining INTEGER stays as INTEGER
 
     # Remove BLOB
     create_sql = create_sql.replace(' BLOB', ' BYTEA')
+
+    # Rename coordinate columns AFTER type conversions (to avoid double-converting DOUBLE PRECISION)
+    # x DOUBLE PRECISION -> x_coord DOUBLE PRECISION
+    create_sql = re.sub(r'\bx\s+', 'x_coord ', create_sql, flags=re.IGNORECASE)
+    create_sql = re.sub(r'\by\s+', 'y_coord ', create_sql, flags=re.IGNORECASE)
+    create_sql = re.sub(r'\bz\s+', 'z_coord ', create_sql, flags=re.IGNORECASE)
 
     return create_sql
 
