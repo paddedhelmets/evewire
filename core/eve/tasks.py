@@ -675,11 +675,11 @@ def refresh_war_detail(war_id: int) -> dict:
             'declared': data.get('declared'),
             'started': data.get('started'),
             'finished': data.get('finished'),
-            'aggressor_id': data.get('aggressor', {}).get('id'),
+            'aggressor_id': data.get('aggressor', {}).get('id') or 0,  # Handle missing aggressor
             'aggressor_name': data.get('aggressor', {}).get('name', ''),
             'ally_id': ally_id,
             'ally_name': ally_name,
-            'defender_id': data.get('defender', {}).get('id'),
+            'defender_id': data.get('defender', {}).get('id') or 0,  # Handle missing defender
             'defender_name': data.get('defender', {}).get('name', ''),
             'defender_ally_id': defender_ally_id,
             'defender_ally_name': defender_ally_name,
