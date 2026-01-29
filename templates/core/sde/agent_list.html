@@ -6,7 +6,7 @@
 <style>
 .agent-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
     gap: 1rem;
     margin-top: 1rem;
 }
@@ -26,6 +26,11 @@
     font-weight: 600;
     margin-bottom: 0.5rem;
 }
+.agent-location {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
 .agent-info {
     font-size: 0.85rem;
     color: var(--text-secondary);
@@ -38,6 +43,26 @@
     background: var(--bg-secondary);
     border-radius: 4px;
 }
+.pagination {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 2rem;
+}
+.pagination a, .pagination span {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    text-decoration: none;
+}
+.pagination a:hover {
+    background: var(--bg-primary);
+}
+.pagination .current {
+    background: var(--link-color);
+    color: white;
+    border-color: var(--link-color);
+}
 </style>
 
 <div class="card">
@@ -48,26 +73,54 @@
 
     <h1>Agents</h1>
     <p style="color: var(--text-secondary);">
-        All {{ agents|length }} agents in EVE Online
+        NPC agents throughout New Eden (Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }})
     </p>
 </div>
 
 <div class="card">
     <div class="agent-grid">
-        {% for agent in agents %}
+        {% for item in agents %}
         <div class="agent-item">
-            <a href="{% url 'core:sde_agent_detail' agent.agent_id %}" style="text-decoration: none;">
+            <a href="{% url 'core:sde_agent_detail' item.agent.agent_id %}" style="text-decoration: none;">
                 <div class="agent-name">
-                    Agent {{ agent.agent_id }} - Level {{ agent.level }}
+                    L{{ item.agent.level }} {{ item.agent_type_name|default:"Agent" }}
+                    {% if item.faction_name %}— {{ item.faction_name }}{% endif %}
                 </div>
+                {% if item.corp_name %}
+                <div class="agent-location">{{ item.corp_name }}</div>
+                {% endif %}
+                {% if item.station_name %}
+                <div class="agent-location" style="font-size: 0.8rem;">
+                    📍 {{ item.station_name }}
+                    {% if item.system_name %}({{ item.system_name }}){% endif %}
+                </div>
+                {% endif %}
                 <div class="agent-info">
-                    <span class="agent-badge">Level {{ agent.level }}</span>
-                    <span class="agent-badge">Quality: {{ agent.quality }}</span>
-                    <span class="agent-badge">Corp ID: {{ agent.corporation_id }}</span>
+                    <span class="agent-badge">Level {{ item.agent.level }}</span>
+                    {% if item.agent.quality is not none %}
+                    <span class="agent-badge">Q: {{ item.agent.quality }}</span>
+                    {% endif %}
+                    {% if item.agent.is_locator %}
+                    <span class="agent-badge">Locator</span>
+                    {% endif %}
                 </div>
             </a>
         </div>
         {% endfor %}
     </div>
+
+    {% if page_obj.has_other_pages %}
+    <div class="pagination">
+        {% if page_obj.has_previous %}
+            <a href="?page={{ page_obj.previous_page_number }}">← Previous</a>
+        {% endif %}
+
+        <span class="current">Page {{ page_obj.number }}</span>
+
+        {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}">Next →</a>
+        {% endif %}
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

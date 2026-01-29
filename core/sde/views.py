@@ -1452,11 +1452,70 @@ def sde_corporation_list(request: HttpRequest) -> HttpResponse:
 
 
 def sde_agent_list(request: HttpRequest) -> HttpResponse:
-    """List all agents."""
-    agents = AgtAgents.objects.all().order_by('level', 'quality')
+    """List all agents with corporation and location info."""
+    from django.core.paginator import Paginator
+
+    # Get paginated agents
+    page = request.GET.get('page', 1)
+    agents_qs = AgtAgents.objects.all().order_by('level', 'quality', 'agent_id')
+
+    paginator = Paginator(agents_qs, 100)  # 100 agents per page
+    agents_page = paginator.get_page(page)
+
+    # Enrich agents with corporation names and location info
+    enriched_agents = []
+    for agent in agents_page:
+        # Get corporation name
+        corp_name = None
+        faction_name = None
+        if agent.corporation_id:
+            try:
+                name_obj = InvNames.objects.get(item_id=agent.corporation_id)
+                corp_name = name_obj.item_name
+            except InvNames.DoesNotExist:
+                corp_name = f'Corp {agent.corporation_id}'
+
+            # Get faction from corporation
+            try:
+                corp = CrpNPCCorporations.objects.get(corporation_id=agent.corporation_id)
+                if corp.faction_id:
+                    faction = ChrFactions.objects.get(faction_id=corp.faction_id)
+                    faction_name = faction.faction_name
+            except (CrpNPCCorporations.DoesNotExist, ChrFactions.DoesNotExist):
+                pass
+
+        # Get station/system info
+        station_name = None
+        system_name = None
+        if agent.location_id:
+            try:
+                station = StaStations.objects.get(station_id=agent.location_id)
+                station_name = station.station_name
+                system_name = station.solar_system.system_name if station.solar_system else None
+            except StaStations.DoesNotExist:
+                pass
+
+        # Get agent type
+        agent_type_name = None
+        if agent.agent_type_id:
+            try:
+                agent_type = AgtAgentTypes.objects.get(agent_type_id=agent.agent_type_id)
+                agent_type_name = agent_type.agent_type
+            except AgtAgentTypes.DoesNotExist:
+                pass
+
+        enriched_agents.append({
+            'agent': agent,
+            'corp_name': corp_name,
+            'faction_name': faction_name,
+            'station_name': station_name,
+            'system_name': system_name,
+            'agent_type_name': agent_type_name,
+        })
 
     return render(request, 'core/sde/agent_list.html', {
-        'agents': agents,
+        'agents': enriched_agents,
+        'page_obj': agents_page,
     })
 
 
