@@ -35,7 +35,7 @@ def send_verification_email(user, request) -> bool:
     user.save()
 
     # Build login link
-    base_url = getattr(settings, 'APP_BASE_URL', 'http://192.168.0.90:8000')
+    base_url = getattr(settings, 'APP_BASE_URL', 'http://localhost:8000')
     login_link = f"{base_url}/verify-email/{token}/"
 
     # Development mode: print to console instead of sending email
