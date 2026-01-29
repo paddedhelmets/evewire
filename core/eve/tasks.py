@@ -659,6 +659,23 @@ def refresh_war_detail(war_id: int) -> dict:
 
     data = response.data
 
+    # ESI war structure changed - now uses alliance_id/corporation_id instead of id
+    # Extract aggressor info (could be alliance or corporation)
+    aggressor = data.get('aggressor', {})
+    aggressor_id = (
+        aggressor.get('alliance_id') or
+        aggressor.get('corporation_id') or
+        aggressor.get('id') or 0
+    )
+
+    # Extract defender info (could be alliance or corporation)
+    defender = data.get('defender', {})
+    defender_id = (
+        defender.get('alliance_id') or
+        defender.get('corporation_id') or
+        defender.get('id') or 0
+    )
+
     # Extract ally (aggressor's ally) from data
     ally = data.get('aggressor', {}).get('ally')
     ally_id = ally.get('id') if ally else None
@@ -675,11 +692,11 @@ def refresh_war_detail(war_id: int) -> dict:
             'declared': data.get('declared'),
             'started': data.get('started'),
             'finished': data.get('finished'),
-            'aggressor_id': data.get('aggressor', {}).get('id') or 0,  # Handle missing aggressor
+            'aggressor_id': aggressor_id,
             'aggressor_name': data.get('aggressor', {}).get('name', ''),
             'ally_id': ally_id,
             'ally_name': ally_name,
-            'defender_id': data.get('defender', {}).get('id') or 0,  # Handle missing defender
+            'defender_id': defender_id,
             'defender_name': data.get('defender', {}).get('name', ''),
             'defender_ally_id': defender_ally_id,
             'defender_ally_name': defender_ally_name,
@@ -847,13 +864,24 @@ def refresh_fw_systems() -> dict:
     FactionWarfareSystem.objects.all().delete()
 
     # Create new records
+    # ESI now uses owner_faction_id instead of faction_id
     systems = []
     for sys_data in response.data:
+        # Look up system name from SDE
+        system_id = sys_data.get('solar_system_id')
+        system_name = ''
+        try:
+            from core.eve.models import SolarSystem
+            system = SolarSystem.objects.get(id=system_id)
+            system_name = system.name
+        except:
+            pass
+
         systems.append(FactionWarfareSystem(
-            system_id=sys_data.get('solar_system_id'),
-            faction_id=sys_data.get('faction_id'),
+            system_id=system_id,
+            faction_id=sys_data.get('owner_faction_id') or sys_data.get('faction_id'),
             corporation_id=sys_data.get('corporation_id'),
-            solar_system_name=sys_data.get('solar_system_name', ''),
+            solar_system_name=system_name,
         ))
 
     FactionWarfareSystem.objects.bulk_create(systems)
