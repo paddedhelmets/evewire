@@ -73,7 +73,16 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         # Get the shared SDE database path
-        sde_db_path = Path(settings.DATABASES['default']['NAME'])
+        # For SQLite, use the DB path. For PostgreSQL, use a data directory.
+        db_engine = settings.DATABASES['default']['ENGINE']
+        db_name = settings.DATABASES['default']['NAME']
+
+        if 'sqlite' in db_engine:
+            sde_db_path = Path(db_name).parent / f"{Path(db_name).stem}_sde.sqlite"
+        else:
+            # For PostgreSQL, store SDE in a data directory
+            from pathlib import Path
+            sde_db_path = Path.home() / 'data' / 'evewire' / 'sde.sqlite'
 
         self.stdout.write(f'SDE Database: {sde_db_path}')
 
@@ -216,18 +225,39 @@ class Command(BaseCommand):
 
     def _table_exists(self, table_name: str) -> bool:
         """Check if a table already exists and has data."""
-        import sqlite3
-        db_path = settings.DATABASES['default']['NAME']
+        from django.db import connections
 
-        conn = sqlite3.connect(db_path)
-        result = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", [table_name]).fetchone()
-        if result:
-            # Check if table has data
-            count_result = conn.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()
+        db_engine = settings.DATABASES['default']['ENGINE']
+
+        if 'postgresql' in db_engine:
+            # PostgreSQL check
+            with connections['default'].cursor() as cursor:
+                cursor.execute("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.tables
+                        WHERE table_name = %s
+                    )
+                """, [f"core_{table_name}"])
+                if not cursor.fetchone()[0]:
+                    return False
+                # Check if table has data
+                try:
+                    cursor.execute(f"SELECT COUNT(*) FROM core_{table_name}")
+                    return cursor.fetchone()[0] > 0
+                except:
+                    return False
+        else:
+            # SQLite fallback
+            import sqlite3
+            db_path = settings.DATABASES['default']['NAME']
+            conn = sqlite3.connect(db_path)
+            result = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", [table_name]).fetchone()
+            if result:
+                count_result = conn.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()
+                conn.close()
+                return count_result[0] > 0
             conn.close()
-            return count_result[0] > 0
-        conn.close()
-        return False
+            return False
 
     def _copy_table(self, sde_path: str, sde_table: str, django_table: str) -> int:
         """
@@ -238,96 +268,222 @@ class Command(BaseCommand):
         needed is renaming the table itself.
         """
         import sqlite3
+        from django.db import connections
 
-        db_path = settings.DATABASES['default']['NAME']
+        db_engine = settings.DATABASES['default']['ENGINE']
+        django_table_full = f"core_{django_table}"
 
         # Connect to SDE database
         sde_conn = sqlite3.connect(sde_path)
         sde_conn.row_factory = sqlite3.Row
-
-        # Connect to our Django database (raw sqlite for direct table manipulation)
-        django_conn = sqlite3.connect(db_path)
-        django_cursor = django_conn.cursor()
-
-        # Get table schema and data from SDE
         sde_cursor = sde_conn.cursor()
-
-        # Get table schema from SDE
-        sde_cursor.execute(f"SELECT sql FROM sqlite_master WHERE type='table' AND name='{sde_table}'")
-        schema_row = sde_cursor.fetchone()
-
-        if not schema_row:
-            sde_conn.close()
-            django_conn.close()
-            raise ValueError(f"Table {sde_table} not found in SDE")
-
-        # Get the CREATE TABLE statement
-        create_sql = schema_row['sql']
-
-        # Remove double quotes around identifiers (SQLite uses double quotes for column/table names)
-        create_sql = create_sql.replace('"', '')
-        # Remove MySQL-specific clauses that Fuzzwork might include
-        create_sql = create_sql.replace('COLLATE utf8mb4_unicode_ci', '')
-        create_sql = create_sql.replace('DEFAULT CURRENT_TIMESTAMP', '')
-        create_sql = create_sql.replace('ON UPDATE CURRENT_TIMESTAMP', '')
-
-        # Replace the table name in CREATE statement with Django table name
-        # Handle both "CREATE TABLE name" and "CREATE TABLE IF NOT EXISTS name"
-        import re
-        create_sql = re.sub(
-            r'CREATE TABLE (?:IF NOT EXISTS )?\w+ \(',
-            f'CREATE TABLE {django_table} (',
-            create_sql
-        )
-
-        # Drop existing Django table if any
-        django_cursor.execute(f"DROP TABLE IF EXISTS {django_table}")
-
-        # Create table with Django name (keeping SDE column names)
-        django_cursor.execute(create_sql)
-
-        # Get row count from SDE
-        sde_cursor.execute(f"SELECT COUNT(*) as cnt FROM {sde_table}")
-        row_count = sde_cursor.fetchone()[0]
-
-        # Copy data in batches
-        batch_size = 1000
-        offset = 0
-        total_copied = 0
 
         # Get column names from SDE
         sde_cursor.execute(f"SELECT * FROM {sde_table} LIMIT 1")
         original_columns = [desc[0] for desc in sde_cursor.description]
 
-        while True:
-            sde_cursor.execute(f"SELECT * FROM {sde_table} LIMIT {batch_size} OFFSET {offset}")
-            rows = sde_cursor.fetchall()
+        if 'postgresql' in db_engine:
+            # PostgreSQL path
+            from django.db import connection
 
-            if not rows:
-                break
+            # Get table schema from SDE to create table
+            sde_cursor.execute(f"SELECT sql FROM sqlite_master WHERE type='table' AND name='{sde_table}'")
+            schema_row = sde_cursor.fetchone()
 
-            # Build and execute INSERT statement
-            placeholders = ', '.join(['?'] * len(original_columns))
-            insert_sql = f"INSERT INTO {django_table} ({', '.join(original_columns)}) VALUES ({placeholders})"
+            if not schema_row:
+                sde_conn.close()
+                raise ValueError(f"Table {sde_table} not found in SDE")
 
-            django_cursor.executemany(insert_sql, rows)
-            total_copied += len(rows)
-            offset += batch_size
+            # Get the CREATE TABLE statement
+            create_sql = schema_row['sql']
 
-        # Special post-processing for TypeAttribute - add id column for Django
-        # Django models require a primary key named 'id', but SDE uses composite key
-        if django_table == 'core_typeattribute':
-            self.stdout.write(f'  Adding id column for Django compatibility...')
-            django_cursor.execute(f"ALTER TABLE {django_table} ADD COLUMN id INTEGER")
-            # Populate id with rowid
-            django_cursor.execute(f"UPDATE {django_table} SET id = rowid")
+            # Clean up SQL for PostgreSQL
+            import re
+            create_sql = create_sql.replace('"', '')  # Remove SQLite quotes
+            create_sql = create_sql.replace('`', '')   # Remove MySQL backticks
+            create_sql = create_sql.replace('COLLATE utf8mb4_unicode_ci', '')
+            create_sql = create_sql.replace('DEFAULT CURRENT_TIMESTAMP', '')
+            create_sql = create_sql.replace('ON UPDATE CURRENT_TIMESTAMP', '')
 
-        # Commit changes and close connections
-        django_conn.commit()
-        sde_conn.close()
-        django_conn.close()
+            # Rename columns that conflict with PostgreSQL system columns (case-insensitive)
+            create_sql = re.sub(r'\bxmin\b', 'xmin_coord', create_sql, flags=re.IGNORECASE)
+            create_sql = re.sub(r'\bxmax\b', 'xmax_coord', create_sql, flags=re.IGNORECASE)
+            create_sql = re.sub(r'\bcmin\b', 'cmin_coord', create_sql, flags=re.IGNORECASE)
+            create_sql = re.sub(r'\bcmax\b', 'cmax_coord', create_sql, flags=re.IGNORECASE)
+            # Rename x, y, z coordinate columns for consistency
+            create_sql = re.sub(r'\b`x`\b', 'x_coord', create_sql, flags=re.IGNORECASE)
+            create_sql = re.sub(r'\b`y`\b', 'y_coord', create_sql, flags=re.IGNORECASE)
+            create_sql = re.sub(r'\b`z`\b', 'z_coord', create_sql, flags=re.IGNORECASE)
+            create_sql = re.sub(r'\bx\s+double', 'x_coord DOUBLE PRECISION', create_sql, flags=re.IGNORECASE)
+            create_sql = re.sub(r'\by\s+double', 'y_coord DOUBLE PRECISION', create_sql, flags=re.IGNORECASE)
+            create_sql = re.sub(r'\bz\s+double', 'z_coord DOUBLE PRECISION', create_sql, flags=re.IGNORECASE)
 
-        return total_copied
+            # Replace SQLite/MySQL types with PostgreSQL types (order matters!)
+            # For dgmTypeAttributes specifically, manually build the CREATE TABLE
+            # to handle EVE's large typeIDs and the composite primary key
+            if 'dgmTypeAttributes' in sde_table:
+                # Manually build the table schema
+                create_sql = """CREATE TABLE core_typeattribute (
+    typeID BIGINT NOT NULL,
+    attributeID BIGINT NOT NULL,
+    valueInt BIGINT,
+    valueFloat DOUBLE PRECISION,
+    id SERIAL PRIMARY KEY
+)"""
+            else:
+                create_sql = create_sql.replace(' INTEGER PRIMARY KEY', ' SERIAL PRIMARY KEY')
+                # Use BIGINT for typeID and valueInt columns that might overflow
+                create_sql = re.sub(r'\btypeID INTEGER', 'typeID BIGINT', create_sql)
+                create_sql = re.sub(r'\bvalueInt INTEGER', 'valueInt BIGINT', create_sql)
+                create_sql = re.sub(r'\bvalue_integer INTEGER', 'value_integer BIGINT', create_sql)
+                create_sql = create_sql.replace(' INTEGER', ' INTEGER')
+                create_sql = create_sql.replace(' TEXT', ' TEXT')
+                create_sql = create_sql.replace(' REAL', ' DOUBLE PRECISION')   # SQLite REAL (must come before double)
+                create_sql = create_sql.replace(' double ', ' DOUBLE PRECISION ')  # MySQL double (lowercase, with spaces)
+                create_sql = create_sql.replace(' double,', ' DOUBLE PRECISION,')  # MySQL double (lowercase, with comma)
+                create_sql = create_sql.replace(' BLOB', ' BYTEA')
+
+            # Replace table name
+            create_sql = re.sub(
+                r'CREATE TABLE (?:IF NOT EXISTS )?\w+ \(',
+                f'CREATE TABLE {django_table_full} (',
+                create_sql
+            )
+
+            with connection.cursor() as django_cursor:
+                # Drop and create table
+                django_cursor.execute(f"DROP TABLE IF EXISTS {django_table_full}")
+                django_cursor.execute(create_sql)
+
+                # Get row count from SDE
+                sde_cursor.execute(f"SELECT COUNT(*) as cnt FROM {sde_table}")
+                row_count = sde_cursor.fetchone()[0]
+
+                # Copy data in batches
+                batch_size = 1000
+                offset = 0
+                total_copied = 0
+
+                # Build column list with proper PostgreSQL identifiers
+                # Rename columns that conflict with system columns (case-insensitive)
+                renamed_columns = []
+                for col in original_columns:
+                    col_lower = col.lower()
+                    if col_lower in ('xmin', 'xmax', 'cmin', 'cmax'):
+                        renamed_columns.append(f"{col}_coord")
+                    elif col_lower in ('x', 'y', 'z'):
+                        renamed_columns.append(f"{col}_coord")
+                    else:
+                        renamed_columns.append(col)
+                columns_str = ', '.join(renamed_columns)
+                placeholders = ', '.join(['%s'] * len(original_columns))
+
+                while True:
+                    sde_cursor.execute(f"SELECT * FROM {sde_table} LIMIT {batch_size} OFFSET {offset}")
+                    rows = sde_cursor.fetchall()
+
+                    if not rows:
+                        break
+
+                    # Build and execute INSERT statement
+                    insert_sql = f"INSERT INTO {django_table_full} ({columns_str}) VALUES ({placeholders})"
+
+                    # Convert rows to list of tuples for executemany
+                    rows_to_insert = [tuple(row[col] for col in original_columns) for row in rows]
+                    django_cursor.executemany(insert_sql, rows_to_insert)
+
+                    total_copied += len(rows)
+                    offset += batch_size
+
+                # Special post-processing for TypeAttribute - add id column for Django
+                # Django models require a primary key named 'id', but SDE uses composite key
+                if django_table == 'typeattribute':
+                    self.stdout.write(f'  Adding id column for Django compatibility...')
+                    django_cursor.execute(f"ALTER TABLE {django_table_full} ADD COLUMN id SERIAL PRIMARY KEY")
+
+            sde_conn.close()
+            return total_copied
+
+        else:
+            # SQLite path (original code)
+            db_path = settings.DATABASES['default']['NAME']
+
+            # Connect to our Django database (raw sqlite for direct table manipulation)
+            django_conn = sqlite3.connect(db_path)
+            django_cursor = django_conn.cursor()
+
+            # Get table schema from SDE
+            sde_cursor.execute(f"SELECT sql FROM sqlite_master WHERE type='table' AND name='{sde_table}'")
+            schema_row = sde_cursor.fetchone()
+
+            if not schema_row:
+                sde_conn.close()
+                django_conn.close()
+                raise ValueError(f"Table {sde_table} not found in SDE")
+
+            # Get the CREATE TABLE statement
+            create_sql = schema_row['sql']
+
+            # Remove double quotes around identifiers (SQLite uses double quotes for column/table names)
+            create_sql = create_sql.replace('"', '')
+            # Remove MySQL-specific clauses that Fuzzwork might include
+            create_sql = create_sql.replace('COLLATE utf8mb4_unicode_ci', '')
+            create_sql = create_sql.replace('DEFAULT CURRENT_TIMESTAMP', '')
+            create_sql = create_sql.replace('ON UPDATE CURRENT_TIMESTAMP', '')
+
+            # Replace the table name in CREATE statement with Django table name
+            # Handle both "CREATE TABLE name" and "CREATE TABLE IF NOT EXISTS name"
+            import re
+            create_sql = re.sub(
+                r'CREATE TABLE (?:IF NOT EXISTS )?\w+ \(',
+                f'CREATE TABLE {django_table} (',
+                create_sql
+            )
+
+            # Drop existing Django table if any
+            django_cursor.execute(f"DROP TABLE IF EXISTS {django_table}")
+
+            # Create table with Django name (keeping SDE column names)
+            django_cursor.execute(create_sql)
+
+            # Get row count from SDE
+            sde_cursor.execute(f"SELECT COUNT(*) as cnt FROM {sde_table}")
+            row_count = sde_cursor.fetchone()[0]
+
+            # Copy data in batches
+            batch_size = 1000
+            offset = 0
+            total_copied = 0
+
+            while True:
+                sde_cursor.execute(f"SELECT * FROM {sde_table} LIMIT {batch_size} OFFSET {offset}")
+                rows = sde_cursor.fetchall()
+
+                if not rows:
+                    break
+
+                # Build and execute INSERT statement
+                placeholders = ', '.join(['?'] * len(original_columns))
+                insert_sql = f"INSERT INTO {django_table} ({', '.join(original_columns)}) VALUES ({placeholders})"
+
+                django_cursor.executemany(insert_sql, rows)
+                total_copied += len(rows)
+                offset += batch_size
+
+            # Special post-processing for TypeAttribute - add id column for Django
+            # Django models require a primary key named 'id', but SDE uses composite key
+            if django_table == 'typeattribute':
+                self.stdout.write(f'  Adding id column for Django compatibility...')
+                django_cursor.execute(f"ALTER TABLE {django_table} ADD COLUMN id INTEGER")
+                # Populate id with rowid
+                django_cursor.execute(f"UPDATE {django_table} SET id = rowid")
+
+            # Commit changes and close connections
+            django_conn.commit()
+            sde_conn.close()
+            django_conn.close()
+
+            return total_copied
 
     def _get_latest_sde_url(self) -> str | None:
         """Fetch the latest SDE release URL from GitHub."""
