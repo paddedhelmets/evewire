@@ -142,7 +142,7 @@
         <div class="info-card">
             <div class="info-label">Owner</div>
             <div class="info-value">
-                <a href="{% url 'core:sde_corporation_detail' station.corporation.corporation_id %}">{{ station.corporation.corporation_name }}</a>
+                <a href="{% url 'core:sde_corporation_detail' station.corporation.corporation_id %}">{{ station.corporation.name }}</a>
             </div>
         </div>
         {% endif %}
@@ -206,7 +206,7 @@
             <a href="{% url 'core:sde_station_detail' other_station.station_id %}">
                 <div class="station-name">{{ other_station.station_name }}</div>
                 {% if other_station.corporation %}
-                <div class="corporation-name">{{ other_station.corporation.corporation_name }}</div>
+                <div class="corporation-name">{{ other_station.corporation.name }}</div>
                 {% endif %}
             </a>
         </div>

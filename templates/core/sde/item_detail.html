@@ -21,7 +21,7 @@
         <div><strong>Group:</strong> <a href="{% url 'core:sde_group_detail' item.group_id %}">{{ item.group.group_name }}</a></div>
         <div><strong>Category:</strong> <a href="{% url 'core:sde_category_detail' item.group.category_id %}">{{ item.group.category.category_name }}</a></div>
         {% if item.market_group_id %}
-        <div><strong>Market Group:</strong> <a href="#">{{ item.market_group.market_group_name }}</a></div>
+        <div><strong>Market Group:</strong> <a href="{% url 'core:sde_market_group_detail' item.market_group_id %}">{{ item.market_group.market_group_name }}</a></div>
         {% endif %}
         <div><strong>Volume:</strong> {{ item.volume }} m³</div>
         {% if item.published %}

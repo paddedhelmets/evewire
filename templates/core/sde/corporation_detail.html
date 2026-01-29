@@ -126,7 +126,11 @@
                         <a href="{% url 'core:sde_system_detail' station.solar_system.system_id %}">{{ station.solar_system.system_name }}</a>
                     </td>
                     <td style="padding: 0.5rem;">
+                        {% if station.region and station.region.region_id %}
                         <a href="{% url 'core:sde_region_detail' station.region.region_id %}">{{ station.region.region_name }}</a>
+                        {% else %}
+                        {{ station.region.region_name|default:"Unknown" }}
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}

@@ -37,7 +37,7 @@
 .quality-badge {
     display: inline-block;
     padding: 0.25rem 0.75rem;
-    background: {{ agent.quality|default:0|add:20 }}
+    background: hsl({% widthratio agent.quality|default:0 40 1 %}, 70%, 45%);
     color: white;
     border-radius: 12px;
     font-size: 0.9rem;

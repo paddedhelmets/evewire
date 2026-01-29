@@ -861,40 +861,65 @@ def get_ship_mastery_data(ship_id: int) -> dict:
     Returns a dictionary with mastery levels (1-5) as keys,
     each containing a list of required certificates with their skills.
     """
+    from django.db import connection
+
     mastery_data = {}
 
-    # Get all mastery levels for this ship
-    masteries = CertMasteries.objects.filter(
-        type_id=ship_id
-    ).select_related('cert').order_by('mastery_level')
+    # Get all mastery levels for this ship using raw SQL
+    # (CertMasteries table has no primary key, so ORM doesn't work well)
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT cm.masterylevel, c.certid, c.name, c.description, c.groupid
+            FROM evesde_certmasteries cm
+            JOIN evesde_certcerts c ON cm.certid = c.certid
+            WHERE cm.typeid = %s
+            ORDER BY cm.masterylevel
+        """, [ship_id])
 
-    # Group by mastery level
-    for mastery in masteries:
-        level = mastery.mastery_level
-        if level not in mastery_data:
-            mastery_data[level] = []
+        mastery_rows = cursor.fetchall()
 
-        # Get certificate details
-        cert = mastery.cert
+    # Process each mastery level
+    for mastery_row in mastery_rows:
+        mastery_level, cert_id, cert_name, cert_desc, cert_group = mastery_row
+
+        if mastery_level not in mastery_data:
+            mastery_data[mastery_level] = []
 
         # Get skills required for this certificate
-        cert_skills = CertSkills.objects.filter(
-            cert_id=cert.cert_id
-        ).select_related('skill')
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT cs.skillid, cs.skilllevel, cs.certlevelint, cs.certleveltext
+                FROM evesde_certskills cs
+                WHERE cs.certid = %s
+                ORDER BY cs.certlevelint, cs.skilllevel
+            """, [cert_id])
+
+            skill_rows = cursor.fetchall()
 
         skills = []
-        for cert_skill in cert_skills:
+        for skill_row in skill_rows:
+            skill_id, skill_level, cert_level_int, cert_level_text = skill_row
             try:
-                skill_type = InvTypes.objects.get(type_id=cert_skill.skill_id)
+                skill_type = InvTypes.objects.get(type_id=skill_id)
                 skills.append({
                     'skill': skill_type,
-                    'required_level': cert_skill.skill_level,
-                    'cert_level': cert_skill.cert_level_int,
+                    'required_level': skill_level,
+                    'cert_level': cert_level_int,
                 })
             except InvTypes.DoesNotExist:
                 pass
 
-        mastery_data[level].append({
+        # Create a simple certificate object
+        class SimpleCert:
+            def __init__(self, cert_id, cert_name, cert_desc, cert_group):
+                self.cert_id = cert_id
+                self.name = cert_name
+                self.description = cert_desc
+                self.group_id = cert_group
+
+        cert = SimpleCert(cert_id, cert_name, cert_desc, cert_group)
+
+        mastery_data[mastery_level].append({
             'certificate': cert,
             'skills': skills,
         })
@@ -1585,168 +1610,17 @@ def sde_agent_detail(request: HttpRequest, agent_id: int) -> HttpResponse:
 
 def sde_industry_activities(request: HttpRequest) -> HttpResponse:
     """
-    Industry activity browser showing blueprints by activity type.
+    Industry activity browser - TEMPORARILY DISABLED.
 
-    Activity Types:
-    - 1: Manufacturing (building items)
-    - 3: Time Efficiency Research (TE research)
-    - 4: Material Efficiency Research (ME research)
-    - 5: Invention (T2/T3 invention)
-    - 8: Reactions (moon gas, polymer reactions)
+    This feature requires additional SDE tables that are not currently imported:
+    - evesde_industryactivity
+    - evesde_industryactivityproducts
+    - evesde_industryactivitymaterials
+    - evesde_industryactivityskills
 
-    Shows:
-    - Activity type tabs
-    - Blueprints that support each activity
-    - Product outputs
-    - Material requirements
-    - Skill requirements
+    The eve-sde-converter project needs to be upgraded to export these tables.
     """
-    # Get selected activity type from query params
-    selected_activity = request.GET.get('activity', '1')
-
-    # Activity type definitions
-    ACTIVITY_TYPES = {
-        '1': {'name': 'Manufacturing', 'icon': '🏭', 'description': 'Build items from blueprints'},
-        '3': {'name': 'TE Research', 'icon': '⏱️', 'description': 'Reduce manufacturing time'},
-        '4': {'name': 'ME Research', 'icon': '📉', 'description': 'Reduce material requirements'},
-        '5': {'name': 'Invention', 'icon': '💡', 'description': 'Create T2/T3 blueprint copies'},
-        '8': {'name': 'Reactions', 'icon': '⚗️', 'description': 'Moon gas and polymer reactions'},
-    }
-
-    activity_info = ACTIVITY_TYPES.get(selected_activity, ACTIVITY_TYPES['1'])
-    activity_id = int(selected_activity)
-
-    # Get blueprints that support this activity
-    # Blueprints are in category 9
-    blueprints_with_activity = []
-
-    # Use raw SQL for better performance with composite key tables
-    from django.conf import settings
-    original_debug = settings.DEBUG
-    settings.DEBUG = False
-
-    try:
-        with connection.cursor() as cursor:
-            # Get all blueprints that have this activity
-            cursor.execute("""
-                SELECT DISTINCT
-                    ia.typeid,
-                    t.typename,
-                    t.description,
-                    g.groupname,
-                    ia.time,
-                    ib.maxProductionLimit
-                FROM evesde_industryactivity ia
-                JOIN evesde_invtypes t ON ia.typeid = t.typeid
-                JOIN evesde_invgroups g ON t.groupid = g.groupid
-                LEFT JOIN evesde_industryblueprints ib ON ia.typeid = ib.typeid
-                WHERE ia.activityid = %s
-                    AND t.published = TRUE
-                    AND g.categoryid = 9
-                ORDER BY g.groupname, t.typename
-                LIMIT 500
-            """, [activity_id])
-
-            blueprint_rows = cursor.fetchall()
-
-            # For each blueprint, get products and materials
-            for bp_row in blueprint_rows:
-                bp_type_id, bp_name, bp_desc, group_name, time_val, max_limit = bp_row
-
-                # Get product for this activity
-                cursor.execute("""
-                    SELECT iap.producttypeid, t.typename, iap.quantity
-                    FROM evesde_industryactivityproducts iap
-                    JOIN evesde_invtypes t ON iap.producttypeid = t.typeid
-                    WHERE iap.typeid = %s AND iap.activityid = %s
-                """, [bp_type_id, activity_id])
-
-                product_row = cursor.fetchone()
-                product = None
-                if product_row:
-                    product = {
-                        'type_id': product_row[0],
-                        'name': product_row[1],
-                        'quantity': product_row[2],
-                    }
-
-                # Get top 5 materials for this activity
-                cursor.execute("""
-                    SELECT iam.materialtypeid, t.typename, g.groupname, iam.quantity
-                    FROM evesde_industryactivitymaterials iam
-                    JOIN evesde_invtypes t ON iam.materialtypeid = t.typeid
-                    JOIN evesde_invgroups g ON t.groupid = g.groupid
-                    WHERE iam.typeid = %s AND iam.activityid = %s
-                    ORDER BY iam.quantity DESC
-                    LIMIT 5
-                """, [bp_type_id, activity_id])
-
-                material_rows = cursor.fetchall()
-                materials = []
-                for mat_row in material_rows:
-                    materials.append({
-                        'type_id': mat_row[0],
-                        'name': mat_row[1],
-                        'group': mat_row[2],
-                        'quantity': mat_row[3],
-                    })
-
-                # Get skill requirements
-                cursor.execute("""
-                    SELECT ias.skillid, t.typename, g.groupname, ias.level
-                    FROM evesde_industryactivityskills ias
-                    JOIN evesde_invtypes t ON ias.skillid = t.typeid
-                    JOIN evesde_invgroups g ON t.groupid = g.groupid
-                    WHERE ias.typeid = %s AND ias.activityid = %s
-                    ORDER BY ias.level DESC, t.typename
-                """, [bp_type_id, activity_id])
-
-                skill_rows = cursor.fetchall()
-                skills = []
-                for skill_row in skill_rows:
-                    skills.append({
-                        'type_id': skill_row[0],
-                        'name': skill_row[1],
-                        'group': skill_row[2],
-                        'level': skill_row[3],
-                    })
-
-                blueprints_with_activity.append({
-                    'type_id': bp_type_id,
-                    'name': bp_name,
-                    'description': bp_desc,
-                    'group': group_name,
-                    'time': time_val,
-                    'max_production_limit': max_limit,
-                    'product': product,
-                    'materials': materials,
-                    'skills': skills,
-                })
-    finally:
-        settings.DEBUG = original_debug
-
-    # Get activity counts for the tabs
-    activity_counts = {}
-    for act_id_key in ACTIVITY_TYPES.keys():
-        try:
-            count = IndustryActivity.objects.filter(
-                activity_id=int(act_id_key),
-                type__group__category_id=9,
-                type__published=True
-            ).count()
-            activity_counts[act_id_key] = count
-        except:
-            activity_counts[act_id_key] = 0
-
-    return render(request, 'core/sde/industry_activity.html', {
-        'activity_types': ACTIVITY_TYPES,
-        'selected_activity': selected_activity,
-        'activity_info': activity_info,
-        'activity_id': activity_id,
-        'blueprints': blueprints_with_activity,
-        'activity_counts': activity_counts,
-        'total_blueprints': len(blueprints_with_activity),
-    })
+    return render(request, 'core/sde/industry_disabled.html')
 
 
 # ============================================================================

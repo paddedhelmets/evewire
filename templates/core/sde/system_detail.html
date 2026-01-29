@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}{{ system.solar_system_name }} - SDE Browser{% endblock %}
+{% block title %}{{ system.system_name }} - SDE Browser{% endblock %}
 
 {% block content %}
 <style>
@@ -88,11 +88,11 @@
     <span>&gt;</span>
     <a href="{% url 'core:sde_constellation_detail' system.constellation.constellation_id %}">{{ system.constellation.constellation_name }}</a>
     <span>&gt;</span>
-    <span>{{ system.solar_system_name }}</span>
+    <span>{{ system.system_name }}</span>
 </div>
 
 <div class="card">
-    <h1>{{ system.solar_system_name }}</h1>
+    <h1>{{ system.system_name }}</h1>
 
     <div style="margin-top: 1rem; display: flex; gap: 2rem; flex-wrap: wrap;">
         <div><strong>System ID:</strong> {{ system.system_id }}</div>
@@ -229,7 +229,7 @@
                 <td style="padding: 0.75rem;">
                     {% if station.corporation %}
                     <a href="{% url 'core:sde_corporation_detail' station.corporation.corporation_id %}" style="color: var(--accent-primary); text-decoration: none;">
-                        {{ station.corporation.corporation_name }}
+                        {{ station.corporation.name }}
                     </a>
                     {% else %}
                         —

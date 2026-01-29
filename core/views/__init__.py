@@ -556,17 +556,29 @@ def character_plans_page(request: HttpRequest, character_id: int) -> HttpRespons
 @login_required
 @require_http_methods(['POST'])
 def toggle_theme(request: HttpRequest) -> HttpResponse:
-    """Cycle through themes: light → dark → solarized-light → solarized-dark → light."""
+    """Set theme directly or cycle through themes if no theme specified.
+
+    POST parameters:
+    - theme: Optional specific theme ('light', 'dark', 'solarized-light', 'solarized-dark')
+    If no theme is provided, cycles to next theme.
+    """
     from django.contrib import messages
 
     themes = ['light', 'dark', 'solarized-light', 'solarized-dark']
     current_theme = request.user.settings.get('theme', 'light')
 
-    try:
-        current_index = themes.index(current_theme)
-        new_theme = themes[(current_index + 1) % len(themes)]
-    except ValueError:
-        new_theme = 'light'
+    # Check if a specific theme was requested
+    requested_theme = request.POST.get('theme')
+
+    if requested_theme and requested_theme in themes:
+        new_theme = requested_theme
+    else:
+        # Cycle to next theme (backwards compatible)
+        try:
+            current_index = themes.index(current_theme)
+            new_theme = themes[(current_index + 1) % len(themes)]
+        except ValueError:
+            new_theme = 'light'
 
     request.user.settings['theme'] = new_theme
     request.user.save(update_fields=['settings'])
