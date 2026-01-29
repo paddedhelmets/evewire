@@ -2069,7 +2069,7 @@ def sde_skills_directory(request: HttpRequest) -> HttpResponse:
                 LEFT JOIN evesde_dgmtypeattributes ta1 ON t.typeid = ta1.typeid AND ta1.attributeid = 180
                 LEFT JOIN evesde_dgmtypeattributes ta2 ON t.typeid = ta2.typeid AND ta2.attributeid = 181
                 LEFT JOIN evesde_dgmtypeattributes ta3 ON t.typeid = ta3.typeid AND ta3.attributeid = 275
-                WHERE g.categoryid = 16 AND t.published = 1
+                WHERE g.categoryid = 16 AND t.published = TRUE
             """
             params = []
 
@@ -2434,7 +2434,7 @@ def sde_ship_fittings(request: HttpRequest, ship_id: int) -> HttpResponse:
                 LEFT JOIN evesde_dgmtypeattributes ta_cal ON t.typeid = ta_cal.typeid AND ta_cal.attributeid = 1132
                 LEFT JOIN evesde_dgmtypeattributes ta_slot ON t.typeid = ta_slot.typeid AND ta_slot.attributeid IN (12, 13, 14, 970)
                 WHERE c.categoryid IN (7, 8, 32)
-                    AND t.published = 1
+                    AND t.published = TRUE
             """
             params = []
 
