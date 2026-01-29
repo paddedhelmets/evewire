@@ -28,6 +28,9 @@ EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='webmaster@localhost')
 
+# Application base URL for email links and external references
+APP_BASE_URL = config('APP_BASE_URL', default='http://localhost:8000')
+
 # Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
