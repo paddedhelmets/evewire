@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Industry - Temporarily Unavailable - evewire{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 600px; margin: 2rem auto; padding: 0 1rem;">
+    <div style="background: var(--bg-secondary); border-radius: 8px; padding: 2rem; border: 1px solid var(--border-color); text-align: center;">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">🏭</div>
+        <h1 style="margin: 0 0 1rem 0;">Industry Browser</h1>
+        <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+            This feature is temporarily unavailable.
+        </p>
+
+        <div style="background: var(--bg-primary); border-radius: 6px; padding: 1.5rem; text-align: left; margin-bottom: 1.5rem;">
+            <h3 style="margin: 0 0 0.75rem 0; font-size: 1rem;">What's needed:</h3>
+            <p style="margin: 0; font-size: 0.9rem; color: var(--text-secondary);">
+                The industry browser requires additional Static Data Export tables that are not currently imported:
+            </p>
+            <ul style="margin: 0.75rem 0 0 1.5rem; font-size: 0.9rem; color: var(--text-secondary);">
+                <li>Industry Activity (blueprint manufacturing data)</li>
+                <li>Industry Activity Products (what blueprints produce)</li>
+                <li>Industry Activity Materials (required materials)</li>
+                <li>Industry Activity Skills (skill requirements)</li>
+            </ul>
+        </div>
+
+        <div style="background: var(--bg-primary); border-radius: 6px; padding: 1.5rem; text-align: left; margin-bottom: 1.5rem;">
+            <h3 style="margin: 0 0 0.75rem 0; font-size: 1rem;">Status:</h3>
+            <p style="margin: 0; font-size: 0.9rem; color: var(--text-secondary);">
+                The <code style="background: var(--bg-secondary); padding: 0.2rem 0.4rem; border-radius: 3px;">eve-sde-converter</code>
+                project needs to be upgraded to export these tables. This is on the roadmap and will be addressed in a future update.
+            </p>
+        </div>
+
+        <a href="{% url 'core:sde_index' %}" style="display: inline-block; padding: 0.75rem 1.5rem; background: var(--link-color); color: white; text-decoration: none; border-radius: 6px; font-weight: 500;">
+            ← Back to SDE Browser
+        </a>
+    </div>
+</div>
+{% endblock %}
