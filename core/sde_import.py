@@ -92,12 +92,17 @@ def prepare_sql_for_postgresql(create_sql: str, sde_table: str, django_table: st
     create_sql = create_sql.replace('DEFAULT CURRENT_TIMESTAMP', '')
     create_sql = create_sql.replace('ON UPDATE CURRENT_TIMESTAMP', '')
 
-    # Rename PostgreSQL system column conflicts (exact lowercase match only)
-    # Note: xMin, xMax, etc. are legitimate EVE column names, not system conflicts
-    create_sql = re.sub(r'\bxmin\b', 'xmin_coord', create_sql)
-    create_sql = re.sub(r'\bxmax\b', 'xmax_coord', create_sql)
-    create_sql = re.sub(r'\bcmin\b', 'cmin_coord', create_sql)
-    create_sql = re.sub(r'\bcmax\b', 'cmax_coord', create_sql)
+    # Rename columns that will conflict with PostgreSQL system columns after lowercasing
+    # xMin -> xmin would conflict, so rename to xmin_coord (matching our system column handling)
+    # Use case-insensitive matching to catch xMin, XMIN, etc.
+    create_sql = re.sub(r'\bxmin\b', 'xmin_coord', create_sql, flags=re.IGNORECASE)
+    create_sql = re.sub(r'\bxmax\b', 'xmax_coord', create_sql, flags=re.IGNORECASE)
+    create_sql = re.sub(r'\bymin\b', 'ymin_coord', create_sql, flags=re.IGNORECASE)
+    create_sql = re.sub(r'\bymax\b', 'ymax_coord', create_sql, flags=re.IGNORECASE)
+    create_sql = re.sub(r'\bzmin\b', 'zmin_coord', create_sql, flags=re.IGNORECASE)
+    create_sql = re.sub(r'\bzmax\b', 'zmax_coord', create_sql, flags=re.IGNORECASE)
+    create_sql = re.sub(r'\bcmin\b', 'cmin_coord', create_sql, flags=re.IGNORECASE)
+    create_sql = re.sub(r'\bcmax\b', 'cmax_coord', create_sql, flags=re.IGNORECASE)
 
     # Replace table name (don't include the opening parenthesis in the match)
     create_sql = re.sub(
@@ -245,10 +250,11 @@ def get_renamed_columns(original_columns: list, quote_identifiers: bool = False)
     """
     renamed = []
     for col in original_columns:
-        # Check for EXACT matches to system column names (not lowercase)
-        # xMin, xMax, etc. are legitimate EVE column names, not system conflicts
-        if col in ('xmin', 'xmax', 'cmin', 'cmax'):
-            new_col = f"{col}_coord"
+        # Check for system column name matches (case-insensitive)
+        # xMin, xmin, XMIN, etc. all conflict with PostgreSQL system columns
+        col_lower = col.lower()
+        if col_lower in ('xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax', 'cmin', 'cmax'):
+            new_col = f"{col_lower}_coord"
         elif col in ('x', 'y', 'z'):
             new_col = f"{col}_coord"
         else:

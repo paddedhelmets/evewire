@@ -498,9 +498,9 @@ class Command(BaseCommand):
 
             # Prepare SQL for PostgreSQL
             # Note: dgmTypeAttributes also needs BIGINT handling
-            # Quote identifiers to preserve case for Django db_column mappings
+            # Don't quote identifiers - let PostgreSQL lowercase them (Django standard behavior)
             is_dgm_type_attributes = (sde_table == 'dgmTypeAttributes')
-            create_sql = prepare_sql_for_postgresql(create_sql, sde_table, evesde_table, is_dgm_type_attributes, quote_identifiers=True)
+            create_sql = prepare_sql_for_postgresql(create_sql, sde_table, evesde_table, is_dgm_type_attributes, quote_identifiers=False)
 
             with connection.cursor() as django_cursor:
                 # Drop and create table
@@ -512,8 +512,8 @@ class Command(BaseCommand):
                 offset = 0
                 total_copied = 0
 
-                # Get renamed column names for PostgreSQL (quoted to preserve case)
-                renamed_columns = get_renamed_columns(original_columns, quote_identifiers=True)
+                # Get renamed column names for PostgreSQL (lowercase, not quoted)
+                renamed_columns = get_renamed_columns(original_columns, quote_identifiers=False)
 
                 # Identify boolean columns that need casting from integer
                 # These are columns that were INTEGER in SDE but BOOLEAN in PostgreSQL

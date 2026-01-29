@@ -27,21 +27,21 @@ class InvTypes(models.Model):
 
     All item types in EVE - ships, modules, ammo, materials, etc.
     """
-    type_id = models.BigIntegerField(primary_key=True, db_column='typeID')
-    name = models.CharField(max_length=255, db_index=True, db_column='typeName')
+    type_id = models.BigIntegerField(primary_key=True, db_column='typeid')
+    name = models.CharField(max_length=255, db_index=True, db_column='typename')
     description = models.TextField(blank=True, db_column='description')
-    group = models.ForeignKey('InvGroups', on_delete=models.DO_NOTHING, db_column='groupID', related_name='types')
+    group = models.ForeignKey('InvGroups', on_delete=models.DO_NOTHING, db_column='groupid', related_name='types')
     mass = models.FloatField(null=True, blank=True, db_column='mass')
     volume = models.FloatField(null=True, blank=True, db_column='volume')
     capacity = models.FloatField(null=True, blank=True, db_column='capacity')
-    portion_size = models.IntegerField(null=True, blank=True, db_column='portionSize')
-    race = models.ForeignKey('ChrRaces', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='raceID', related_name='types')
-    base_price = models.FloatField(null=True, blank=True, db_column='basePrice')
+    portion_size = models.IntegerField(null=True, blank=True, db_column='portionsize')
+    race = models.ForeignKey('ChrRaces', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='raceid', related_name='types')
+    base_price = models.FloatField(null=True, blank=True, db_column='baseprice')
     published = models.BooleanField(db_column='published')
-    market_group = models.ForeignKey('InvMarketGroups', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='marketGroupID', related_name='types')
-    icon = models.ForeignKey('EveIcons', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='iconID', related_name='types')
-    sound_id = models.IntegerField(null=True, blank=True, db_column='soundID')
-    graphic = models.ForeignKey('EveGraphics', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='graphicID', related_name='types')
+    market_group = models.ForeignKey('InvMarketGroups', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='marketgroupid', related_name='types')
+    icon = models.ForeignKey('EveIcons', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='iconid', related_name='types')
+    sound_id = models.IntegerField(null=True, blank=True, db_column='soundid')
+    graphic = models.ForeignKey('EveGraphics', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='graphicid', related_name='types')
 
     class Meta:
         db_table = 'evesde_invtypes'
@@ -70,14 +70,14 @@ class InvGroups(models.Model):
 
     Item groups - categories of similar items (e.g., Cruisers, Laser Turrets)
     """
-    group_id = models.IntegerField(primary_key=True, db_column='groupID')
-    category = models.ForeignKey('InvCategories', on_delete=models.DO_NOTHING, db_column='categoryID', related_name='groups')
-    group_name = models.CharField(max_length=255, db_column='groupName')
-    icon = models.ForeignKey('EveIcons', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='iconID', related_name='groups')
-    use_base_price = models.BooleanField(db_column='useBasePrice')
+    group_id = models.IntegerField(primary_key=True, db_column='groupid')
+    category = models.ForeignKey('InvCategories', on_delete=models.DO_NOTHING, db_column='categoryid', related_name='groups')
+    group_name = models.CharField(max_length=255, db_column='groupname')
+    icon = models.ForeignKey('EveIcons', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='iconid', related_name='groups')
+    use_base_price = models.BooleanField(db_column='usebaseprice')
     anchored = models.BooleanField(db_column='anchored')
     anchorable = models.BooleanField(db_column='anchorable')
-    fittable_non_singleton = models.BooleanField(db_column='fittableNonSingleton')
+    fittable_non_singleton = models.BooleanField(db_column='fittablenonsingleton')
     published = models.BooleanField(db_column='published')
 
     class Meta:
@@ -97,9 +97,9 @@ class InvCategories(models.Model):
 
     Top-level item categories (e.g., Ships, Modules, Materials)
     """
-    category_id = models.IntegerField(primary_key=True, db_column='categoryID')
-    category_name = models.CharField(max_length=255, db_column='categoryName')
-    icon_id = models.IntegerField(null=True, blank=True, db_column='iconID')
+    category_id = models.IntegerField(primary_key=True, db_column='categoryid')
+    category_name = models.CharField(max_length=255, db_column='categoryname')
+    icon_id = models.IntegerField(null=True, blank=True, db_column='iconid')
     published = models.BooleanField(db_column='published')
 
     class Meta:
@@ -119,12 +119,12 @@ class InvMarketGroups(models.Model):
 
     Market group hierarchy for buy/sell orders
     """
-    market_group_id = models.IntegerField(primary_key=True, db_column='marketGroupID')
-    parent_group_id = models.IntegerField(null=True, blank=True, db_column='parentGroupID')
-    market_group_name = models.CharField(max_length=255, db_column='marketGroupName')
+    market_group_id = models.IntegerField(primary_key=True, db_column='marketgroupid')
+    parent_group_id = models.IntegerField(null=True, blank=True, db_column='parentgroupid')
+    market_group_name = models.CharField(max_length=255, db_column='marketgroupname')
     description = models.TextField(blank=True, db_column='description')
-    icon_id = models.IntegerField(null=True, blank=True, db_column='iconID')
-    has_types = models.BooleanField(db_column='hasTypes')
+    icon_id = models.IntegerField(null=True, blank=True, db_column='iconid')
+    has_types = models.BooleanField(db_column='hastypes')
 
     class Meta:
         db_table = 'evesde_invmarketgroups'
@@ -143,10 +143,10 @@ class InvMetaGroups(models.Model):
 
     Meta groups define item rarity/tech level
     """
-    meta_group_id = models.IntegerField(primary_key=True, db_column='metaGroupID')
-    meta_group_name = models.CharField(max_length=255, db_column='metaGroupName')
+    meta_group_id = models.IntegerField(primary_key=True, db_column='metagroupid')
+    meta_group_name = models.CharField(max_length=255, db_column='metagroupname')
     description = models.TextField(blank=True, db_column='description')
-    icon_id = models.IntegerField(null=True, blank=True, db_column='iconID')
+    icon_id = models.IntegerField(null=True, blank=True, db_column='iconid')
 
     class Meta:
         db_table = 'evesde_invmetagroups'
@@ -169,14 +169,14 @@ class DgmAttributeTypes(models.Model):
 
     Definitions of all item attributes (speed, damage, etc.)
     """
-    attribute_id = models.IntegerField(primary_key=True, db_column='attributeID')
-    attribute_name = models.CharField(max_length=255, db_column='attributeName')
-    default_value = models.FloatField(null=True, blank=True, db_column='defaultValue')
+    attribute_id = models.IntegerField(primary_key=True, db_column='attributeid')
+    attribute_name = models.CharField(max_length=255, db_column='attributename')
+    default_value = models.FloatField(null=True, blank=True, db_column='defaultvalue')
     published = models.BooleanField(db_column='published')
-    display_name = models.CharField(max_length=255, blank=True, db_column='displayName')
+    display_name = models.CharField(max_length=255, blank=True, db_column='displayname')
     stackable = models.BooleanField(null=True, blank=True, db_column='stackable')
-    high_is_good = models.BooleanField(null=True, blank=True, db_column='highIsGood')
-    category_id = models.IntegerField(null=True, blank=True, db_column='categoryID')
+    high_is_good = models.BooleanField(null=True, blank=True, db_column='highisgood')
+    category_id = models.IntegerField(null=True, blank=True, db_column='categoryid')
 
     class Meta:
         db_table = 'evesde_dgmattributetypes'
@@ -197,10 +197,10 @@ class DgmTypeAttributes(models.Model):
     """
     # Primary key: Django requires one, using the id column from the database
     id = models.AutoField(primary_key=True, db_column='id')
-    type = models.ForeignKey('InvTypes', on_delete=models.DO_NOTHING, db_column='typeID', related_name='attributes')
-    attribute = models.ForeignKey('DgmAttributeTypes', on_delete=models.DO_NOTHING, db_column='attributeID', related_name='type_attributes')
-    value_int = models.IntegerField(null=True, blank=True, db_column='valueInt')
-    value_float = models.FloatField(null=True, blank=True, db_column='valueFloat')
+    type = models.ForeignKey('InvTypes', on_delete=models.DO_NOTHING, db_column='typeid', related_name='attributes')
+    attribute = models.ForeignKey('DgmAttributeTypes', on_delete=models.DO_NOTHING, db_column='attributeid', related_name='type_attributes')
+    value_int = models.IntegerField(null=True, blank=True, db_column='valueint')
+    value_float = models.FloatField(null=True, blank=True, db_column='valuefloat')
 
     class Meta:
         db_table = 'evesde_dgmtypeattributes'
@@ -221,9 +221,9 @@ class MapRegions(models.Model):
 
     EVE regions
     """
-    region_id = models.IntegerField(primary_key=True, db_column='regionID')
-    region_name = models.CharField(max_length=255, db_column='regionName')
-    faction_id = models.IntegerField(null=True, blank=True, db_column='factionID')
+    region_id = models.IntegerField(primary_key=True, db_column='regionid')
+    region_name = models.CharField(max_length=255, db_column='regionname')
+    faction_id = models.IntegerField(null=True, blank=True, db_column='factionid')
     radius = models.FloatField(null=True, blank=True, db_column='radius')
 
     class Meta:
@@ -243,19 +243,19 @@ class MapConstellations(models.Model):
 
     EVE constellations (groups of solar systems)
     """
-    constellation_id = models.IntegerField(primary_key=True, db_column='constellationID')
-    region = models.ForeignKey('MapRegions', on_delete=models.DO_NOTHING, db_column='regionID', related_name='constellations')
-    constellation_name = models.CharField(max_length=255, db_column='constellationName')
+    constellation_id = models.IntegerField(primary_key=True, db_column='constellationid')
+    region = models.ForeignKey('MapRegions', on_delete=models.DO_NOTHING, db_column='regionid', related_name='constellations')
+    constellation_name = models.CharField(max_length=255, db_column='constellationname')
     x = models.FloatField(null=True, blank=True, db_column='x')
     y = models.FloatField(null=True, blank=True, db_column='y')
     z = models.FloatField(null=True, blank=True, db_column='z')
-    x_min = models.FloatField(null=True, blank=True, db_column='xMin')
-    x_max = models.FloatField(null=True, blank=True, db_column='xMax')
-    y_min = models.FloatField(null=True, blank=True, db_column='yMin')
-    y_max = models.FloatField(null=True, blank=True, db_column='yMax')
-    z_min = models.FloatField(null=True, blank=True, db_column='zMin')
-    z_max = models.FloatField(null=True, blank=True, db_column='zMax')
-    faction = models.ForeignKey('ChrFactions', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='factionID', related_name='constellations')
+    x_min = models.FloatField(null=True, blank=True, db_column='xmin')
+    x_max = models.FloatField(null=True, blank=True, db_column='xmax')
+    y_min = models.FloatField(null=True, blank=True, db_column='ymin')
+    y_max = models.FloatField(null=True, blank=True, db_column='ymax')
+    z_min = models.FloatField(null=True, blank=True, db_column='zmin')
+    z_max = models.FloatField(null=True, blank=True, db_column='zmax')
+    faction = models.ForeignKey('ChrFactions', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='factionid', related_name='constellations')
     radius = models.FloatField(null=True, blank=True, db_column='radius')
 
     class Meta:
@@ -275,19 +275,19 @@ class MapSolarSystems(models.Model):
 
     Individual solar systems
     """
-    system_id = models.IntegerField(primary_key=True, db_column='solarSystemID')
-    region = models.ForeignKey('MapRegions', on_delete=models.DO_NOTHING, db_column='regionID', related_name='systems')
-    constellation = models.ForeignKey('MapConstellations', on_delete=models.DO_NOTHING, db_column='constellationID', related_name='systems')
-    system_name = models.CharField(max_length=255, db_index=True, db_column='solarSystemName')
+    system_id = models.IntegerField(primary_key=True, db_column='solarsystemid')
+    region = models.ForeignKey('MapRegions', on_delete=models.DO_NOTHING, db_column='regionid', related_name='systems')
+    constellation = models.ForeignKey('MapConstellations', on_delete=models.DO_NOTHING, db_column='constellationid', related_name='systems')
+    system_name = models.CharField(max_length=255, db_index=True, db_column='solarsystemname')
     x = models.FloatField(null=True, blank=True, db_column='x')
     y = models.FloatField(null=True, blank=True, db_column='y')
     z = models.FloatField(null=True, blank=True, db_column='z')
-    x_min = models.FloatField(null=True, blank=True, db_column='xMin')
-    x_max = models.FloatField(null=True, blank=True, db_column='xMax')
-    y_min = models.FloatField(null=True, blank=True, db_column='yMin')
-    y_max = models.FloatField(null=True, blank=True, db_column='yMax')
-    z_min = models.FloatField(null=True, blank=True, db_column='zMin')
-    z_max = models.FloatField(null=True, blank=True, db_column='zMax')
+    x_min = models.FloatField(null=True, blank=True, db_column='xmin')
+    x_max = models.FloatField(null=True, blank=True, db_column='xmax')
+    y_min = models.FloatField(null=True, blank=True, db_column='ymin')
+    y_max = models.FloatField(null=True, blank=True, db_column='ymax')
+    z_min = models.FloatField(null=True, blank=True, db_column='zmin')
+    z_max = models.FloatField(null=True, blank=True, db_column='zmax')
     luminosity = models.FloatField(null=True, blank=True, db_column='luminosity')
     border = models.BooleanField(null=True, blank=True, db_column='border')
     fringe = models.BooleanField(null=True, blank=True, db_column='fringe')
@@ -297,10 +297,10 @@ class MapSolarSystems(models.Model):
     regional = models.BooleanField(null=True, blank=True, db_column='regional')
     is_constellation = models.BooleanField(null=True, blank=True, db_column='constellation')
     security = models.FloatField(null=True, blank=True, db_column='security')
-    faction = models.ForeignKey('ChrFactions', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='factionID', related_name='systems')
+    faction = models.ForeignKey('ChrFactions', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='factionid', related_name='systems')
     radius = models.FloatField(null=True, blank=True, db_column='radius')
-    sun_type = models.ForeignKey('InvTypes', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='sunTypeID', related_name='star_systems')
-    security_class = models.CharField(max_length=10, blank=True, db_column='securityClass')
+    sun_type = models.ForeignKey('InvTypes', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='suntypeid', related_name='star_systems')
+    security_class = models.CharField(max_length=10, blank=True, db_column='securityclass')
 
     class Meta:
         db_table = 'evesde_mapsolarsystems'
@@ -332,24 +332,24 @@ class StaStations(models.Model):
 
     Stations where players can dock
     """
-    station_id = models.IntegerField(primary_key=True, db_column='stationID')
+    station_id = models.IntegerField(primary_key=True, db_column='stationid')
     security = models.FloatField(null=True, blank=True, db_column='security')
-    docking_cost_per_volume = models.FloatField(null=True, blank=True, db_column='dockingCostPerVolume')
-    max_ship_volume_dockable = models.FloatField(null=True, blank=True, db_column='maxShipVolumeDockable')
-    office_rental_cost = models.IntegerField(null=True, blank=True, db_column='officeRentalCost')
-    operation_id = models.IntegerField(null=True, blank=True, db_column='operationID')
-    station_type = models.ForeignKey('InvTypes', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='stationTypeID', related_name='stations_of_type')
-    corporation = models.ForeignKey('CrpNPCCorporations', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='corporationID', related_name='stations')
-    solar_system = models.ForeignKey('MapSolarSystems', on_delete=models.DO_NOTHING, db_column='solarSystemID', related_name='stations')
-    constellation = models.ForeignKey('MapConstellations', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='constellationID', related_name='stations')
-    region = models.ForeignKey('MapRegions', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='regionID', related_name='stations')
-    station_name = models.CharField(max_length=255, db_column='stationName')
+    docking_cost_per_volume = models.FloatField(null=True, blank=True, db_column='dockingcostpervolume')
+    max_ship_volume_dockable = models.FloatField(null=True, blank=True, db_column='maxshipvolumedockable')
+    office_rental_cost = models.IntegerField(null=True, blank=True, db_column='officerentalcost')
+    operation_id = models.IntegerField(null=True, blank=True, db_column='operationid')
+    station_type = models.ForeignKey('InvTypes', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='stationtypeid', related_name='stations_of_type')
+    corporation = models.ForeignKey('CrpNPCCorporations', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='corporationid', related_name='stations')
+    solar_system = models.ForeignKey('MapSolarSystems', on_delete=models.DO_NOTHING, db_column='solarsystemid', related_name='stations')
+    constellation = models.ForeignKey('MapConstellations', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='constellationid', related_name='stations')
+    region = models.ForeignKey('MapRegions', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='regionid', related_name='stations')
+    station_name = models.CharField(max_length=255, db_column='stationname')
     x = models.FloatField(null=True, blank=True, db_column='x')
     y = models.FloatField(null=True, blank=True, db_column='y')
     z = models.FloatField(null=True, blank=True, db_column='z')
-    reprocessing_efficiency = models.FloatField(null=True, blank=True, db_column='reprocessingEfficiency')
-    reprocessing_stations_take = models.FloatField(null=True, blank=True, db_column='reprocessingStationsTake')
-    reprocessing_hanger_flag = models.IntegerField(null=True, blank=True, db_column='reprocessingHangarFlag')
+    reprocessing_efficiency = models.FloatField(null=True, blank=True, db_column='reprocessingefficiency')
+    reprocessing_stations_take = models.FloatField(null=True, blank=True, db_column='reprocessingstationstake')
+    reprocessing_hanger_flag = models.IntegerField(null=True, blank=True, db_column='reprocessinghangarflag')
 
     class Meta:
         db_table = 'evesde_stastations'
@@ -372,17 +372,17 @@ class ChrFactions(models.Model):
 
     Major factions in EVE
     """
-    faction_id = models.IntegerField(primary_key=True, db_column='factionID')
-    faction_name = models.CharField(max_length=255, db_column='factionName')
+    faction_id = models.IntegerField(primary_key=True, db_column='factionid')
+    faction_name = models.CharField(max_length=255, db_column='factionname')
     description = models.TextField(blank=True, db_column='description')
-    race_ids = models.TextField(blank=True, db_column='raceIDs')
-    solar_system_id = models.IntegerField(null=True, blank=True, db_column='solarSystemID')
-    corporation_id = models.IntegerField(null=True, blank=True, db_column='corporationID')
-    size_factor = models.FloatField(null=True, blank=True, db_column='sizeFactor')
-    station_count = models.IntegerField(null=True, blank=True, db_column='stationCount')
-    station_system_count = models.IntegerField(null=True, blank=True, db_column='stationSystemCount')
-    militia_corporation_id = models.IntegerField(null=True, blank=True, db_column='militiaCorporationID')
-    icon_id = models.IntegerField(null=True, blank=True, db_column='iconID')
+    race_ids = models.TextField(blank=True, db_column='raceids')
+    solar_system_id = models.IntegerField(null=True, blank=True, db_column='solarsystemid')
+    corporation_id = models.IntegerField(null=True, blank=True, db_column='corporationid')
+    size_factor = models.FloatField(null=True, blank=True, db_column='sizefactor')
+    station_count = models.IntegerField(null=True, blank=True, db_column='stationcount')
+    station_system_count = models.IntegerField(null=True, blank=True, db_column='stationsystemcount')
+    militia_corporation_id = models.IntegerField(null=True, blank=True, db_column='militiacorporationid')
+    icon_id = models.IntegerField(null=True, blank=True, db_column='iconid')
 
     class Meta:
         db_table = 'evesde_chrfactions'
@@ -401,11 +401,11 @@ class ChrRaces(models.Model):
 
     Playable races
     """
-    race_id = models.IntegerField(primary_key=True, db_column='raceID')
-    race_name = models.CharField(max_length=255, db_column='raceName')
+    race_id = models.IntegerField(primary_key=True, db_column='raceid')
+    race_name = models.CharField(max_length=255, db_column='racename')
     description = models.TextField(blank=True, db_column='description')
-    icon_id = models.IntegerField(null=True, blank=True, db_column='iconID')
-    short_description = models.CharField(max_length=255, blank=True, db_column='shortDescription')
+    icon_id = models.IntegerField(null=True, blank=True, db_column='iconid')
+    short_description = models.CharField(max_length=255, blank=True, db_column='shortdescription')
 
     class Meta:
         db_table = 'evesde_chrraces'
@@ -425,10 +425,10 @@ class CrpNPCCorporations(models.Model):
     NPC corporations
     Note: corporation names are stored in InvNames table, not here
     """
-    corporation_id = models.IntegerField(primary_key=True, db_column='corporationID')
+    corporation_id = models.IntegerField(primary_key=True, db_column='corporationid')
     size = models.CharField(max_length=1, blank=True, db_column='size')
     extent = models.CharField(max_length=1, blank=True, db_column='extent')
-    solar_system_id = models.IntegerField(null=True, blank=True, db_column='solarSystemID')
+    solar_system_id = models.IntegerField(null=True, blank=True, db_column='solarsystemid')
     investor_id1 = models.IntegerField(null=True, blank=True, db_column='investorID1')
     investor_shares1 = models.IntegerField(null=True, blank=True, db_column='investorShares1')
     investor_id2 = models.IntegerField(null=True, blank=True, db_column='investorID2')
@@ -437,22 +437,22 @@ class CrpNPCCorporations(models.Model):
     investor_shares3 = models.IntegerField(null=True, blank=True, db_column='investorShares3')
     investor_id4 = models.IntegerField(null=True, blank=True, db_column='investorID4')
     investor_shares4 = models.IntegerField(null=True, blank=True, db_column='investorShares4')
-    friend_id = models.IntegerField(null=True, blank=True, db_column='friendID')
-    enemy_id = models.IntegerField(null=True, blank=True, db_column='enemyID')
-    public_shares = models.IntegerField(null=True, blank=True, db_column='publicShares')
-    initial_price = models.IntegerField(null=True, blank=True, db_column='initialPrice')
-    min_security = models.FloatField(null=True, blank=True, db_column='minSecurity')
+    friend_id = models.IntegerField(null=True, blank=True, db_column='friendid')
+    enemy_id = models.IntegerField(null=True, blank=True, db_column='enemyid')
+    public_shares = models.IntegerField(null=True, blank=True, db_column='publicshares')
+    initial_price = models.IntegerField(null=True, blank=True, db_column='initialprice')
+    min_security = models.FloatField(null=True, blank=True, db_column='minsecurity')
     scattered = models.BooleanField(null=True, blank=True, db_column='scattered')
     fringe = models.BooleanField(null=True, blank=True, db_column='fringe')
     corridor = models.BooleanField(null=True, blank=True, db_column='corridor')
     hub = models.BooleanField(null=True, blank=True, db_column='hub')
     border = models.BooleanField(null=True, blank=True, db_column='border')
-    faction = models.ForeignKey('ChrFactions', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='factionID', related_name='+')
-    size_factor = models.FloatField(null=True, blank=True, db_column='sizeFactor')
-    station_count = models.IntegerField(null=True, blank=True, db_column='stationCount')
-    station_system_count = models.IntegerField(null=True, blank=True, db_column='stationSystemCount')
+    faction = models.ForeignKey('ChrFactions', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='factionid', related_name='+')
+    size_factor = models.FloatField(null=True, blank=True, db_column='sizefactor')
+    station_count = models.IntegerField(null=True, blank=True, db_column='stationcount')
+    station_system_count = models.IntegerField(null=True, blank=True, db_column='stationsystemcount')
     description = models.TextField(blank=True, db_column='description')
-    icon_id = models.IntegerField(null=True, blank=True, db_column='iconID')
+    icon_id = models.IntegerField(null=True, blank=True, db_column='iconid')
 
     class Meta:
         db_table = 'evesde_crpnpccorporations'
@@ -484,9 +484,9 @@ class InvMetaTypes(models.Model):
 
     Item variants (Tech II, faction, deadspace, etc.) - links to base items
     """
-    type = models.OneToOneField('InvTypes', on_delete=models.DO_NOTHING, primary_key=True, db_column='typeID', related_name='meta_type')
-    parent_type = models.ForeignKey('InvTypes', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='parentTypeID', related_name='variant_types')
-    meta_group = models.ForeignKey('InvMetaGroups', on_delete=models.DO_NOTHING, db_column='metaGroupID', related_name='types')
+    type = models.OneToOneField('InvTypes', on_delete=models.DO_NOTHING, primary_key=True, db_column='typeid', related_name='meta_type')
+    parent_type = models.ForeignKey('InvTypes', on_delete=models.DO_NOTHING, null=True, blank=True, db_column='parenttypeid', related_name='variant_types')
+    meta_group = models.ForeignKey('InvMetaGroups', on_delete=models.DO_NOTHING, db_column='metagroupid', related_name='types')
 
     class Meta:
         db_table = 'evesde_invmetatypes'
@@ -512,8 +512,8 @@ class EveIcons(models.Model):
 
     Icon files for items, ships, stations, etc.
     """
-    icon_id = models.IntegerField(primary_key=True, db_column='iconID')
-    icon_file = models.CharField(max_length=500, blank=True, db_column='iconFile')
+    icon_id = models.IntegerField(primary_key=True, db_column='iconid')
+    icon_file = models.CharField(max_length=500, blank=True, db_column='iconfile')
     description = models.TextField(blank=True, db_column='description')
 
     class Meta:
@@ -533,7 +533,7 @@ class EveGraphics(models.Model):
 
     Graphics references for item models
     """
-    graphic_id = models.IntegerField(primary_key=True, db_column='graphicID')
+    graphic_id = models.IntegerField(primary_key=True, db_column='graphicid')
     # Note: schema may vary - check actual SDE
     url = models.CharField(max_length=500, blank=True, db_column='url')
 
@@ -558,8 +558,8 @@ class InvNames(models.Model):
 
     Localized item names for various entities
     """
-    item_id = models.IntegerField(primary_key=True, db_column='itemID')
-    item_name = models.CharField(max_length=200, db_column='itemName')
+    item_id = models.IntegerField(primary_key=True, db_column='itemid')
+    item_name = models.CharField(max_length=200, db_column='itemname')
 
     class Meta:
         db_table = 'evesde_invnames'
@@ -578,10 +578,10 @@ class InvFlags(models.Model):
 
     Item flags (slots, hangars, etc.)
     """
-    flag_id = models.IntegerField(primary_key=True, db_column='flagID')
-    flag_name = models.CharField(max_length=200, blank=True, db_column='flagName')
-    flag_text = models.CharField(max_length=100, blank=True, db_column='flagText')
-    order_id = models.IntegerField(null=True, blank=True, db_column='orderID')
+    flag_id = models.IntegerField(primary_key=True, db_column='flagid')
+    flag_name = models.CharField(max_length=200, blank=True, db_column='flagname')
+    flag_text = models.CharField(max_length=100, blank=True, db_column='flagtext')
+    order_id = models.IntegerField(null=True, blank=True, db_column='orderid')
 
     class Meta:
         db_table = 'evesde_invflags'
@@ -600,12 +600,12 @@ class InvContrabandTypes(models.Model):
 
     Contraband types by faction
     """
-    faction_id = models.IntegerField(db_column='factionID')
-    type_id = models.IntegerField(db_column='typeID')
-    standing_loss = models.FloatField(null=True, blank=True, db_column='standingLoss')
-    confiscate_min_sec = models.FloatField(null=True, blank=True, db_column='confiscateMinSec')
-    fine_by_value = models.FloatField(null=True, blank=True, db_column='fineByValue')
-    attack_min_sec = models.FloatField(null=True, blank=True, db_column='attackMinSec')
+    faction_id = models.IntegerField(db_column='factionid')
+    type_id = models.IntegerField(db_column='typeid')
+    standing_loss = models.FloatField(null=True, blank=True, db_column='standingloss')
+    confiscate_min_sec = models.FloatField(null=True, blank=True, db_column='confiscateminsec')
+    fine_by_value = models.FloatField(null=True, blank=True, db_column='finebyvalue')
+    attack_min_sec = models.FloatField(null=True, blank=True, db_column='attackminsec')
 
     class Meta:
         db_table = 'evesde_invcontrabandtypes'
@@ -621,8 +621,8 @@ class InvTypeMaterials(models.Model):
 
     Materials required for manufacturing (reprocessing)
     """
-    type_id = models.IntegerField(db_index=True, db_column='typeID')
-    material_type_id = models.IntegerField(db_index=True, db_column='materialTypeID')
+    type_id = models.IntegerField(db_index=True, db_column='typeid')
+    material_type_id = models.IntegerField(db_index=True, db_column='materialtypeid')
     quantity = models.IntegerField(db_column='quantity')
 
     class Meta:
@@ -643,9 +643,9 @@ class EveUnits(models.Model):
 
     Measurement units for attributes (e.g., "mm", "m³", "%")
     """
-    unit_id = models.IntegerField(primary_key=True, db_column='unitID')
-    unit_name = models.CharField(max_length=100, blank=True, db_column='unitName')
-    display_name = models.CharField(max_length=50, blank=True, db_column='displayName')
+    unit_id = models.IntegerField(primary_key=True, db_column='unitid')
+    unit_name = models.CharField(max_length=100, blank=True, db_column='unitname')
+    display_name = models.CharField(max_length=50, blank=True, db_column='displayname')
     description = models.CharField(max_length=1000, blank=True, db_column='description')
 
     class Meta:
@@ -669,9 +669,9 @@ class DgmAttributeCategories(models.Model):
 
     Attribute categories for grouping attributes
     """
-    category_id = models.IntegerField(primary_key=True, db_column='categoryID')
-    category_name = models.CharField(max_length=50, blank=True, db_column='categoryName')
-    category_description = models.CharField(max_length=200, blank=True, db_column='categoryDescription')
+    category_id = models.IntegerField(primary_key=True, db_column='categoryid')
+    category_name = models.CharField(max_length=50, blank=True, db_column='categoryname')
+    category_description = models.CharField(max_length=200, blank=True, db_column='categorydescription')
 
     class Meta:
         db_table = 'evesde_dgmattributecategories'
@@ -690,28 +690,28 @@ class DgmEffects(models.Model):
 
     Effect definitions (module activation, passive effects, etc.)
     """
-    effect_id = models.IntegerField(primary_key=True, db_column='effectID')
-    effect_name = models.CharField(max_length=400, blank=True, db_column='effectName')
-    effect_category = models.IntegerField(null=True, blank=True, db_column='effectCategory')
-    pre_expression = models.IntegerField(null=True, blank=True, db_column='preExpression')
-    post_expression = models.IntegerField(null=True, blank=True, db_column='postExpression')
+    effect_id = models.IntegerField(primary_key=True, db_column='effectid')
+    effect_name = models.CharField(max_length=400, blank=True, db_column='effectname')
+    effect_category = models.IntegerField(null=True, blank=True, db_column='effectcategory')
+    pre_expression = models.IntegerField(null=True, blank=True, db_column='preexpression')
+    post_expression = models.IntegerField(null=True, blank=True, db_column='postexpression')
     description = models.CharField(max_length=1000, blank=True, db_column='description')
     guid = models.CharField(max_length=60, blank=True, db_column='guid')
-    icon_id = models.IntegerField(null=True, blank=True, db_column='iconID')
-    is_offensive = models.BooleanField(null=True, blank=True, db_column='isOffensive')
-    is_assistance = models.BooleanField(null=True, blank=True, db_column='isAssistance')
-    duration_attribute_id = models.IntegerField(null=True, blank=True, db_column='durationAttributeID')
-    tracking_speed_attribute_id = models.IntegerField(null=True, blank=True, db_column='trackingSpeedAttributeID')
-    discharge_attribute_id = models.IntegerField(null=True, blank=True, db_column='dischargeAttributeID')
-    range_attribute_id = models.IntegerField(null=True, blank=True, db_column='rangeAttributeID')
-    falloff_attribute_id = models.IntegerField(null=True, blank=True, db_column='falloffAttributeID')
-    disallow_auto_repeat = models.BooleanField(null=True, blank=True, db_column='disallowAutoRepeat')
+    icon_id = models.IntegerField(null=True, blank=True, db_column='iconid')
+    is_offensive = models.BooleanField(null=True, blank=True, db_column='isoffensive')
+    is_assistance = models.BooleanField(null=True, blank=True, db_column='isassistance')
+    duration_attribute_id = models.IntegerField(null=True, blank=True, db_column='durationattributeid')
+    tracking_speed_attribute_id = models.IntegerField(null=True, blank=True, db_column='trackingspeedattributeid')
+    discharge_attribute_id = models.IntegerField(null=True, blank=True, db_column='dischargeattributeid')
+    range_attribute_id = models.IntegerField(null=True, blank=True, db_column='rangeattributeid')
+    falloff_attribute_id = models.IntegerField(null=True, blank=True, db_column='falloffattributeid')
+    disallow_auto_repeat = models.BooleanField(null=True, blank=True, db_column='disallowautorepeat')
     published = models.BooleanField(null=True, blank=True, db_column='published')
-    display_name = models.CharField(max_length=100, blank=True, db_column='displayName')
-    is_warp_safe = models.BooleanField(null=True, blank=True, db_column='isWarpSafe')
-    range_chance = models.BooleanField(null=True, blank=True, db_column='rangeChance')
-    electronic_chance = models.BooleanField(null=True, blank=True, db_column='electronicChance')
-    propagation_chance = models.BooleanField(null=True, blank=True, db_column='propagationChance')
+    display_name = models.CharField(max_length=100, blank=True, db_column='displayname')
+    is_warp_safe = models.BooleanField(null=True, blank=True, db_column='iswarpsafe')
+    range_chance = models.BooleanField(null=True, blank=True, db_column='rangechance')
+    electronic_chance = models.BooleanField(null=True, blank=True, db_column='electronicchance')
+    propagation_chance = models.BooleanField(null=True, blank=True, db_column='propagationchance')
 
     class Meta:
         db_table = 'evesde_dgmeffects'
@@ -730,9 +730,9 @@ class DgmTypeEffects(models.Model):
 
     Effects applied to item types
     """
-    type_id = models.IntegerField(db_index=True, db_column='typeID')
-    effect_id = models.IntegerField(db_index=True, db_column='effectID')
-    is_default = models.BooleanField(null=True, blank=True, db_column='isDefault')
+    type_id = models.IntegerField(db_index=True, db_column='typeid')
+    effect_id = models.IntegerField(db_index=True, db_column='effectid')
+    is_default = models.BooleanField(null=True, blank=True, db_column='isdefault')
 
     class Meta:
         db_table = 'evesde_dgmtypeeffects'
@@ -752,17 +752,17 @@ class ChrAncestries(models.Model):
 
     Character ancestry options (during character creation)
     """
-    ancestry_id = models.IntegerField(primary_key=True, db_column='ancestryID')
-    ancestry_name = models.CharField(max_length=100, blank=True, db_column='ancestryName')
-    bloodline_id = models.IntegerField(null=True, blank=True, db_column='bloodlineID')
+    ancestry_id = models.IntegerField(primary_key=True, db_column='ancestryid')
+    ancestry_name = models.CharField(max_length=100, blank=True, db_column='ancestryname')
+    bloodline_id = models.IntegerField(null=True, blank=True, db_column='bloodlineid')
     description = models.CharField(max_length=1000, blank=True, db_column='description')
     perception = models.IntegerField(null=True, blank=True, db_column='perception')
     willpower = models.IntegerField(null=True, blank=True, db_column='willpower')
     charisma = models.IntegerField(null=True, blank=True, db_column='charisma')
     memory = models.IntegerField(null=True, blank=True, db_column='memory')
     intelligence = models.IntegerField(null=True, blank=True, db_column='intelligence')
-    icon_id = models.IntegerField(null=True, blank=True, db_column='iconID')
-    short_description = models.CharField(max_length=500, blank=True, db_column='shortDescription')
+    icon_id = models.IntegerField(null=True, blank=True, db_column='iconid')
+    short_description = models.CharField(max_length=500, blank=True, db_column='shortdescription')
 
     class Meta:
         db_table = 'evesde_chrancestries'
@@ -781,23 +781,23 @@ class ChrBloodlines(models.Model):
 
     Character bloodlines
     """
-    bloodline_id = models.IntegerField(primary_key=True, db_column='bloodlineID')
-    bloodline_name = models.CharField(max_length=100, blank=True, db_column='bloodlineName')
-    race_id = models.IntegerField(null=True, blank=True, db_column='raceID')
+    bloodline_id = models.IntegerField(primary_key=True, db_column='bloodlineid')
+    bloodline_name = models.CharField(max_length=100, blank=True, db_column='bloodlinename')
+    race_id = models.IntegerField(null=True, blank=True, db_column='raceid')
     description = models.CharField(max_length=1000, blank=True, db_column='description')
-    male_description = models.CharField(max_length=1000, blank=True, db_column='maleDescription')
-    female_description = models.CharField(max_length=1000, blank=True, db_column='femaleDescription')
-    ship_type_id = models.IntegerField(null=True, blank=True, db_column='shipTypeID')
-    corporation_id = models.IntegerField(null=True, blank=True, db_column='corporationID')
+    male_description = models.CharField(max_length=1000, blank=True, db_column='maledescription')
+    female_description = models.CharField(max_length=1000, blank=True, db_column='femaledescription')
+    ship_type_id = models.IntegerField(null=True, blank=True, db_column='shiptypeid')
+    corporation_id = models.IntegerField(null=True, blank=True, db_column='corporationid')
     perception = models.IntegerField(null=True, blank=True, db_column='perception')
     willpower = models.IntegerField(null=True, blank=True, db_column='willpower')
     charisma = models.IntegerField(null=True, blank=True, db_column='charisma')
     memory = models.IntegerField(null=True, blank=True, db_column='memory')
     intelligence = models.IntegerField(null=True, blank=True, db_column='intelligence')
-    icon_id = models.IntegerField(null=True, blank=True, db_column='iconID')
-    short_description = models.CharField(max_length=500, blank=True, db_column='shortDescription')
-    short_male_description = models.CharField(max_length=500, blank=True, db_column='shortMaleDescription')
-    short_female_description = models.CharField(max_length=500, blank=True, db_column='shortFemaleDescription')
+    icon_id = models.IntegerField(null=True, blank=True, db_column='iconid')
+    short_description = models.CharField(max_length=500, blank=True, db_column='shortdescription')
+    short_male_description = models.CharField(max_length=500, blank=True, db_column='shortmaledescription')
+    short_female_description = models.CharField(max_length=500, blank=True, db_column='shortfemaledescription')
 
     class Meta:
         db_table = 'evesde_chrbloodlines'
@@ -820,9 +820,9 @@ class CertCerts(models.Model):
 
     Certificate definitions
     """
-    cert_id = models.IntegerField(primary_key=True, db_column='certID')
+    cert_id = models.IntegerField(primary_key=True, db_column='certid')
     description = models.TextField(blank=True, db_column='description')
-    group_id = models.IntegerField(null=True, blank=True, db_column='groupID')
+    group_id = models.IntegerField(null=True, blank=True, db_column='groupid')
     name = models.CharField(max_length=255, blank=True, db_column='name')
 
     class Meta:
@@ -843,11 +843,11 @@ class CertSkills(models.Model):
     Certificate skill requirements
     """
     id = models.AutoField(primary_key=True, db_column='id')  # Django requires a PK, using auto-increment
-    cert = models.ForeignKey('CertCerts', on_delete=models.DO_NOTHING, db_column='certID', related_name='skill_requirements')
-    skill = models.ForeignKey('InvTypes', on_delete=models.DO_NOTHING, db_column='skillID', related_name='certificate_requirements')
-    cert_level_int = models.IntegerField(null=True, blank=True, db_column='certLevelInt')
-    skill_level = models.IntegerField(null=True, blank=True, db_column='skillLevel')
-    cert_level_text = models.CharField(max_length=8, blank=True, db_column='certLevelText')
+    cert = models.ForeignKey('CertCerts', on_delete=models.DO_NOTHING, db_column='certid', related_name='skill_requirements')
+    skill = models.ForeignKey('InvTypes', on_delete=models.DO_NOTHING, db_column='skillid', related_name='certificate_requirements')
+    cert_level_int = models.IntegerField(null=True, blank=True, db_column='certlevelint')
+    skill_level = models.IntegerField(null=True, blank=True, db_column='skilllevel')
+    cert_level_text = models.CharField(max_length=8, blank=True, db_column='certleveltext')
 
     class Meta:
         db_table = 'evesde_certskills'
@@ -863,9 +863,9 @@ class CertMasteries(models.Model):
     Certificate mastery levels
     """
     id = models.AutoField(primary_key=True, db_column='id')  # Django requires a PK, using auto-increment
-    type = models.ForeignKey('InvTypes', on_delete=models.DO_NOTHING, db_column='typeID', related_name='mastery_certificates')
-    mastery_level = models.IntegerField(null=True, blank=True, db_column='masteryLevel')
-    cert = models.ForeignKey('CertCerts', on_delete=models.DO_NOTHING, db_column='certID', related_name='masteries')
+    type = models.ForeignKey('InvTypes', on_delete=models.DO_NOTHING, db_column='typeid', related_name='mastery_certificates')
+    mastery_level = models.IntegerField(null=True, blank=True, db_column='masterylevel')
+    cert = models.ForeignKey('CertCerts', on_delete=models.DO_NOTHING, db_column='certid', related_name='masteries')
 
     class Meta:
         db_table = 'evesde_certmasteries'
@@ -884,14 +884,14 @@ class AgtAgents(models.Model):
 
     NPC agents for missions
     """
-    agent_id = models.IntegerField(primary_key=True, db_column='agentID')
-    division_id = models.IntegerField(null=True, blank=True, db_column='divisionID')
-    corporation_id = models.IntegerField(null=True, blank=True, db_index=True, db_column='corporationID')
-    location_id = models.IntegerField(null=True, blank=True, db_index=True, db_column='locationID')
+    agent_id = models.IntegerField(primary_key=True, db_column='agentid')
+    division_id = models.IntegerField(null=True, blank=True, db_column='divisionid')
+    corporation_id = models.IntegerField(null=True, blank=True, db_index=True, db_column='corporationid')
+    location_id = models.IntegerField(null=True, blank=True, db_index=True, db_column='locationid')
     level = models.IntegerField(null=True, blank=True, db_column='level')
     quality = models.IntegerField(null=True, blank=True, db_column='quality')
-    agent_type_id = models.IntegerField(null=True, blank=True, db_column='agentTypeID')
-    is_locator = models.BooleanField(null=True, blank=True, db_column='isLocator')
+    agent_type_id = models.IntegerField(null=True, blank=True, db_column='agenttypeid')
+    is_locator = models.BooleanField(null=True, blank=True, db_column='islocator')
 
     class Meta:
         db_table = 'evesde_agtagents'
@@ -910,8 +910,8 @@ class AgtAgentTypes(models.Model):
 
     Agent type definitions
     """
-    agent_type_id = models.IntegerField(primary_key=True, db_column='agentTypeID')
-    agent_type = models.CharField(max_length=50, blank=True, db_column='agentType')
+    agent_type_id = models.IntegerField(primary_key=True, db_column='agenttypeid')
+    agent_type = models.CharField(max_length=50, blank=True, db_column='agenttype')
 
     class Meta:
         db_table = 'evesde_agtagenttypes'
@@ -930,11 +930,11 @@ class AgtAgentsInSpace(models.Model):
 
     Mission agents located in space (not at stations)
     """
-    agent_id = models.IntegerField(primary_key=True, db_column='agentID')
-    dungeon_id = models.IntegerField(null=True, blank=True, db_column='dungeonID')
-    solar_system_id = models.IntegerField(null=True, blank=True, db_index=True, db_column='solarSystemID')
-    spawn_point_id = models.IntegerField(null=True, blank=True, db_column='spawnPointID')
-    type_id = models.IntegerField(null=True, blank=True, db_column='typeID')
+    agent_id = models.IntegerField(primary_key=True, db_column='agentid')
+    dungeon_id = models.IntegerField(null=True, blank=True, db_column='dungeonid')
+    solar_system_id = models.IntegerField(null=True, blank=True, db_index=True, db_column='solarsystemid')
+    spawn_point_id = models.IntegerField(null=True, blank=True, db_column='spawnpointid')
+    type_id = models.IntegerField(null=True, blank=True, db_column='typeid')
 
     class Meta:
         db_table = 'evesde_agtagentsinspace'
@@ -953,8 +953,8 @@ class AgtResearchAgents(models.Model):
 
     Research agents for skill point research
     """
-    agent_id = models.IntegerField(db_column='agentID')
-    type_id = models.IntegerField(db_index=True, db_column='typeID')
+    agent_id = models.IntegerField(db_column='agentid')
+    type_id = models.IntegerField(db_index=True, db_column='typeid')
 
     class Meta:
         db_table = 'evesde_agtresearchagents'
@@ -977,8 +977,8 @@ class IndustryBlueprints(models.Model):
 
     Blueprint metadata
     """
-    type_id = models.IntegerField(primary_key=True, db_column='typeID')
-    max_production_limit = models.IntegerField(null=True, blank=True, db_column='maxProductionLimit')
+    type_id = models.IntegerField(primary_key=True, db_column='typeid')
+    max_production_limit = models.IntegerField(null=True, blank=True, db_column='maxproductionlimit')
 
     class Meta:
         db_table = 'evesde_industryblueprints'
@@ -1004,8 +1004,8 @@ class CrpActivities(models.Model):
 
     Corporation activity types
     """
-    activity_id = models.IntegerField(primary_key=True, db_column='activityID')
-    activity_name = models.CharField(max_length=100, blank=True, db_column='activityName')
+    activity_id = models.IntegerField(primary_key=True, db_column='activityid')
+    activity_name = models.CharField(max_length=100, blank=True, db_column='activityname')
     description = models.CharField(max_length=1000, blank=True, db_column='description')
 
     class Meta:
@@ -1031,12 +1031,12 @@ class InvControlTowerResources(models.Model):
     """
     # Composite key workaround: use controlTowerTypeID as primary key
     # This allows queries but note that multiple rows may have the same PK
-    control_tower_type_id = models.IntegerField(primary_key=True, db_column='controlTowerTypeID')
-    resource_type_id = models.IntegerField(db_column='resourceTypeID')
+    control_tower_type_id = models.IntegerField(primary_key=True, db_column='controltowertypeid')
+    resource_type_id = models.IntegerField(db_column='resourcetypeid')
     purpose = models.IntegerField(null=True, blank=True, db_column='purpose')
     quantity = models.IntegerField(null=True, blank=True, db_column='quantity')
-    min_security_level = models.FloatField(null=True, blank=True, db_column='minSecurityLevel')
-    faction_id = models.IntegerField(null=True, blank=True, db_column='factionID')
+    min_security_level = models.FloatField(null=True, blank=True, db_column='minsecuritylevel')
+    faction_id = models.IntegerField(null=True, blank=True, db_column='factionid')
 
     class Meta:
         db_table = 'evesde_invcontroltowerresources'
@@ -1056,21 +1056,21 @@ class MapDenormalize(models.Model):
 
     Denormalized map data for easy querying (celestial objects)
     """
-    item_id = models.IntegerField(primary_key=True, db_column='itemID')
-    type_id = models.IntegerField(null=True, blank=True, db_index=True, db_column='typeID')
-    group_id = models.IntegerField(null=True, blank=True, db_column='groupID')
-    solar_system_id = models.IntegerField(null=True, blank=True, db_index=True, db_column='solarSystemID')
-    constellation_id = models.IntegerField(null=True, blank=True, db_index=True, db_column='constellationID')
-    region_id = models.IntegerField(null=True, blank=True, db_index=True, db_column='regionID')
-    orbit_id = models.IntegerField(null=True, blank=True, db_index=True, db_column='orbitID')
+    item_id = models.IntegerField(primary_key=True, db_column='itemid')
+    type_id = models.IntegerField(null=True, blank=True, db_index=True, db_column='typeid')
+    group_id = models.IntegerField(null=True, blank=True, db_column='groupid')
+    solar_system_id = models.IntegerField(null=True, blank=True, db_index=True, db_column='solarsystemid')
+    constellation_id = models.IntegerField(null=True, blank=True, db_index=True, db_column='constellationid')
+    region_id = models.IntegerField(null=True, blank=True, db_index=True, db_column='regionid')
+    orbit_id = models.IntegerField(null=True, blank=True, db_index=True, db_column='orbitid')
     x = models.FloatField(null=True, blank=True, db_column='x')
     y = models.FloatField(null=True, blank=True, db_column='y')
     z = models.FloatField(null=True, blank=True, db_column='z')
     radius = models.FloatField(null=True, blank=True, db_column='radius')
-    item_name = models.CharField(max_length=100, blank=True, db_column='itemName')
+    item_name = models.CharField(max_length=100, blank=True, db_column='itemname')
     security = models.FloatField(null=True, blank=True, db_column='security')
-    celestial_index = models.IntegerField(null=True, blank=True, db_column='celestialIndex')
-    orbit_index = models.IntegerField(null=True, blank=True, db_column='orbitIndex')
+    celestial_index = models.IntegerField(null=True, blank=True, db_column='celestialindex')
+    orbit_index = models.IntegerField(null=True, blank=True, db_column='orbitindex')
 
     class Meta:
         db_table = 'evesde_mapdenormalize'
@@ -1089,10 +1089,10 @@ class MapLandmarks(models.Model):
 
     Landmarks in space
     """
-    landmark_id = models.IntegerField(primary_key=True, db_column='landmarkID')
-    landmark_name = models.CharField(max_length=100, blank=True, db_column='landmarkName')
+    landmark_id = models.IntegerField(primary_key=True, db_column='landmarkid')
+    landmark_name = models.CharField(max_length=100, blank=True, db_column='landmarkname')
     description = models.TextField(blank=True, db_column='description')
-    location_id = models.IntegerField(null=True, blank=True, db_column='locationID')
+    location_id = models.IntegerField(null=True, blank=True, db_column='locationid')
     x = models.FloatField(null=True, blank=True, db_column='x')
     y = models.FloatField(null=True, blank=True, db_column='y')
     z = models.FloatField(null=True, blank=True, db_column='z')
@@ -1118,9 +1118,9 @@ class PlanetSchematics(models.Model):
 
     Planet interaction schematic definitions
     """
-    schematic_id = models.IntegerField(primary_key=True, db_column='schematicID')
-    schematic_name = models.CharField(max_length=255, blank=True, db_column='schematicName')
-    cycle_time = models.IntegerField(null=True, blank=True, db_column='cycleTime')
+    schematic_id = models.IntegerField(primary_key=True, db_column='schematicid')
+    schematic_name = models.CharField(max_length=255, blank=True, db_column='schematicname')
+    cycle_time = models.IntegerField(null=True, blank=True, db_column='cycletime')
 
     class Meta:
         db_table = 'evesde_planetschematics'
@@ -1139,8 +1139,8 @@ class PlanetSchematicsPinMap(models.Model):
 
     Planet pin mappings for schematics
     """
-    schematic_id = models.IntegerField(db_index=True, db_column='schematicID')
-    pin_type_id = models.IntegerField(db_index=True, db_column='pinTypeID')
+    schematic_id = models.IntegerField(db_index=True, db_column='schematicid')
+    pin_type_id = models.IntegerField(db_index=True, db_column='pintypeid')
 
     class Meta:
         db_table = 'evesde_planetschematicspinmap'
@@ -1156,10 +1156,10 @@ class PlanetSchematicsTypeMap(models.Model):
 
     Planet type mappings for schematics (inputs/outputs)
     """
-    schematic_id = models.IntegerField(db_index=True, db_column='schematicID')
-    type_id = models.IntegerField(db_index=True, db_column='typeID')
+    schematic_id = models.IntegerField(db_index=True, db_column='schematicid')
+    type_id = models.IntegerField(db_index=True, db_column='typeid')
     quantity = models.BooleanField(null=True, blank=True, db_column='quantity')  # Is output?
-    is_input = models.BooleanField(null=True, blank=True, db_column='isInput')
+    is_input = models.BooleanField(null=True, blank=True, db_column='isinput')
 
     class Meta:
         db_table = 'evesde_planetschematicstypemap'
@@ -1179,9 +1179,9 @@ class SkinLicense(models.Model):
 
     SKIN license definitions
     """
-    license_id = models.IntegerField(primary_key=True, db_column='licenseID')
-    type_id = models.IntegerField(null=True, blank=True, db_column='typeID')
-    skin_id = models.IntegerField(null=True, blank=True, db_column='skinID')
+    license_id = models.IntegerField(primary_key=True, db_column='licenseid')
+    type_id = models.IntegerField(null=True, blank=True, db_column='typeid')
+    skin_id = models.IntegerField(null=True, blank=True, db_column='skinid')
 
     class Meta:
         db_table = 'evesde_skinlicense'
@@ -1200,9 +1200,9 @@ class SkinMaterials(models.Model):
 
     SKIN material definitions
     """
-    skin_material_id = models.IntegerField(primary_key=True, db_column='skinMaterialID')
-    display_name = models.CharField(max_length=100, blank=True, db_column='displayName')
-    skin_material = models.CharField(max_length=100, blank=True, db_column='skinMaterial')
+    skin_material_id = models.IntegerField(primary_key=True, db_column='skinmaterialid')
+    display_name = models.CharField(max_length=100, blank=True, db_column='displayname')
+    skin_material = models.CharField(max_length=100, blank=True, db_column='skinmaterial')
 
     class Meta:
         db_table = 'evesde_skinmaterials'
@@ -1221,8 +1221,8 @@ class SkinShip(models.Model):
 
     SKIN to ship bindings
     """
-    skin_id = models.IntegerField(primary_key=True, db_column='skinID')
-    type_id = models.IntegerField(null=True, blank=True, db_column='typeID')
+    skin_id = models.IntegerField(primary_key=True, db_column='skinid')
+    type_id = models.IntegerField(null=True, blank=True, db_column='typeid')
 
     class Meta:
         db_table = 'evesde_skinship'
@@ -1245,9 +1245,9 @@ class TrnTranslations(models.Model):
 
     Translated strings for localization
     """
-    tc_id = models.IntegerField(db_index=True, db_column='tcID')
-    key_id = models.IntegerField(db_index=True, db_column='keyID')
-    language_id = models.CharField(max_length=5, db_index=True, db_column='languageID')
+    tc_id = models.IntegerField(db_index=True, db_column='tcid')
+    key_id = models.IntegerField(db_index=True, db_column='keyid')
+    language_id = models.CharField(max_length=5, db_index=True, db_column='languageid')
     text = models.TextField(db_column='text')
 
     class Meta:
@@ -1268,8 +1268,8 @@ class IndustryActivity(models.Model):
 
     Activity types for industry (manufacturing, research, invention, etc.)
     """
-    type_id = models.IntegerField(db_index=True, db_column='typeID')
-    activity_id = models.IntegerField(db_index=True, db_column='activityID')
+    type_id = models.IntegerField(db_index=True, db_column='typeid')
+    activity_id = models.IntegerField(db_index=True, db_column='activityid')
     time = models.IntegerField(null=True, blank=True, db_column='time')
 
     class Meta:
@@ -1289,9 +1289,9 @@ class IndustryActivityMaterials(models.Model):
 
     Material requirements for industry activities
     """
-    type_id = models.IntegerField(db_index=True, db_column='typeID')
-    activity_id = models.IntegerField(db_index=True, db_column='activityID')
-    material_type_id = models.IntegerField(db_index=True, db_column='materialTypeID')
+    type_id = models.IntegerField(db_index=True, db_column='typeid')
+    activity_id = models.IntegerField(db_index=True, db_column='activityid')
+    material_type_id = models.IntegerField(db_index=True, db_column='materialtypeid')
     quantity = models.IntegerField(db_column='quantity')
 
     class Meta:
@@ -1311,9 +1311,9 @@ class IndustryActivityProducts(models.Model):
 
     Products output by industry activities
     """
-    type_id = models.IntegerField(db_index=True, db_column='typeID')
-    activity_id = models.IntegerField(db_index=True, db_column='activityID')
-    product_type_id = models.IntegerField(db_index=True, db_column='productTypeID')
+    type_id = models.IntegerField(db_index=True, db_column='typeid')
+    activity_id = models.IntegerField(db_index=True, db_column='activityid')
+    product_type_id = models.IntegerField(db_index=True, db_column='producttypeid')
     quantity = models.IntegerField(db_column='quantity')
 
     class Meta:
@@ -1333,9 +1333,9 @@ class IndustryActivitySkills(models.Model):
 
     Skill requirements for industry activities
     """
-    type_id = models.IntegerField(db_index=True, db_column='typeID')
-    activity_id = models.IntegerField(db_index=True, db_column='activityID')
-    skill_id = models.IntegerField(db_index=True, db_column='skillID')
+    type_id = models.IntegerField(db_index=True, db_column='typeid')
+    activity_id = models.IntegerField(db_index=True, db_column='activityid')
+    skill_id = models.IntegerField(db_index=True, db_column='skillid')
     level = models.IntegerField(db_column='level')
 
     class Meta:
@@ -1355,11 +1355,11 @@ class RamTypeRequirements(models.Model):
 
     Additional requirements for industry activities (items, skills)
     """
-    type_id = models.IntegerField(db_index=True, db_column='typeID')
-    activity_id = models.IntegerField(db_index=True, db_column='activityID')
-    required_type_id = models.IntegerField(db_index=True, db_column='requiredTypeID')
+    type_id = models.IntegerField(db_index=True, db_column='typeid')
+    activity_id = models.IntegerField(db_index=True, db_column='activityid')
+    required_type_id = models.IntegerField(db_index=True, db_column='requiredtypeid')
     quantity = models.IntegerField(db_column='quantity')
-    damage_per_job = models.FloatField(null=True, blank=True, db_column='damagePerJob')
+    damage_per_job = models.FloatField(null=True, blank=True, db_column='damageperjob')
     recycle = models.BooleanField(null=True, blank=True, db_column='recycle')
 
     class Meta:
@@ -1384,12 +1384,12 @@ class MapSolarSystemJumps(models.Model):
     Stargate connections between solar systems.
     Each row represents a direct connection from one system to another.
     """
-    from_region = models.ForeignKey('MapRegions', on_delete=models.DO_NOTHING, db_column='fromRegionID', related_name='outgoing_jumps')
-    from_constellation = models.ForeignKey('MapConstellations', on_delete=models.DO_NOTHING, db_column='fromConstellationID', related_name='outgoing_jumps')
-    from_system = models.ForeignKey('MapSolarSystems', on_delete=models.DO_NOTHING, db_column='fromSolarSystemID', related_name='outgoing_jumps')
-    to_region = models.ForeignKey('MapRegions', on_delete=models.DO_NOTHING, db_column='toRegionID', related_name='incoming_jumps')
-    to_constellation = models.ForeignKey('MapConstellations', on_delete=models.DO_NOTHING, db_column='toConstellationID', related_name='incoming_jumps')
-    to_system = models.ForeignKey('MapSolarSystems', on_delete=models.DO_NOTHING, db_column='toSolarSystemID', related_name='incoming_jumps')
+    from_region = models.ForeignKey('MapRegions', on_delete=models.DO_NOTHING, db_column='fromregionid', related_name='outgoing_jumps')
+    from_constellation = models.ForeignKey('MapConstellations', on_delete=models.DO_NOTHING, db_column='fromconstellationid', related_name='outgoing_jumps')
+    from_system = models.ForeignKey('MapSolarSystems', on_delete=models.DO_NOTHING, db_column='fromsolarsystemid', related_name='outgoing_jumps')
+    to_region = models.ForeignKey('MapRegions', on_delete=models.DO_NOTHING, db_column='toregionid', related_name='incoming_jumps')
+    to_constellation = models.ForeignKey('MapConstellations', on_delete=models.DO_NOTHING, db_column='toconstellationid', related_name='incoming_jumps')
+    to_system = models.ForeignKey('MapSolarSystems', on_delete=models.DO_NOTHING, db_column='tosolarsystemid', related_name='incoming_jumps')
 
     class Meta:
         db_table = 'evesde_mapsolarsystemjumps'
