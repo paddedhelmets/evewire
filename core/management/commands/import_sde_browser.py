@@ -62,7 +62,7 @@ class Command(BaseCommand):
         # === Attributes (dogma) ===
         'dgmAttributeTypes': 'evesde_dgmattributetypes',
         'dgmAttributeCategories': 'evesde_dgmattributecategories',
-        'dgmTypeAttributes': 'evesde_dgmatypeattributes',
+        'dgmTypeAttributes': 'evesde_dgmtypeattributes',
         'dgmEffects': 'evesde_dgmeffects',
         'dgmTypeEffects': 'evesde_dgmtypeeffects',
 
