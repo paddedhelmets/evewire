@@ -498,8 +498,9 @@ class Command(BaseCommand):
 
             # Prepare SQL for PostgreSQL
             # Note: dgmTypeAttributes also needs BIGINT handling
+            # Quote identifiers to preserve case for Django db_column mappings
             is_dgm_type_attributes = (sde_table == 'dgmTypeAttributes')
-            create_sql = prepare_sql_for_postgresql(create_sql, sde_table, evesde_table, is_dgm_type_attributes)
+            create_sql = prepare_sql_for_postgresql(create_sql, sde_table, evesde_table, is_dgm_type_attributes, quote_identifiers=True)
 
             with connection.cursor() as django_cursor:
                 # Drop and create table
@@ -511,10 +512,27 @@ class Command(BaseCommand):
                 offset = 0
                 total_copied = 0
 
-                # Get renamed column names for PostgreSQL
-                renamed_columns = get_renamed_columns(original_columns)
+                # Get renamed column names for PostgreSQL (quoted to preserve case)
+                renamed_columns = get_renamed_columns(original_columns, quote_identifiers=True)
+
+                # Identify boolean columns that need casting from integer
+                # These are columns that were INTEGER in SDE but BOOLEAN in PostgreSQL
+                boolean_column_names = {'published', 'anchored', 'anchorable', 'fittableNonSingleton',
+                                       'useBasePrice', 'hasTypes', 'scattered'}
+
+                # Build INSERT with cast for boolean columns
+                # For boolean columns, use "::boolean" cast
+                insert_columns = []
+                for i, col in enumerate(original_columns):
+                    renamed_col = renamed_columns[i]
+                    if col in boolean_column_names:
+                        # Cast integer 0/1 to boolean
+                        insert_columns.append(f"(%s)::boolean")
+                    else:
+                        insert_columns.append('%s')
+
                 columns_str = ', '.join(renamed_columns)
-                placeholders = ', '.join(['%s'] * len(original_columns))
+                placeholders = ', '.join(insert_columns)
 
                 while True:
                     sde_cursor.execute(f"SELECT * FROM {sde_table} LIMIT {batch_size} OFFSET {offset}")

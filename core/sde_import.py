@@ -67,7 +67,8 @@ def table_exists(table_name: str, table_prefix: str = 'core_') -> bool:
 
 
 def prepare_sql_for_postgresql(create_sql: str, sde_table: str, django_table: str,
-                               is_dgm_type_attributes: bool = False) -> str:
+                               is_dgm_type_attributes: bool = False,
+                               quote_identifiers: bool = False) -> str:
     """
     Convert SQLite CREATE TABLE syntax to PostgreSQL-compatible SQL.
 
@@ -77,6 +78,11 @@ def prepare_sql_for_postgresql(create_sql: str, sde_table: str, django_table: st
     - Composite primary key handling
     - Backtick removal
     - Collation and timestamp clause removal
+    - Identifier quoting (to preserve case for Django db_column mappings)
+
+    Args:
+        quote_identifiers: If True, quote all identifiers to preserve case.
+                          Required for SDE browser models that use db_column='camelCase'.
     """
     # Remove quotes and backticks
     create_sql = create_sql.replace('"', '').replace('`', '')
@@ -86,11 +92,12 @@ def prepare_sql_for_postgresql(create_sql: str, sde_table: str, django_table: st
     create_sql = create_sql.replace('DEFAULT CURRENT_TIMESTAMP', '')
     create_sql = create_sql.replace('ON UPDATE CURRENT_TIMESTAMP', '')
 
-    # Rename PostgreSQL system column conflicts (case-insensitive)
-    create_sql = re.sub(r'\bxmin\b', 'xmin_coord', create_sql, flags=re.IGNORECASE)
-    create_sql = re.sub(r'\bxmax\b', 'xmax_coord', create_sql, flags=re.IGNORECASE)
-    create_sql = re.sub(r'\bcmin\b', 'cmin_coord', create_sql, flags=re.IGNORECASE)
-    create_sql = re.sub(r'\bcmax\b', 'cmax_coord', create_sql, flags=re.IGNORECASE)
+    # Rename PostgreSQL system column conflicts (exact lowercase match only)
+    # Note: xMin, xMax, etc. are legitimate EVE column names, not system conflicts
+    create_sql = re.sub(r'\bxmin\b', 'xmin_coord', create_sql)
+    create_sql = re.sub(r'\bxmax\b', 'xmax_coord', create_sql)
+    create_sql = re.sub(r'\bcmin\b', 'cmin_coord', create_sql)
+    create_sql = re.sub(r'\bcmax\b', 'cmax_coord', create_sql)
 
     # Replace table name (don't include the opening parenthesis in the match)
     create_sql = re.sub(
@@ -139,6 +146,25 @@ def prepare_sql_for_postgresql(create_sql: str, sde_table: str, django_table: st
 
     # Remove BLOB
     create_sql = create_sql.replace(' BLOB', ' BYTEA')
+    # DECIMAL -> NUMERIC for PostgreSQL
+    create_sql = re.sub(r'\bDECIMAL\b', 'NUMERIC', create_sql, flags=re.IGNORECASE)
+
+    # Remove MySQL-specific CHECK constraints that assume INTEGER for boolean columns
+    # These will be recreated automatically by PostgreSQL for BOOLEAN columns
+    # Pattern: CHECK (columnName in (0,1)) or CHECK (scattered in (0,1))
+    create_sql = re.sub(r',\s*CONSTRAINT\s+"?\w+?"?\s+CHECK\s*\([^)]+in\s+\(0,1\)\)', '', create_sql, flags=re.IGNORECASE)
+
+    # Convert INTEGER boolean columns to BOOLEAN
+    # These columns store 0/1 but Django expects boolean
+    create_sql = re.sub(r'\bpublished INTEGER', 'published BOOLEAN', create_sql, flags=re.IGNORECASE)
+    create_sql = re.sub(r'\banchored INTEGER', 'anchored BOOLEAN', create_sql, flags=re.IGNORECASE)
+    create_sql = re.sub(r'\banchorable INTEGER', 'anchorable BOOLEAN', create_sql, flags=re.IGNORECASE)
+    create_sql = re.sub(r'\bfittableNonSingleton INTEGER', 'fittableNonSingleton BOOLEAN', create_sql, flags=re.IGNORECASE)
+    create_sql = re.sub(r'\buseBasePrice INTEGER', 'useBasePrice BOOLEAN', create_sql, flags=re.IGNORECASE)
+    create_sql = re.sub(r'\bhasTypes INTEGER', 'hasTypes BOOLEAN', create_sql, flags=re.IGNORECASE)
+    create_sql = re.sub(r'\bscattered INTEGER', 'scattered BOOLEAN', create_sql, flags=re.IGNORECASE)
+    # Note: tinyint(1) from MySQL/MariaDB also maps to boolean
+    create_sql = re.sub(r'\b(\w+)\s+tinyint\(1\)', r'\1 BOOLEAN', create_sql, flags=re.IGNORECASE)
 
     # Rename coordinate columns AFTER type conversions (to avoid double-converting DOUBLE PRECISION)
     # x DOUBLE PRECISION -> x_coord DOUBLE PRECISION
@@ -146,21 +172,90 @@ def prepare_sql_for_postgresql(create_sql: str, sde_table: str, django_table: st
     create_sql = re.sub(r'\by\s+', 'y_coord ', create_sql, flags=re.IGNORECASE)
     create_sql = re.sub(r'\bz\s+', 'z_coord ', create_sql, flags=re.IGNORECASE)
 
+    # Quote identifiers to preserve case (for Django db_column mappings)
+    if quote_identifiers:
+        create_sql = _quote_identifiers_in_sql(create_sql)
+
     return create_sql
 
 
-def get_renamed_columns(original_columns: list) -> list:
+def _quote_identifiers_in_sql(sql: str) -> str:
+    """
+    Quote identifiers in SQL to preserve case for PostgreSQL.
+
+    PostgreSQL folds unquoted identifiers to lowercase, but Django's db_column
+    uses camelCase (e.g., db_column='groupID'). We need to quote identifiers
+    to preserve the case.
+
+    This quotes column names and table names while avoiding SQL keywords,
+    type names, and other reserved words.
+    """
+    # SQL keywords and type names that should NOT be quoted
+    skip_words = {
+        # SQL keywords
+        'CREATE', 'TABLE', 'PRIMARY', 'KEY', 'NOT', 'NULL', 'DEFAULT',
+        'UNIQUE', 'FOREIGN', 'REFERENCES', 'CONSTRAINT', 'CHECK',
+        'SELECT', 'INSERT', 'INTO', 'VALUES', 'WHERE', 'FROM', 'JOIN',
+        'ON', 'AND', 'OR', 'NOT', 'IN', 'IS', 'TRUE', 'FALSE',
+        # Data types
+        'INTEGER', 'BIGINT', 'SMALLINT', 'SERIAL', 'BIGSERIAL',
+        'VARCHAR', 'CHAR', 'TEXT', 'BOOLEAN', 'BOOL',
+        'REAL', 'DOUBLE', 'PRECISION', 'FLOAT', 'NUMERIC', 'DECIMAL',
+        'DATE', 'TIME', 'TIMESTAMP', 'BYTEA', 'BLOB',
+        # Other
+        'IF', 'NOT', 'EXISTS', 'CASCADE', 'RESTRICT', 'NO', 'ACTION',
+        'AUTOINCREMENT', 'ASC', 'DESC', 'LIMIT', 'OFFSET',
+    }
+
+    result = []
+    # Tokenize by splitting on common delimiters
+    tokens = re.split(r'([,\(\)\s]+)', sql)
+
+    for token in tokens:
+        # Skip whitespace, punctuation, empty tokens
+        if not token or token.isspace() or token in ',()':
+            result.append(token)
+            continue
+
+        # Check if this looks like an identifier
+        # Identifiers: start with letter or underscore, contain letters/digits/underscore
+        if re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', token):
+            upper_token = token.upper()
+            # Don't quote SQL keywords or type names
+            if upper_token not in skip_words:
+                # Quote the identifier to preserve case
+                result.append(f'"{token}"')
+            else:
+                result.append(token)
+        else:
+            result.append(token)
+
+    return ''.join(result)
+
+
+def get_renamed_columns(original_columns: list, quote_identifiers: bool = False) -> list:
     """
     Get the list of column names after renaming for PostgreSQL compatibility.
+
     Handles system columns and coordinate columns.
+
+    Args:
+        quote_identifiers: If True, quote column names to preserve case for PostgreSQL.
+                          Required for SDE browser models that use db_column='camelCase'.
     """
     renamed = []
     for col in original_columns:
-        col_lower = col.lower()
-        if col_lower in ('xmin', 'xmax', 'cmin', 'cmax'):
-            renamed.append(f"{col}_coord")
-        elif col_lower in ('x', 'y', 'z'):
-            renamed.append(f"{col}_coord")
+        # Check for EXACT matches to system column names (not lowercase)
+        # xMin, xMax, etc. are legitimate EVE column names, not system conflicts
+        if col in ('xmin', 'xmax', 'cmin', 'cmax'):
+            new_col = f"{col}_coord"
+        elif col in ('x', 'y', 'z'):
+            new_col = f"{col}_coord"
         else:
-            renamed.append(col)
+            new_col = col
+
+        if quote_identifiers:
+            renamed.append(f'"{new_col}"')
+        else:
+            renamed.append(new_col)
     return renamed
