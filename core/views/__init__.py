@@ -625,7 +625,7 @@ def sync_character(request: HttpRequest, character_id: int) -> HttpResponse:
 
     # Queue the sync task
     try:
-        async_task('core.services.sync_character_data', character)
+        async_task('core.services.sync_character_data', character.id)
         messages.success(request, 'Character sync started. Data will be updated shortly.')
     except Exception as e:
         logger.error(f'Failed to queue sync task for character {character_id}: {e}')

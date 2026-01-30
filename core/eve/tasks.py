@@ -231,14 +231,15 @@ def refresh_stale_characters() -> dict:
 
 def _sync_character_metadata(character_id: int) -> bool:
     """
-    Sync character metadata (location, wallet, orders, contracts, industry).
+    Sync character metadata (location, wallet balance, orders, contracts, industry).
 
-    This is a lighter sync than full character sync - excludes assets and skills.
+    This is a lighter sync than full character sync - excludes assets, skills,
+    and wallet journal (heavy operations).
     """
     from core.models import Character
     from core.services import (
-        ESIClient, _sync_location, _sync_wallet, _sync_orders,
-        _sync_orders_history, _sync_industry_jobs, _sync_contracts,
+        ESIClient, __sync_location, __sync_wallet_balance, __sync_orders,
+        __sync_orders_history, __sync_industry_jobs, __sync_contracts,
         update_character_corporation_info
     )
     from requests.exceptions import HTTPError
@@ -258,21 +259,21 @@ def _sync_character_metadata(character_id: int) -> bool:
 
         # Location might fail with 401 if scope not granted
         try:
-            _sync_location(character)
+            __sync_location(character)
         except HTTPError as e:
             if e.response is not None and e.response.status_code == 401:
                 logger.warning(f'Location not available for character {character_id} (missing scope)')
             else:
                 raise
 
-        _sync_wallet(character)
-        _sync_orders(character)
-        _sync_orders_history(character)
-        _sync_industry_jobs(character)
+        __sync_wallet_balance(character)  # Just balance, not journal
+        __sync_orders(character)
+        __sync_orders_history(character)
+        __sync_industry_jobs(character)
 
         # Contracts might fail with 401 if scope not granted
         try:
-            _sync_contracts(character)
+            __sync_contracts(character)
         except HTTPError as e:
             if e.response is not None and e.response.status_code == 401:
                 logger.warning(f'Contracts not available for character {character_id} (missing scope)')
@@ -333,13 +334,13 @@ def refresh_stale_assets() -> dict:
 def _sync_character_assets(character_id: int) -> bool:
     """Sync character assets only."""
     from core.models import Character
-    from core.services import _sync_assets
+    from core.services import __sync_assets
 
     try:
         character = Character.objects.get(id=character_id)
         logger.info(f'Syncing assets for character {character_id}')
 
-        _sync_assets(character)
+        __sync_assets(character)
 
         logger.info(f'Asset sync complete for character {character_id}')
         return True
@@ -391,16 +392,16 @@ def refresh_stale_skills() -> dict:
 def _sync_character_skills(character_id: int) -> bool:
     """Sync character skills and skill queue only."""
     from core.models import Character
-    from core.services import _sync_skills, _sync_skill_queue, _sync_attributes, _sync_implants
+    from core.services import __sync_skills, __sync_skill_queue, __sync_attributes, __sync_implants
 
     try:
         character = Character.objects.get(id=character_id)
         logger.info(f'Syncing skills for character {character_id}')
 
-        _sync_skills(character)
-        _sync_skill_queue(character)
-        _sync_attributes(character)
-        _sync_implants(character)
+        __sync_skills(character)
+        __sync_skill_queue(character)
+        __sync_attributes(character)
+        __sync_implants(character)
 
         logger.info(f'Skill sync complete for character {character_id}')
         return True

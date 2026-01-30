@@ -89,9 +89,9 @@ class SolarSystem(models.Model):
     region_id = models.IntegerField(db_index=True, null=True, db_column='regionid')
     security_class = models.CharField(max_length=10, blank=True, db_column='securityclass')
     security = models.FloatField(null=True, blank=True)
-    x = models.FloatField(null=True, blank=True)
-    y = models.FloatField(null=True, blank=True)
-    z = models.FloatField(null=True, blank=True)
+    x = models.FloatField(null=True, blank=True, db_column='x_coord')
+    y = models.FloatField(null=True, blank=True, db_column='y_coord')
+    z = models.FloatField(null=True, blank=True, db_column='z_coord')
 
     class Meta:
         verbose_name = _('solar system')
@@ -126,9 +126,9 @@ class Station(models.Model):
     corporation_id = models.IntegerField(null=True, blank=True, db_column='corporationid')
     region_id = models.IntegerField(null=True, blank=True, db_column='regionid')
     type_id = models.IntegerField(null=True, blank=True, db_column='stationtypeid')
-    x = models.FloatField(null=True, blank=True)
-    y = models.FloatField(null=True, blank=True)
-    z = models.FloatField(null=True, blank=True)
+    x = models.FloatField(null=True, blank=True, db_column='x_coord')
+    y = models.FloatField(null=True, blank=True, db_column='y_coord')
+    z = models.FloatField(null=True, blank=True, db_column='z_coord')
     security = models.FloatField(null=True, blank=True)
 
     class Meta:
@@ -215,7 +215,7 @@ class Alliance(models.Model):
     id = models.BigIntegerField(primary_key=True, db_column='allianceid')
     name = models.CharField(max_length=255, db_index=True)
     ticker = models.CharField(max_length=10, blank=True)
-    creator_corporation_id = models.IntegerField(null=True, blank=True, db_column='creatorcorpid')
+    creator_corporation_id = models.IntegerField(null=True, blank=True, db_column='creatorcorporationid')
     creator_id = models.IntegerField(null=True, blank=True, db_column='creatorid')
     date_founded = models.DateField(null=True, blank=True, db_column='startdate')
 

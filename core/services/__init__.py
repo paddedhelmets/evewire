@@ -948,92 +948,321 @@ def update_character_corporation_info(character) -> bool:
 
 # Sync functions for character data
 
-def sync_character_data(character) -> bool:
-    """Sync all character data from ESI.
+def sync_character_data(character_id: int) -> bool:
+    """Sync character data from ESI (lightweight sync only).
+
+    Queues independent tasks for fast operations: skills, location, wallet balance,
+    orders, contracts, industry jobs. Does NOT include assets or wallet journal.
+
+    Heavy operations (assets, wallet journal) must be synced separately via:
+    - sync_character_assets()
+    - sync_character_wallet_journal()
 
     Args:
-        character: Character object (will be refreshed from DB to avoid stale data)
+        character_id: Character ID to sync
     """
     from core.models import SyncStatus, Character
-    from requests.exceptions import HTTPError
-
-    # Refresh character from database to avoid issues with serialized objects
-    character = Character.objects.get(id=character.id)
+    from django_q.tasks import async_task
 
     try:
-        character.last_sync_status = SyncStatus.IN_PROGRESS
-        character.save(update_fields=['last_sync_status'])
+        character = Character.objects.get(id=character_id)
+    except Character.DoesNotExist:
+        logger.error(f'Character {character_id} not found for sync')
+        return False
 
-        # First, fetch and update basic character info (corporation_id may have changed)
+    # Set status to in_progress
+    character.last_sync_status = SyncStatus.PENDING
+    character.last_sync_error = ''
+    character.save(update_fields=['last_sync_status', 'last_sync_error'])
+
+    # Update basic info immediately (corporation can change)
+    try:
         char_info_response = ESIClient.get_character_info(character.id)
         char_info = char_info_response.data
         character.corporation_id = char_info.get('corporation_id')
         character.save(update_fields=['corporation_id'])
-
-        _sync_skills(character)
-        _sync_skill_queue(character)
-        _sync_attributes(character)
-        _sync_implants(character)
-
-        # Location might fail with 401 if scope not granted - handle gracefully
-        try:
-            _sync_location(character)
-        except HTTPError as e:
-            if e.response is not None and e.response.status_code == 401:
-                logger.warning(f'Location not available for character {character.id} (missing scope)')
-            else:
-                raise
-
-        _sync_wallet(character)
-        _sync_assets(character)
-        _sync_orders(character)
-        _sync_orders_history(character)
-        _sync_industry_jobs(character)
-
-        # Contracts might fail with 401 if scope not granted - handle gracefully
-        try:
-            _sync_contracts(character)
-        except HTTPError as e:
-            if e.response is not None and e.response.status_code == 401:
-                logger.warning(f'Contracts not available for character {character.id} (missing scope)')
-            else:
-                raise
-
-        # Update corporation/alliance names (can change over time)
-        update_character_corporation_info(character)
-
-        character.last_sync_status = SyncStatus.SUCCESS
-        character.last_sync_error = ''
-        character.last_sync = timezone.now()
-        character.save(update_fields=['last_sync_status', 'last_sync_error', 'last_sync'])
-
-        logger.info(f'Sync completed for character {character.id}')
-        return True
-
-    except HTTPError as e:
-        # Check for 401 Unauthorized - indicates invalid/missing scopes or broken refresh token
-        if e.response is not None and e.response.status_code == 401:
-            character.last_sync_status = SyncStatus.NEEDS_REAUTH
-            character.last_sync_error = 'Authentication failed. Please re-authorize this character through EVE SSO.'
-            character.save(update_fields=['last_sync_status', 'last_sync_error'])
-            logger.warning(f'Character {character.id} needs re-authentication: {e}')
-        else:
-            character.last_sync_status = SyncStatus.FAILED
-            character.last_sync_error = str(e)[:500]
-            character.save(update_fields=['last_sync_status', 'last_sync_error'])
-            logger.error(f'Sync failed for character {character.id}: {e}')
-        return False
     except Exception as e:
-        character.last_sync_status = SyncStatus.FAILED
-        character.last_sync_error = str(e)[:500]
-        character.save(update_fields=['last_sync_status', 'last_sync_error'])
+        logger.warning(f'Failed to fetch basic info for {character.id}: {e}')
 
-        import traceback
-        logger.error(f'Sync failed for character {character.id}: {e}\n{traceback.format_exc()}')
+    # Queue lightweight sync tasks - each updates its own timestamp
+    group_id = f'sync_character_{character_id}'
+
+    async_task('core.services._sync_skills', character_id, group=group_id)
+    async_task('core.services._sync_skill_queue', character_id, group=group_id)
+    async_task('core.services._sync_attributes', character_id, group=group_id)
+    async_task('core.services._sync_implants', character_id, group=group_id)
+    async_task('core.services._sync_location', character_id, group=group_id)
+    async_task('core.services._sync_wallet_balance', character_id, group=group_id)  # Just balance, not journal
+    async_task('core.services._sync_orders', character_id, group=group_id)
+    async_task('core.services._sync_orders_history', character_id, group=group_id)
+    async_task('core.services._sync_industry_jobs', character_id, group=group_id)
+    async_task('core.services._sync_contracts', character_id, group=group_id)
+    async_task('core.services._finalize_sync', character_id, group=group_id)
+
+    logger.info(f'Queued lightweight sync tasks for character {character.id}')
+    return True
+
+
+def sync_character_assets(character_id: int) -> bool:
+    """Sync character assets (heavy operation, separate queue).
+
+    Assets can have thousands of items and take a long time.
+    This should be run separately from the main sync.
+
+    Args:
+        character_id: Character ID to sync
+    """
+    from core.models import Character
+    from django_q.tasks import async_task
+
+    try:
+        character = Character.objects.get(id=character_id)
+    except Character.DoesNotExist:
+        logger.error(f'Character {character_id} not found for asset sync')
+        return False
+
+    async_task('core.services._sync_assets', character_id)
+    logger.info(f'Queued asset sync for character {character.id}')
+    return True
+
+
+def sync_character_wallet_journal(character_id: int) -> bool:
+    """Sync character wallet journal and transactions (heavy operation, separate queue).
+
+    Wallet journal and transactions can have hundreds/thousands of entries.
+    This should be run separately from the main sync.
+
+    Args:
+        character_id: Character ID to sync
+    """
+    from core.models import Character
+    from django_q.tasks import async_task
+
+    try:
+        character = Character.objects.get(id=character_id)
+    except Character.DoesNotExist:
+        logger.error(f'Character {character_id} not found for wallet journal sync')
+        return False
+
+    group_id = f'wallet_journal_{character_id}'
+    async_task('core.services._sync_wallet_journal_full', character_id, group=group_id)
+    async_task('core.services._sync_wallet_transactions_full', character_id, group=group_id)
+
+    logger.info(f'Queued wallet journal sync for character {character.id}')
+    return True
+
+
+# Wrapper functions for async tasks (take character_id instead of character object)
+def _sync_skills(character_id: int) -> bool:
+    """Wrapper: sync skills from ESI."""
+    from core.models import Character
+    try:
+        character = Character.objects.get(id=character_id)
+        __sync_skills(character)
+        return True
+    except Exception as e:
+        logger.error(f'_sync_skills failed for {character_id}: {e}')
         return False
 
 
-def _sync_skills(character) -> None:
+def _sync_skill_queue(character_id: int) -> bool:
+    """Wrapper: sync skill queue from ESI."""
+    from core.models import Character
+    try:
+        character = Character.objects.get(id=character_id)
+        __sync_skill_queue(character)
+        return True
+    except Exception as e:
+        logger.error(f'_sync_skill_queue failed for {character_id}: {e}')
+        return False
+
+
+def _sync_attributes(character_id: int) -> bool:
+    """Wrapper: sync attributes from ESI."""
+    from core.models import Character
+    try:
+        character = Character.objects.get(id=character_id)
+        __sync_attributes(character)
+        return True
+    except Exception as e:
+        logger.error(f'_sync_attributes failed for {character_id}: {e}')
+        return False
+
+
+def _sync_implants(character_id: int) -> bool:
+    """Wrapper: sync implants from ESI."""
+    from core.models import Character
+    try:
+        character = Character.objects.get(id=character_id)
+        __sync_implants(character)
+        return True
+    except Exception as e:
+        logger.error(f'_sync_implants failed for {character_id}: {e}')
+        return False
+
+
+def _sync_location(character_id: int) -> bool:
+    """Wrapper: sync location from ESI."""
+    from core.models import Character
+    from requests.exceptions import HTTPError
+    try:
+        character = Character.objects.get(id=character_id)
+        __sync_location(character)
+        return True
+    except HTTPError as e:
+        if e.response is not None and e.response.status_code == 401:
+            logger.warning(f'Location not available for {character_id} (missing scope)')
+            return True  # Not an error, just missing scope
+        raise
+    except Exception as e:
+        logger.error(f'_sync_location failed for {character_id}: {e}')
+        return False
+
+
+def _sync_wallet_balance(character_id: int) -> bool:
+    """Wrapper: sync wallet balance from ESI (lightweight)."""
+    from core.models import Character
+    try:
+        character = Character.objects.get(id=character_id)
+        __sync_wallet_balance(character)
+        return True
+    except Exception as e:
+        logger.error(f'_sync_wallet_balance failed for {character_id}: {e}')
+        return False
+
+
+def _sync_wallet_journal_full(character_id: int) -> bool:
+    """Wrapper: sync full wallet journal from ESI (heavy operation)."""
+    from core.models import Character
+    try:
+        character = Character.objects.get(id=character_id)
+        __sync_wallet_journal(character)
+        return True
+    except Exception as e:
+        logger.error(f'_sync_wallet_journal_full failed for {character_id}: {e}')
+        return False
+
+
+def _sync_wallet_transactions_full(character_id: int) -> bool:
+    """Wrapper: sync full wallet transactions from ESI (heavy operation)."""
+    from core.models import Character
+    try:
+        character = Character.objects.get(id=character_id)
+        __sync_wallet_transactions(character)
+        return True
+    except Exception as e:
+        logger.error(f'_sync_wallet_transactions_full failed for {character_id}: {e}')
+        return False
+
+
+def _sync_assets(character_id: int) -> bool:
+    """Wrapper: sync assets from ESI (heavy operation)."""
+    from core.models import Character
+    try:
+        character = Character.objects.get(id=character_id)
+        __sync_assets(character)
+        return True
+    except Exception as e:
+        logger.error(f'_sync_assets failed for {character_id}: {e}')
+        return False
+
+
+def _sync_orders(character_id: int) -> bool:
+    """Wrapper: sync orders from ESI."""
+    from core.models import Character
+    try:
+        character = Character.objects.get(id=character_id)
+        __sync_orders(character)
+        return True
+    except Exception as e:
+        logger.error(f'_sync_orders failed for {character_id}: {e}')
+        return False
+
+
+def _sync_orders_history(character_id: int) -> bool:
+    """Wrapper: sync orders history from ESI."""
+    from core.models import Character
+    try:
+        character = Character.objects.get(id=character_id)
+        __sync_orders_history(character)
+        return True
+    except Exception as e:
+        logger.error(f'_sync_orders_history failed for {character_id}: {e}')
+        return False
+
+
+def _sync_industry_jobs(character_id: int) -> bool:
+    """Wrapper: sync industry jobs from ESI."""
+    from core.models import Character
+    try:
+        character = Character.objects.get(id=character_id)
+        __sync_industry_jobs(character)
+        return True
+    except Exception as e:
+        logger.error(f'_sync_industry_jobs failed for {character_id}: {e}')
+        return False
+
+
+def _sync_contracts(character_id: int) -> bool:
+    """Wrapper: sync contracts from ESI."""
+    from core.models import Character
+    from requests.exceptions import HTTPError
+    try:
+        character = Character.objects.get(id=character_id)
+        __sync_contracts(character)
+        return True
+    except HTTPError as e:
+        if e.response is not None and e.response.status_code == 401:
+            logger.warning(f'Contracts not available for {character_id} (missing scope)')
+            return True  # Not an error, just missing scope
+        raise
+    except Exception as e:
+        logger.error(f'_sync_contracts failed for {character_id}: {e}')
+        return False
+
+
+def _finalize_sync(character_id: int) -> bool:
+    """Finalizer: update overall sync status based on partial sync timestamps."""
+    from core.models import Character, SyncStatus
+    import time
+
+    # Small delay to ensure other tasks have had time to write their timestamps
+    time.sleep(1)
+
+    try:
+        character = Character.objects.get(id=character_id)
+
+        # Get all sync timestamps
+        sync_times = filter(None, [
+            character.skills_synced_at,
+            character.wallet_synced_at,
+            character.assets_synced_at,
+            character.orders_synced_at,
+        ])
+
+        sync_times_list = list(sync_times)
+        if sync_times_list:
+            # We have at least some data synced
+            character.last_sync = max(sync_times_list)
+            character.last_sync_status = SyncStatus.SUCCESS
+            character.last_sync_error = ''
+            character.save(update_fields=['last_sync', 'last_sync_status', 'last_sync_error'])
+            logger.info(f'Sync finalized for {character_id}: last_sync={character.last_sync}')
+        else:
+            # Nothing was synced
+            character.last_sync_status = SyncStatus.FAILED
+            character.last_sync_error = 'No data was synced'
+            character.save(update_fields=['last_sync_status', 'last_sync_error'])
+            logger.warning(f'Sync finalized for {character_id}: no data synced')
+
+        return True
+    except Exception as e:
+        logger.error(f'_finalize_sync failed for {character_id}: {e}')
+        return False
+
+
+# Renamed original functions with __ prefix (internal use)
+def __sync_skills(character) -> None:
     """Sync character skills from ESI."""
     from core.character.models import CharacterSkill
 
@@ -1058,7 +1287,7 @@ def _sync_skills(character) -> None:
         )
 
 
-def _sync_skill_queue(character) -> None:
+def __sync_skill_queue(character) -> None:
     """Sync character skill queue from ESI."""
     from core.character.models import SkillQueueItem
 
@@ -1082,7 +1311,7 @@ def _sync_skill_queue(character) -> None:
         )
 
 
-def _sync_attributes(character) -> None:
+def __sync_attributes(character) -> None:
     """Sync character attributes from ESI."""
     from core.character.models import CharacterAttributes
 
@@ -1102,7 +1331,7 @@ def _sync_attributes(character) -> None:
     )
 
 
-def _sync_implants(character) -> None:
+def __sync_implants(character) -> None:
     """Sync character implants from ESI."""
     from core.character.models import CharacterImplant
 
@@ -1120,9 +1349,8 @@ def _sync_implants(character) -> None:
         )
 
 
-def _sync_wallet(character) -> None:
-    """Sync character wallet data from ESI (balance, journal, transactions)."""
-    # Sync balance
+def __sync_wallet_balance(character) -> None:
+    """Sync character wallet balance from ESI (lightweight)."""
     response = ESIClient.get_wallet_balance(character)
     balance = response.data
 
@@ -1130,14 +1358,20 @@ def _sync_wallet(character) -> None:
     character.wallet_synced_at = timezone.now()
     character.save(update_fields=['wallet_balance', 'wallet_synced_at'])
 
+
+def __sync_wallet(character) -> None:
+    """Sync character wallet data from ESI (balance, journal, transactions)."""
+    # Sync balance
+    __sync_wallet_balance(character)
+
     # Sync journal with fromID walking
-    _sync_wallet_journal(character)
+    __sync_wallet_journal(character)
 
     # Sync transactions with fromID walking
-    _sync_wallet_transactions(character)
+    __sync_wallet_transactions(character)
 
 
-def _sync_location(character) -> None:
+def __sync_location(character) -> None:
     """Sync character location from ESI.
 
     ESI Endpoint: GET /characters/{character_id}/location/
@@ -1157,7 +1391,7 @@ def _sync_location(character) -> None:
     character.save(update_fields=['solar_system_id', 'station_id', 'structure_id', 'location_synced_at'])
 
 
-def _sync_wallet_journal(character) -> None:
+def __sync_wallet_journal(character) -> None:
     """
     Sync character wallet journal from ESI with fromID walking.
 
@@ -1263,7 +1497,7 @@ def _sync_wallet_journal(character) -> None:
         logger.info(f'Wallet journal sync for character {character.id}: created {created} entries across {total_fetched} fetched')
 
 
-def _sync_wallet_transactions(character) -> None:
+def __sync_wallet_transactions(character) -> None:
     """
     Sync character wallet transactions from ESI with fromID walking.
 
@@ -1362,7 +1596,7 @@ def _sync_wallet_transactions(character) -> None:
 
 
 
-def _sync_assets(character) -> None:
+def __sync_assets(character) -> None:
     """Sync character assets from ESI."""
     from core.character.models import CharacterAsset
 
@@ -1494,7 +1728,7 @@ def _queue_structure_refreshes(character, assets_by_id: dict) -> None:
             async_task('core.eve.tasks.refresh_structure', structure_id)
 
 
-def _sync_orders(character) -> None:
+def __sync_orders(character) -> None:
     """
     Sync character market orders from ESI.
 
@@ -1614,7 +1848,7 @@ def _sync_orders(character) -> None:
     character.save(update_fields=['orders_synced_at'])
 
 
-def _sync_orders_history(character) -> None:
+def __sync_orders_history(character) -> None:
     """
     Sync character market order history from ESI.
 
@@ -1687,7 +1921,7 @@ def _sync_orders_history(character) -> None:
     )
 
 
-def _sync_industry_jobs(character) -> None:
+def __sync_industry_jobs(character) -> None:
     """
     Sync character industry jobs from ESI.
 
@@ -1825,7 +2059,7 @@ def _sync_industry_jobs(character) -> None:
     character.save(update_fields=['industry_jobs_synced_at'])
 
 
-def _sync_contracts(character) -> None:
+def __sync_contracts(character) -> None:
     """
     Sync character contracts from ESI.
 
@@ -1957,7 +2191,7 @@ def _sync_contracts(character) -> None:
     character.save(update_fields=['contracts_synced_at'])
 
 
-def _sync_contract_items(character, contract) -> None:
+def __sync_contract_items(character, contract) -> None:
     """
     Sync items for a specific contract from ESI.
 

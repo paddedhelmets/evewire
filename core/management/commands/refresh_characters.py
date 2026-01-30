@@ -3,10 +3,10 @@ Management command to manually trigger character refresh tasks.
 
 Can be run via cron or systemd timer for periodic refresh.
 Usage:
-    python manage.py refresh_characters              # Refresh all stale data
+    python manage.py refresh_characters              # Refresh metadata + skills (NOT assets)
     python manage.py refresh_characters --metadata    # Metadata only
-    python manage.py refresh_characters --assets      # Assets only
     python manage.py refresh_characters --skills      # Skills only
+    python manage.py refresh_characters --assets      # Assets only
 """
 import logging
 from django.core.management.base import BaseCommand
@@ -29,7 +29,7 @@ class Command(BaseCommand):
             '--assets',
             action='store_true',
             dest='assets',
-            help='Refresh character assets',
+            help='Refresh character assets (heavy operation)',
         )
         parser.add_argument(
             '--skills',
@@ -42,9 +42,8 @@ class Command(BaseCommand):
         queued = 0
 
         if not any([options['metadata'], options['assets'], options['skills']]):
-            # Refresh all if nothing specified
+            # Default: metadata + skills only (assets are on separate timer)
             options['metadata'] = True
-            options['assets'] = True
             options['skills'] = True
 
         if options['metadata']:
