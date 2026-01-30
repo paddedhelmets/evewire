@@ -949,16 +949,18 @@ class SkillPlan(models.Model):
                 )
             }
 
-        # SP calculation constants
-        SP_multiplier = 32 ** 0.5
-
         def sp_for_level(level: int, rank: int) -> int:
-            """Calculate SP required for a given skill level."""
+            """Calculate total SP required for a given skill level."""
             if level == 0:
                 return 0
-            base = 250 * rank
-            geometric_sum = (SP_multiplier ** level - 1) / (SP_multiplier - 1)
-            return int(base * geometric_sum)
+            # EVE SP formula: 250 * rank * (sqrt(32))^(L-1)
+            # Which is: 250 * rank * 32^((L-1)/2)
+            # L1: 250 * 32^0 = 250 * rank
+            # L2: 250 * 32^0.5 = 1414 * rank
+            # L3: 250 * 32^1 = 8000 * rank
+            # L4: 250 * 32^1.5 = 45255 * rank
+            # L5: 250 * 32^2 = 256000 * rank
+            return int(250 * rank * math.pow(32, (level - 1) / 2))
 
         # Primary entries tracking
         primary_total = 0

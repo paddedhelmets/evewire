@@ -343,8 +343,9 @@ def fitting_skill_plans(request: HttpRequest, fitting_id: int) -> HttpResponse:
 
     # Build SP lookup function using pre-fetched data
     def get_sp_for_level(skill_id: int, level: int) -> int:
-        """Get total SP needed for a skill level (using pre-fetched data)."""
-        import math
+        """Get total SP needed for a skill level."""
+        if level == 0:
+            return 0
 
         rank_attr = rank_attrs.get(skill_id)
         if rank_attr:
@@ -352,7 +353,8 @@ def fitting_skill_plans(request: HttpRequest, fitting_id: int) -> HttpResponse:
         else:
             rank = 1
 
-        return int(math.pow(2, (2.5 * level) - 2) * 32 * rank)
+        # EVE SP formula: 250 * rank * 32^((L-1)/2)
+        return int(250 * rank * math.pow(32, (level - 1) / 2))
 
     # Step 5: Calculate pilot progress with pre-fetched character skills
     characters = Character.objects.filter(

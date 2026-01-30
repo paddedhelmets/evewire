@@ -389,18 +389,19 @@ def calculate_training_time(
     else:
         sp_per_minute = 20 + (20 / 2)  # Default: both attributes at 20
 
-    # Calculate SP needed for each level from current to target
-    total_sp_needed = 0
-    for level in range(current_level + 1, target_level + 1):
-        level_sp = math.pow(2, (2.5 * level) - 2) * 32 * skill_rank
-        total_sp_needed += level_sp
+    # Calculate SP needed: total SP at target - total SP at current
+    # EVE SP formula: 250 * rank * 32^((L-1)/2)
+    def total_sp_at_level(level: int, rank: int) -> int:
+        if level == 0:
+            return 0
+        return int(250 * rank * math.pow(32, (level - 1) / 2))
 
-    # SP already earned towards current level
-    sp_at_current_level_start = 0
-    if current_level > 0:
-        sp_at_current_level_start = math.pow(2, (2.5 * current_level) - 2) * 32 * skill_rank
+    sp_at_target = total_sp_at_level(target_level, skill_rank)
+    sp_at_current = total_sp_at_level(current_level, skill_rank)
+    total_sp_needed = sp_at_target - sp_at_current
 
-    sp_remaining = max(0, total_sp_needed - (current_sp - sp_at_current_level_start))
+    # SP remaining considering current progress
+    sp_remaining = max(0, sp_at_target - current_sp)
 
     # Calculate time
     if sp_per_minute > 0:
@@ -951,7 +952,8 @@ def calculate_fitting_plan_progress(
     # Calculate SP for each skill level
     def get_sp_for_level(skill_id: int, level: int) -> int:
         """Get total SP needed for a skill level."""
-        import math
+        if level == 0:
+            return 0
 
         # Get skill rank from map
         rank_attr = skill_rank_map.get(skill_id)
@@ -960,8 +962,8 @@ def calculate_fitting_plan_progress(
         else:
             rank = 1
 
-        # SP formula: 2^((2.5 * level) - 2) * 32 * rank
-        return int(math.pow(2, (2.5 * level) - 2) * 32 * rank)
+        # EVE SP formula: 250 * rank * 32^((L-1)/2)
+        return int(250 * rank * math.pow(32, (level - 1) / 2))
 
     # Calculate prerequisite skills (all_skills minus primary_skills)
     prereq_skills = all_skills - primary_skills
