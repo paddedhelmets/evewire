@@ -5,6 +5,7 @@ Based on the Imperium skill-checker reference implementation.
 """
 
 import logging
+import math
 from typing import List, Dict, Set, Optional, Any
 from django.utils import timezone
 from xml.etree import ElementTree as ET
