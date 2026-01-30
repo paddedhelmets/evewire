@@ -219,18 +219,13 @@ def refresh_stale_characters() -> dict:
 
     queued = 0
     for i, character in enumerate(stale_characters):
-        # Add jitter: spread tasks over 0-30 seconds randomly
-        # This prevents all characters from hitting ESI simultaneously
-        jitter_seconds = random.randint(0, 30)
-        scheduled_time = timezone.now() + timedelta(seconds=jitter_seconds)
         async_task(
             'core.eve.tasks._sync_character_metadata',
-            character.id,
-            schedule=scheduled_time
+            character.id
         )
         queued += 1
 
-    logger.info(f'Character metadata refresh: queued {queued} characters with jitter')
+    logger.info(f'Character metadata refresh: queued {queued} characters')
     return {'queued': queued}
 
 
@@ -325,17 +320,13 @@ def refresh_stale_assets() -> dict:
 
     queued = 0
     for character in stale_characters:
-        # Assets are heavier, spread over 0-60 seconds
-        jitter_seconds = random.randint(0, 60)
-        scheduled_time = timezone.now() + timedelta(seconds=jitter_seconds)
         async_task(
             'core.eve.tasks._sync_character_assets',
-            character.id,
-            schedule=scheduled_time
+            character.id
         )
         queued += 1
 
-    logger.info(f'Asset refresh: queued {queued} characters with jitter')
+    logger.info(f'Asset refresh: queued {queued} characters')
     return {'queued': queued}
 
 
@@ -387,17 +378,13 @@ def refresh_stale_skills() -> dict:
         needs_refresh = finishing_soon or not character.skills_synced_at
 
         if needs_refresh:
-            # Skills are light, spread over 0-20 seconds
-            jitter_seconds = random.randint(0, 20)
-            scheduled_time = timezone.now() + timedelta(seconds=jitter_seconds)
             async_task(
                 'core.eve.tasks._sync_character_skills',
-                character.id,
-                schedule=scheduled_time
+                character.id
             )
             queued += 1
 
-    logger.info(f'Skills refresh: queued {queued} characters with jitter')
+    logger.info(f'Skills refresh: queued {queued} characters')
     return {'queued': queued}
 
 
