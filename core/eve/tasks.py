@@ -16,7 +16,7 @@ from django_q.tasks import async_task
 logger = logging.getLogger('evewire')
 
 
-def refresh_structure(structure_id: int) -> bool:
+def refresh_structure(structure_id: int, discovered_by_character_id: int = None) -> bool:
     """
     Refresh structure data from ESI.
 
@@ -25,11 +25,14 @@ def refresh_structure(structure_id: int) -> bool:
 
     Args:
         structure_id: The structure ID to refresh
+        discovered_by_character_id: Optional character ID who discovered this structure
+                                     (should be tried first for auth)
 
     Returns:
         True if successful, False otherwise
     """
     from core.eve.models import Structure
+    from core.models import Character
     from core.esi_client import fetch_structure_info
 
     logger.info(f'Refreshing/creating structure {structure_id}')
@@ -56,20 +59,31 @@ def refresh_structure(structure_id: int) -> bool:
             is_new = True
             logger.info(f'Created placeholder for new structure {structure_id}')
 
-        # Try to find a character with access to this structure
-        # Characters in the same corporation or with docking rights
-        from core.models import Character
+        # Build list of characters to try, in priority order
+        potential_characters = []
 
-        # For existing structures, try characters in the owning corp
-        # For new structures, try ALL characters (one might have docking rights)
-        if is_new or structure.owner_id == 0:
-            potential_characters = Character.objects.filter(
-                assets_synced_at__isnull=False  # Has synced recently
-            )
-        else:
-            potential_characters = Character.objects.filter(
+        # First: try the character who discovered this structure (if provided)
+        if discovered_by_character_id:
+            try:
+                discoverer = Character.objects.get(id=discovered_by_character_id)
+                potential_characters.append(discoverer)
+                logger.debug(f'Trying discoverer {discoverer.character_name} first for structure {structure_id}')
+            except Character.DoesNotExist:
+                logger.warning(f'Discoverer character {discovered_by_character_id} not found')
+
+        # Then: try characters in the owning corp (for existing structures with known owner)
+        if not is_new and structure.owner_id != 0:
+            corp_characters = Character.objects.filter(
                 corporation_id=structure.owner_id
-            )
+            ).exclude(id__in=[c.id for c in potential_characters])
+            potential_characters.extend(list(corp_characters))
+
+        # Finally: for new structures or those with no owner, try all recently synced characters
+        if not potential_characters:
+            all_characters = Character.objects.filter(
+                assets_synced_at__isnull=False
+            ).exclude(id__in=[c.id for c in potential_characters])
+            potential_characters.extend(list(all_characters))
 
         data = None
         all_403 = True  # Track if all attempts returned 403
@@ -229,7 +243,7 @@ def refresh_stale_characters() -> dict:
     return {'queued': queued}
 
 
-def _sync_character_metadata(character_id: int) -> bool:
+def _sync_character_metadata(character_id: int, **kwargs) -> bool:
     """
     Sync character metadata (location, wallet balance, orders, contracts, industry).
 
@@ -331,7 +345,7 @@ def refresh_stale_assets() -> dict:
     return {'queued': queued}
 
 
-def _sync_character_assets(character_id: int) -> bool:
+def _sync_character_assets(character_id: int, **kwargs) -> bool:
     """Sync character assets only."""
     from core.models import Character
     from core.services import __sync_assets
@@ -389,7 +403,7 @@ def refresh_stale_skills() -> dict:
     return {'queued': queued}
 
 
-def _sync_character_skills(character_id: int) -> bool:
+def _sync_character_skills(character_id: int, **kwargs) -> bool:
     """Sync character skills and skill queue only."""
     from core.models import Character
     from core.services import __sync_skills, __sync_skill_queue, __sync_attributes, __sync_implants

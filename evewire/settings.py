@@ -168,7 +168,7 @@ OAUTH2_PROVIDER = {
 Q_CLUSTER = {
     'name': 'evewire',
     'workers': config('Q_WORKERS', default=1, cast=int),
-    'timeout': config('Q_TIMEOUT', default=300, cast=int),
+    'timeout': config('Q_TIMEOUT', default=900, cast=int),  # 15 min for large asset syncs
     'retry': config('Q_RETRY', default=120, cast=int),
     'queue_limit': config('Q_QUEUE_LIMIT', default=50, cast=int),
     'bulk': config('Q_BULK', default=1, cast=int),

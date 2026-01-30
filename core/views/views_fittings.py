@@ -980,7 +980,7 @@ def fitting_readiness_browser(request: HttpRequest, fitting_id: int) -> HttpResp
     from core.doctrines.services import AssetFitExtractor
     from core.character.models import CharacterAsset
     from core.models import Character
-    from core.eve.models import ItemType, Station, SolarSystem
+    from core.eve.models import ItemType, Station, SolarSystem, Structure
     from collections import defaultdict
 
     try:
@@ -1039,6 +1039,9 @@ def fitting_readiness_browser(request: HttpRequest, fitting_id: int) -> HttpResp
                     elif path_asset.location_type == 'solar_system':
                         loc = SolarSystem.objects.get(id=path_asset.location_id)
                         location_path.append(loc.name or f"System {path_asset.location_id}")
+                    elif path_asset.location_type == 'structure':
+                        loc = Structure.objects.get(id=path_asset.location_id)
+                        location_path.append(loc.name or f"Structure {path_asset.location_id}")
                     else:
                         location_path.append(f"{path_asset.location_type.title()} {path_asset.location_id}")
                 except:
@@ -1133,12 +1136,48 @@ def fitting_readiness_browser(request: HttpRequest, fitting_id: int) -> HttpResp
 
             shopping_list_text = '\n'.join(shopping_list_lines)
 
-            # Find owned assets
+            # Find owned assets (excluding fitted modules)
             module_type_ids = list(shopping_modules.keys())
             owned_assets = CharacterAsset.objects.filter(
                 character__in=characters,
                 type_id__in=module_type_ids
+            ).exclude(
+                # Exclude fitted modules (items with Slot in location_flag)
+                location_flag__icontains='Slot'
             ).select_related('character').order_by('character__character_name', 'type_id')
+
+            # Pre-fetch location names for all assets using their root location
+            # This shows where the item actually is (hangar/station), not parent container
+            from core.eve.models import Station, SolarSystem, Structure
+            stations = {}
+            solar_systems = {}
+            structures = {}
+            for asset in owned_assets:
+                root = asset.get_root()
+                # Cache the location for display
+                if root.location_type == 'station':
+                    if root.location_id not in stations:
+                        try:
+                            stations[root.location_id] = Station.objects.get(id=root.location_id).name
+                        except Station.DoesNotExist:
+                            stations[root.location_id] = f"Station {root.location_id}"
+                    asset._cached_location_name = stations[root.location_id]
+                elif root.location_type == 'solar_system':
+                    if root.location_id not in solar_systems:
+                        try:
+                            solar_systems[root.location_id] = SolarSystem.objects.get(id=root.location_id).name
+                        except SolarSystem.DoesNotExist:
+                            solar_systems[root.location_id] = f"System {root.location_id}"
+                    asset._cached_location_name = solar_systems[root.location_id]
+                elif root.location_type == 'structure':
+                    if root.location_id not in structures:
+                        try:
+                            structures[root.location_id] = Structure.objects.get(id=root.location_id).name
+                        except Structure.DoesNotExist:
+                            structures[root.location_id] = f"Structure {root.location_id}"
+                    asset._cached_location_name = structures[root.location_id]
+                else:
+                    asset._cached_location_name = f"{root.location_type.title()} {root.location_id}"
 
     # Calculate summary stats from JIT data
     ready_count = 0

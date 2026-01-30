@@ -110,10 +110,29 @@ class ESIMeta:
 
     def __init__(self, response: requests.Response):
         self.response = response
-        self.remaining_error_limit = int(response.headers.get('X-Esi-Error-Limit-Remain', 0))
-        self.error_limit_reset = response.headers.get('X-Esi-Error-Limit-Reset', '')
+
+        # Check if error limit header is present
+        error_limit_header = response.headers.get('X-Esi-Error-Limit-Remain')
+        if error_limit_header is None:
+            # Header not sent - this endpoint might not report error limit
+            self.remaining_error_limit = 100  # Assume we have full limit if not reported
+            self.error_limit_reset = ''
+            logger.debug(f'ESI response missing X-Esi-Error-Limit-Remain header (status {response.status_code}, url {response.url})')
+        else:
+            self.remaining_error_limit = int(error_limit_header)
+            self.error_limit_reset = response.headers.get('X-Esi-Error-Limit-Reset', '')
+
         self.expires = self._parse_expires()
         self.cache_control = response.headers.get('Cache-Control', '')
+
+        # New rate limiting headers (429-based, per-character per-route-group)
+        # See: https://developers.eveonline.com/blog/hold-your-horses-introducing-rate-limiting-to-esi
+        self.rate_limit_remaining = response.headers.get('X-Rate-Limit-Remaining')
+        self.rate_limit_reset = response.headers.get('X-Rate-Limit-Reset')
+        self.rate_limit_limit = response.headers.get('X-Rate-Limit-Limit')
+
+        # Route group name (e.g., "assets", "character-assets", "location")
+        self.rate_limit_group = response.headers.get('X-Rate-Limit-Group', '')
 
     def _parse_expires(self) -> Optional[datetime]:
         """Parse the Expires header into a datetime."""
@@ -297,35 +316,118 @@ class ESIRateLimiter:
 
     @classmethod
     def _update_cached_limit(cls, remaining: int, reset_time: Optional[str] = None) -> None:
-        """Update the cached rate limit."""
+        """
+        Update the cached rate limit with proper TTL.
+
+        Uses X-Esi-Error-Limit-Reset to calculate cache TTL instead of fixed 60s.
+        This prevents stale cached values when ESI's sliding window replenishes.
+
+        Important: If reset_time is not provided, we preserve the existing cached reset_time
+        instead of clearing it. This handles cases where ESI responses don't include the header.
+        """
+        import time
         from django.core.cache import cache
 
-        cache.set(cls.ERROR_LIMIT_CACHE_KEY, remaining, timeout=60)  # Cache for 1 min
+        # Get existing reset_time before potentially overwriting
+        existing_reset_time = cache.get(cls.ERROR_LIMIT_RESET_KEY)
+
+        # Determine TTL and what reset_time to cache
+        ttl = 60  # Default 1 minute
+        final_reset_time = existing_reset_time  # Default to existing
+
         if reset_time:
-            cache.set(cls.ERROR_LIMIT_RESET_KEY, reset_time, timeout=60)
+            # Parse reset timestamp and calculate TTL
+            try:
+                reset_timestamp = int(reset_time)
+                current_timestamp = int(time.time())
+
+                # Only update if new reset_time is more recent than existing
+                if existing_reset_time:
+                    try:
+                        existing_timestamp = int(existing_reset_time)
+                        if reset_timestamp > existing_timestamp:
+                            final_reset_time = reset_time
+                            logger.debug(f'Rate limiter: Updated reset_time from {existing_reset_time} to {reset_time}')
+                    except (ValueError, TypeError):
+                        final_reset_time = reset_time
+                        logger.debug(f'Rate limiter: Set reset_time to {reset_time} (existing was invalid)')
+                else:
+                    final_reset_time = reset_time
+                    logger.debug(f'Rate limiter: Set reset_time to {reset_time} (no existing value)')
+
+                # TTL = seconds until reset + 5s buffer
+                # If reset is in the past, use a short TTL to allow quick recovery
+                ttl = max(5, reset_timestamp - current_timestamp + 5)
+
+            except (ValueError, TypeError):
+                # Keep existing reset_time, use default TTL
+                if existing_reset_time:
+                    logger.debug(f'Rate limiter: Preserved existing reset_time {existing_reset_time} (new value {reset_time!r} invalid)')
+                else:
+                    logger.debug(f'Rate limiter: No valid reset_time (got {reset_time!r})')
+        else:
+            # No reset_time provided, preserve existing
+            if existing_reset_time:
+                logger.debug(f'Rate limiter: Preserved existing reset_time {existing_reset_time} (no new value)')
+
+        cache.set(cls.ERROR_LIMIT_CACHE_KEY, remaining, timeout=ttl)
+        if final_reset_time:
+            cache.set(cls.ERROR_LIMIT_RESET_KEY, final_reset_time, timeout=ttl)
 
     @classmethod
-    def check_and_wait(cls, remaining: int) -> None:
+    def check_and_wait(cls, remaining: int, reset_time: Optional[str] = None) -> None:
         """
         Check rate limit and wait if necessary before making ESI requests.
 
         Args:
             remaining: The X-Esi-Error-Limit-Remain value from response
+            reset_time: The X-Esi-Error-Limit-Reset value from response (Unix timestamp)
         """
         import time
 
-        # Update cached value
-        cls._update_cached_limit(remaining)
+        # Update cached value (also stores reset_time if available)
+        cls._update_cached_limit(remaining, reset_time)
 
-        # If we're below threshold, add backoff delay
+        # Debug: log what we received
         if remaining < cls.ERROR_LIMIT_WARNING_THRESHOLD:
-            # Calculate backoff: more errors consumed = longer delay
+            logger.debug(f'check_and_wait: remaining={remaining}, reset_time={reset_time!r}')
+
+        # If we're below threshold, check if we should wait
+        if remaining < cls.ERROR_LIMIT_WARNING_THRESHOLD:
+            # Check if we have a reset time from cache
+            cached_remaining, cached_reset = cls._get_cached_limit()
+
+            if cached_reset:
+                # Calculate time until reset
+                try:
+                    reset_timestamp = int(cached_reset)
+                    current_timestamp = int(time.time())
+                    wait_seconds = reset_timestamp - current_timestamp + 2  # +2s buffer
+
+                    if wait_seconds > 0:
+                        # Wait until reset
+                        wait_seconds = min(wait_seconds, 60)  # Cap at 60s
+                        logger.info(f'ESI rate limit low ({remaining} remaining, reset in {wait_seconds}s), waiting until reset')
+                        time.sleep(wait_seconds)
+                        return
+                    else:
+                        # Reset time passed, brief pause
+                        logger.info(f'ESI rate limit reset passed ({remaining} remaining), brief pause')
+                        time.sleep(2)
+                        return
+                except (ValueError, TypeError) as e:
+                    logger.debug(f'Failed to parse reset_time {cached_reset}: {e}')
+                    pass  # Fall through to default backoff
+            else:
+                logger.debug(f'No cached reset_time, using default backoff')
+
+            # Fallback: Calculate backoff based on errors consumed
             errors_consumed = 100 - remaining
             backoff_seconds = min(
                 errors_consumed * cls.BACKOFF_SECONDS_PER_ERROR,
                 60  # Max 1 minute backoff
             )
-            logger.info(f'ESI rate limit low ({remaining} remaining), backing off for {backoff_seconds}s')
+            logger.info(f'ESI rate limit low ({remaining} remaining), backing off for {backoff_seconds}s (no reset time)')
             time.sleep(backoff_seconds)
 
     @classmethod
@@ -371,6 +473,136 @@ class ESIRateLimiter:
         }
 
 
+class ESIRateLimiterV2:
+    """
+    ESI Rate Limiter V2 for new 429-based rate limiting.
+
+    From https://developers.eveonline.com/blog/hold-your-horses-introducing-rate-limiting-to-esi
+
+    Key differences from old error limit (420):
+    - Floating window over 15 minutes
+    - Per (rate_limit_group, ApplicationID, CharacterID) bucket
+    - Token cost varies by response status (2XX=2, 3XX=1, 4XX=5, 5XX=0)
+    - Returns 429 with Retry-After header when exceeded
+
+    This class tracks rate limit state per character per route group.
+    """
+
+    # Token costs per response status
+    TOKEN_COSTS = {
+        '2': 2,  # 2XX responses
+        '3': 1,  # 3XX responses
+        '4': 5,  # 4XX responses
+        '5': 0,  # 5XX responses (no cost)
+    }
+
+    # Cache key prefix
+    CACHE_KEY_PREFIX = 'esi_v2_rate_limit'
+
+    @classmethod
+    def _get_cache_key(cls, character_id: int, route_group: str) -> str:
+        """Get cache key for a specific character/route-group combination."""
+        return f'{cls.CACHE_KEY_PREFIX}:{character_id}:{route_group}'
+
+    @classmethod
+    def _get_rate_limit_state(cls, character_id: int, route_group: str) -> dict:
+        """Get current rate limit state from cache."""
+        from django.core.cache import cache
+        key = cls._get_cache_key(character_id, route_group)
+        state = cache.get(key)
+        if state is None:
+            return {'remaining': None, 'reset': None, 'limit': None}
+        return state
+
+    @classmethod
+    def _update_rate_limit_state(cls, character_id: int, route_group: str, remaining: int = None,
+                                  reset: str = None, limit: int = None) -> None:
+        """Update rate limit state in cache."""
+        from django.core.cache import cache
+        import time
+
+        key = cls._get_cache_key(character_id, route_group)
+        state = {
+            'remaining': remaining,
+            'reset': reset,
+            'limit': limit,
+        }
+
+        # Calculate TTL from reset timestamp if available
+        ttl = 900  # Default 15 minutes
+        if reset:
+            try:
+                reset_timestamp = int(reset)
+                current_timestamp = int(time.time())
+                ttl = max(60, reset_timestamp - current_timestamp + 10)  # +10s buffer, min 1min
+            except (ValueError, TypeError):
+                pass
+
+        cache.set(key, state, timeout=ttl)
+
+    @classmethod
+    def _calculate_token_cost(cls, status_code: int) -> int:
+        """Calculate token cost for a response based on status code."""
+        status_first_digit = str(status_code)[0]
+        return cls.TOKEN_COSTS.get(status_first_digit, 1)  # Default to 1 if unknown
+
+    @classmethod
+    def check_and_update(cls, character_id: int, route_group: str, meta: ESIMeta,
+                        status_code: int) -> None:
+        """
+        Check rate limit before request and update after response.
+
+        Args:
+            character_id: Character ID making the request
+            route_group: Route group name from X-Rate-Limit-Group header
+            meta: ESI response metadata
+            status_code: HTTP response status code
+        """
+        # Update state with new values from response
+        cls._update_rate_limit_state(
+            character_id,
+            route_group,
+            remaining=int(meta.rate_limit_remaining) if meta.rate_limit_remaining else None,
+            reset=meta.rate_limit_reset,
+            limit=int(meta.rate_limit_limit) if meta.rate_limit_limit else None,
+        )
+
+    @classmethod
+    def handle_429(cls, retry_after: str, character_id: int, route_group: str) -> None:
+        """
+        Handle a 429 rate limit error - wait until reset.
+
+        Args:
+            retry_after: The Retry-After header value (seconds)
+            character_id: Character ID that hit the limit
+            route_group: Route group that hit the limit
+        """
+        import time
+
+        try:
+            wait_seconds = int(retry_after)
+            logger.warning(
+                f'ESI V2 rate limit hit for character {character_id} '
+                f'group {route_group}, waiting {wait_seconds}s'
+            )
+            time.sleep(wait_seconds)
+        except ValueError:
+            logger.error(f'Invalid Retry-After value: {retry_after}')
+            time.sleep(60)  # Fallback to 1 minute
+
+    @classmethod
+    def get_status(cls, character_id: int, route_group: str) -> dict:
+        """Get current rate limit status for a character/route-group."""
+        state = cls._get_rate_limit_state(character_id, route_group)
+        return {
+            'character_id': character_id,
+            'route_group': route_group,
+            'remaining': state.get('remaining'),
+            'reset': state.get('reset'),
+            'limit': state.get('limit'),
+        }
+
+
 class ESIClient:
     """
     Client for EVE Swagger Interface (ESI) API.
@@ -411,7 +643,17 @@ class ESIClient:
             """Inner function to make the actual request (used by retry logic)."""
             response = requests.get(url, params=params, headers=headers, timeout=30)
 
-            # Check for rate limit error (420) - handle specially
+            # Check for new V2 rate limit (429) - handle first
+            if response.status_code == 429:
+                retry_after = response.headers.get('Retry-After', '')
+                meta = ESIMeta(response)
+                route_group = meta.rate_limit_group or endpoint.split('/')[1]
+                logger.warning(f'ESI V2 rate limit hit (429) on {endpoint}, group={route_group}')
+                ESIRateLimiterV2.handle_429(retry_after, character.id, route_group)
+                # Retry immediately after waiting for reset
+                response = requests.get(url, params=params, headers=headers, timeout=30)
+
+            # Check for old error limit (420) - handle specially
             if response.status_code == 420:
                 reset_time = response.headers.get('X-Esi-Error-Limit-Reset', '')
                 logger.warning(f'ESI rate limit hit (420) on {endpoint}, handling...')
@@ -424,10 +666,14 @@ class ESIClient:
             meta = ESIMeta(response)
             data = response.json()
 
-            logger.debug(f'ESI GET {endpoint}: rate limit remaining={meta.remaining_error_limit}')
+            logger.debug(f'ESI GET {endpoint}: error limit remaining={meta.remaining_error_limit}')
 
-            # Check rate limit and add backoff if needed
-            ESIRateLimiter.check_and_wait(meta.remaining_error_limit)
+            # Track V2 rate limit state (per character per route group)
+            if meta.rate_limit_group:
+                ESIRateLimiterV2.check_and_update(character.id, meta.rate_limit_group, meta, response.status_code)
+
+            # Check old error limit and add backoff if needed
+            ESIRateLimiter.check_and_wait(meta.remaining_error_limit, meta.error_limit_reset)
 
             return ESIResponse(data, meta)
 
@@ -449,7 +695,18 @@ class ESIClient:
             """Inner function to make the actual request (used by retry logic)."""
             response = requests.get(url, params=params, headers=headers, timeout=30)
 
-            # Check for rate limit error (420) - handle specially
+            # Check for new V2 rate limit (429) - handle first
+            if response.status_code == 429:
+                retry_after = response.headers.get('Retry-After', '')
+                meta = ESIMeta(response)
+                route_group = meta.rate_limit_group or endpoint.split('/')[1]
+                logger.warning(f'ESI V2 rate limit hit (429) on {endpoint}, group={route_group}')
+                # Use character_id=0 for public endpoints
+                ESIRateLimiterV2.handle_429(retry_after, 0, route_group)
+                # Retry immediately after waiting for reset
+                response = requests.get(url, params=params, headers=headers, timeout=30)
+
+            # Check for old error limit (420) - handle specially
             if response.status_code == 420:
                 reset_time = response.headers.get('X-Esi-Error-Limit-Reset', '')
                 logger.warning(f'ESI rate limit hit (420) on {endpoint}, handling...')
@@ -462,8 +719,12 @@ class ESIClient:
             meta = ESIMeta(response)
             data = response.json()
 
-            # Check rate limit and add backoff if needed
-            ESIRateLimiter.check_and_wait(meta.remaining_error_limit)
+            # Track V2 rate limit state (for public endpoints, use character_id=0)
+            if meta.rate_limit_group:
+                ESIRateLimiterV2.check_and_update(0, meta.rate_limit_group, meta, response.status_code)
+
+            # Check old error limit and add backoff if needed
+            ESIRateLimiter.check_and_wait(meta.remaining_error_limit, meta.error_limit_reset)
 
             return ESIResponse(data, meta)
 
@@ -486,7 +747,18 @@ class ESIClient:
             import json
             response = requests.post(url, json=data, headers=headers, timeout=30)
 
-            # Check for rate limit error (420) - handle specially
+            # Check for new V2 rate limit (429) - handle first
+            if response.status_code == 429:
+                retry_after = response.headers.get('Retry-After', '')
+                meta = ESIMeta(response)
+                route_group = meta.rate_limit_group or endpoint.split('/')[1]
+                logger.warning(f'ESI V2 rate limit hit (429) on {endpoint}, group={route_group}')
+                # Use character_id=0 for public endpoints
+                ESIRateLimiterV2.handle_429(retry_after, 0, route_group)
+                # Retry immediately after waiting for reset
+                response = requests.post(url, json=data, headers=headers, timeout=30)
+
+            # Check for old error limit (420) - handle specially
             if response.status_code == 420:
                 reset_time = response.headers.get('X-Esi-Error-Limit-Reset', '')
                 logger.warning(f'ESI rate limit hit (420) on {endpoint}, handling...')
@@ -499,17 +771,14 @@ class ESIClient:
             meta = ESIMeta(response)
             response_data = response.json()
 
-            # Check rate limit and add backoff if needed
-            ESIRateLimiter.check_and_wait(meta.remaining_error_limit)
+            # Track V2 rate limit state (for public endpoints, use character_id=0)
+            if meta.rate_limit_group:
+                ESIRateLimiterV2.check_and_update(0, meta.rate_limit_group, meta, response.status_code)
+
+            # Check old error limit and add backoff if needed
+            ESIRateLimiter.check_and_wait(meta.remaining_error_limit, meta.error_limit_reset)
 
             return ESIResponse(response_data, meta)
-
-        return retry_with_exponential_backoff(
-            _make_request,
-            max_retries=3,
-            initial_backoff=1.0,
-            max_backoff=60.0,
-        )
 
         return retry_with_exponential_backoff(
             _make_request,
@@ -1780,7 +2049,7 @@ def _queue_structure_refreshes(character, assets_by_id: dict) -> None:
     if new_structure_ids:
         logger.info(f'Queueing {len(new_structure_ids)} structure refresh tasks for character {character.id}')
         for structure_id in new_structure_ids:
-            async_task('core.eve.tasks.refresh_structure', structure_id)
+            async_task('core.eve.tasks.refresh_structure', structure_id, character.id)
 
 
 def __sync_orders(character) -> None:
