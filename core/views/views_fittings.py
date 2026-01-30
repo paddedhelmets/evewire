@@ -3,6 +3,7 @@ Core views for evewire.
 """
 
 import logging
+import math
 from datetime import timedelta
 from django.shortcuts import render, redirect
 from django.contrib.auth import login, logout
