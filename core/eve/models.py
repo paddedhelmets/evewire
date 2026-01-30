@@ -137,8 +137,44 @@ class Station(models.Model):
         ordering = ['name']
         db_table = 'core_station'
 
+    @property
+    def display_name(self) -> str:
+        """Get the station name, computing it from SDE data if stationname is NULL.
+
+        Follows ESI naming convention: <solarSystemName> - <corporationName>
+        Falls back to station ID if we can't construct a name.
+        """
+        # If we have a name in the database, use it
+        if self.name:
+            return self.name
+
+        # Otherwise, construct it from solar system and corporation
+        try:
+            solar_system = SolarSystem.objects.get(id=self.solar_system_id)
+            solar_name = solar_system.name
+        except SolarSystem.DoesNotExist:
+            solar_name = f"System {self.solar_system_id}"
+
+        # Get corporation name from invNames
+        try:
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT itemname FROM core_invnames WHERE itemid = %s",
+                    [self.corporation_id]
+                )
+                row = cursor.fetchone()
+                if row:
+                    corp_name = row[0]
+                else:
+                    corp_name = f"CORP {self.corporation_id}"
+        except Exception:
+            corp_name = f"CORP {self.corporation_id}"
+
+        return f"{solar_name} - {corp_name}"
+
     def __str__(self) -> str:
-        return self.name
+        return self.display_name
 
 
 class Region(models.Model):
@@ -308,10 +344,10 @@ class TypeAttribute(models.Model):
     and other item properties are stored.
     """
 
-    id = models.BigAutoField(primary_key=True)
+    id = models.IntegerField(primary_key=True)
     type_id = models.IntegerField(db_index=True, db_column='typeid')
     attribute_id = models.IntegerField(db_index=True, db_column='attributeid')
-    value_int = models.IntegerField(null=True, blank=True, db_column='valueint')
+    value_int = models.BigIntegerField(null=True, blank=True, db_column='valueint')
     value_float = models.FloatField(null=True, blank=True, db_column='valuefloat')
 
     class Meta:
@@ -320,6 +356,8 @@ class TypeAttribute(models.Model):
         unique_together = [['type_id', 'attribute_id']]
         ordering = ['type_id', 'attribute_id']
         db_table = 'core_typeattribute'
+        # SDE table, but schema has been modified for Django compatibility
+        # (id column added for primary key)
 
     def __str__(self) -> str:
         try:

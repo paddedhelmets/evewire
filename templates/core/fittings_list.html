@@ -255,6 +255,13 @@
                 <span style="font-size: 0.9rem;">Show hidden fittings</span>
             </label>
         </div>
+        <!-- System fittings toggle -->
+        <div style="margin-left: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                <input type="checkbox" name="show_system" value="1" {% if show_system %}checked{% endif %} id="show-system-toggle" style="cursor: pointer;">
+                <span style="font-size: 0.9rem;">Show system fittings</span>
+            </label>
+        </div>
     </form>
 </div>
 
@@ -328,6 +335,14 @@ document.addEventListener('DOMContentLoaded', function() {
     const showHiddenToggle = document.getElementById('show-hidden-toggle');
     if (showHiddenToggle) {
         showHiddenToggle.addEventListener('change', function() {
+            this.closest('form').submit();
+        });
+    }
+
+    // Auto-submit form when show-system toggle changes
+    const showSystemToggle = document.getElementById('show-system-toggle');
+    if (showSystemToggle) {
+        showSystemToggle.addEventListener('change', function() {
             this.closest('form').submit();
         });
     }

@@ -152,7 +152,12 @@ class SkillPlanExporter:
 
         for skill_attr in skill_attrs:
             attr_id = skill_attr.attribute_id
-            skill_type_id = int(skill_attr.value_float) if skill_attr.value_float else None
+            # Skill IDs can be stored in value_int or value_float
+            skill_type_id = None
+            if skill_attr.value_int is not None:
+                skill_type_id = skill_attr.value_int
+            elif skill_attr.value_float is not None:
+                skill_type_id = int(skill_attr.value_float)
 
             if not skill_type_id:
                 continue
@@ -167,7 +172,13 @@ class SkillPlanExporter:
                     type_id=skill_id,
                     attribute_id=level_attr_id
                 )
-                required_level = int(level_obj.value_float) if level_obj.value_float else 0
+                # Required level can be stored in value_int or value_float
+                if level_obj.value_int is not None:
+                    required_level = level_obj.value_int
+                elif level_obj.value_float is not None:
+                    required_level = int(level_obj.value_float)
+                else:
+                    required_level = 0
             except TypeAttribute.DoesNotExist:
                 required_level = 1  # Default to level 1 if not specified
 
@@ -663,7 +674,13 @@ def extract_fitting_skills(fitting) -> Set[tuple[int, int]]:
         )
 
         for skill_attr in skill_attrs:
-            prereq_skill_id = int(skill_attr.value_float) if skill_attr.value_float else None
+            # Skill IDs can be stored in value_int or value_float
+            prereq_skill_id = None
+            if skill_attr.value_int is not None:
+                prereq_skill_id = skill_attr.value_int
+            elif skill_attr.value_float is not None:
+                prereq_skill_id = int(skill_attr.value_float)
+
             if not prereq_skill_id:
                 continue
 
@@ -677,7 +694,13 @@ def extract_fitting_skills(fitting) -> Set[tuple[int, int]]:
                     type_id=item_type_id,
                     attribute_id=level_attr_id
                 )
-                required_level = int(level_obj.value_float) if level_obj.value_float else 1
+                # Required level can be stored in value_int or value_float
+                if level_obj.value_int is not None:
+                    required_level = level_obj.value_int
+                elif level_obj.value_float is not None:
+                    required_level = int(level_obj.value_float)
+                else:
+                    required_level = 1
             except TypeAttribute.DoesNotExist:
                 required_level = 1
 

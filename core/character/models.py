@@ -477,12 +477,14 @@ class CharacterAsset(MPTTModel):
 
         if self.location_type == 'station':
             try:
-                return Station.objects.get(id=self.location_id).name
+                station = Station.objects.get(id=self.location_id)
+                return station.name or f"Station {self.location_id}"
             except Station.DoesNotExist:
                 return f"Station {self.location_id}"
         elif self.location_type == 'solar_system':
             try:
-                return SolarSystem.objects.get(id=self.location_id).name
+                system = SolarSystem.objects.get(id=self.location_id)
+                return system.name or f"System {self.location_id}"
             except SolarSystem.DoesNotExist:
                 return f"System {self.location_id}"
         elif self.location_type == 'structure':
@@ -492,7 +494,7 @@ class CharacterAsset(MPTTModel):
             # Look up the parent asset to get its name
             try:
                 parent = CharacterAsset.objects.get(item_id=self.location_id, character=self.character)
-                return parent.type_name
+                return parent.type_name or f"Item {self.location_id}"
             except CharacterAsset.DoesNotExist:
                 return f"Item {self.location_id}"
         else:

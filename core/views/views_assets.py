@@ -143,7 +143,7 @@ def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
             pass
 
     all_structure_ids_for_names = set(loc_id for (loc_id, loc_type) in all_location_groups.keys()
-                                       if loc_type == 'structure' and loc_id)
+                                       if (loc_type == 'structure' or (loc_type == 'item' and loc_id >= 1000000000000)) and loc_id)
     if all_structure_ids_for_names:
         from core.esi_client import ensure_structure_data
         for structure_id in all_structure_ids_for_names:
@@ -157,11 +157,14 @@ def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
     available_locations = []
     for (loc_id, loc_type), data in sorted(all_location_groups.items()):
         if loc_type == 'station':
-            location_name = all_station_names.get(loc_id, f"Station {loc_id}")
+            location_name = all_station_names.get(loc_id) or f"Station {loc_id}"
         elif loc_type == 'solar_system':
-            location_name = all_system_names.get(loc_id, f"System {loc_id}")
+            location_name = all_system_names.get(loc_id) or f"System {loc_id}"
         elif loc_type == 'structure':
-            location_name = all_structure_names.get(loc_id, f"Structure {loc_id}")
+            location_name = all_structure_names.get(loc_id) or f"Structure {loc_id}"
+        elif loc_type == 'item' and loc_id >= 1000000000000:
+            # 'item' type with large ID is likely a structure
+            location_name = all_structure_names.get(loc_id) or f"Structure {loc_id}"
         else:
             location_name = f"{loc_type.title()} {loc_id}"
 
@@ -216,7 +219,7 @@ def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
 
     # Fetch structure data from cache or ESI
     structure_ids = set(loc_id for (loc_id, loc_type) in location_groups.keys()
-                       if loc_type == 'structure' and loc_id)
+                       if (loc_type == 'structure' or (loc_type == 'item' and loc_id >= 1000000000000)) and loc_id)
     if structure_ids:
         from core.esi_client import ensure_structure_data
         for structure_id in structure_ids:
@@ -230,11 +233,14 @@ def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
     locations = []
     for (loc_id, loc_type), data in sorted(location_groups.items()):
         if loc_type == 'station':
-            location_name = station_names.get(loc_id, f"Station {loc_id}")
+            location_name = station_names.get(loc_id) or f"Station {loc_id}"
         elif loc_type == 'solar_system':
-            location_name = system_names.get(loc_id, f"System {loc_id}")
+            location_name = system_names.get(loc_id) or f"System {loc_id}"
         elif loc_type == 'structure':
-            location_name = structure_names.get(loc_id, f"Structure {loc_id}")
+            location_name = structure_names.get(loc_id) or f"Structure {loc_id}"
+        elif loc_type == 'item' and loc_id >= 1000000000000:
+            # 'item' type with large ID is likely a structure
+            location_name = structure_names.get(loc_id) or f"Structure {loc_id}"
         else:
             location_name = f"{loc_type.title()} {loc_id}"
 
@@ -325,13 +331,13 @@ def assets_summary(request: HttpRequest, character_id: int = None) -> HttpRespon
         if loc_type == 'station':
             from core.eve.models import Station
             try:
-                loc_name = Station.objects.get(id=loc_id).name
+                loc_name = Station.objects.get(id=loc_id).name or f"Station {loc_id}"
             except Station.DoesNotExist:
                 loc_name = f"Station {loc_id}"
         elif loc_type == 'solar_system':
             from core.eve.models import SolarSystem
             try:
-                loc_name = SolarSystem.objects.get(id=loc_id).name
+                loc_name = SolarSystem.objects.get(id=loc_id).name or f"System {loc_id}"
             except SolarSystem.DoesNotExist:
                 loc_name = f"System {loc_id}"
         elif loc_type == 'structure':
@@ -429,28 +435,28 @@ def fitted_ships(request: HttpRequest, character_id: int = None) -> HttpResponse
         high_module_names = []
         for type_id in ship.high_slots:
             try:
-                high_module_names.append(ItemType.objects.get(id=type_id).name)
+                high_module_names.append(ItemType.objects.get(id=type_id).name or f"Module {type_id}")
             except ItemType.DoesNotExist:
                 high_module_names.append(f"Module {type_id}")
 
         med_module_names = []
         for type_id in ship.med_slots:
             try:
-                med_module_names.append(ItemType.objects.get(id=type_id).name)
+                med_module_names.append(ItemType.objects.get(id=type_id).name or f"Module {type_id}")
             except ItemType.DoesNotExist:
                 med_module_names.append(f"Module {type_id}")
 
         low_module_names = []
         for type_id in ship.low_slots:
             try:
-                low_module_names.append(ItemType.objects.get(id=type_id).name)
+                low_module_names.append(ItemType.objects.get(id=type_id).name or f"Module {type_id}")
             except ItemType.DoesNotExist:
                 low_module_names.append(f"Module {type_id}")
 
         rig_module_names = []
         for type_id in ship.rig_slots:
             try:
-                rig_module_names.append(ItemType.objects.get(id=type_id).name)
+                rig_module_names.append(ItemType.objects.get(id=type_id).name or f"Module {type_id}")
             except ItemType.DoesNotExist:
                 rig_module_names.append(f"Module {type_id}")
 
@@ -459,13 +465,13 @@ def fitted_ships(request: HttpRequest, character_id: int = None) -> HttpResponse
         if ship.location_type == 'station':
             try:
                 from core.eve.models import Station
-                location_name = Station.objects.get(id=ship.location_id).name
+                location_name = Station.objects.get(id=ship.location_id).name or location_name
             except Station.DoesNotExist:
                 pass
         elif ship.location_type == 'solar_system':
             try:
                 from core.eve.models import SolarSystem
-                location_name = SolarSystem.objects.get(id=ship.location_id).name
+                location_name = SolarSystem.objects.get(id=ship.location_id).name or location_name
             except SolarSystem.DoesNotExist:
                 pass
 

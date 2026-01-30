@@ -43,6 +43,7 @@ class Command(BaseCommand):
         'mapSolarSystems': 'solarsystem',
         'mapRegions': 'region',
         'staStations': 'station',
+        'invNames': 'invnames',  # Contains station and other celestial names
     }
 
     def add_arguments(self, parser):
@@ -111,44 +112,38 @@ class Command(BaseCommand):
                 self.stdout.write(f'  {sde_table} -> {django_table}: {status}')
             return
 
-        # Download and extract the SDE database
-        with tempfile.TemporaryDirectory() as tmpdir:
-            sde_path = os.path.join(tmpdir, 'sde.sqlite')
+        # Check if we have a local SDE file (eve-sde-converter output)
+        # If so, use it directly instead of downloading
+        local_sde_path = Path.home() / 'projects' / 'eve-sde-converter' / 'output' / 'sde.sqlite'
+        use_local_file = local_sde_path.exists()
 
-            # Download and decompress
-            self.stdout.write(f'Downloading SDE database...')
+        if use_local_file:
+            sde_path = str(local_sde_path)
+            self.stdout.write(f'Using local SDE file: {sde_path}')
+        else:
+            # Download and extract the SDE database
+            self.stdout.write(f'Downloading SDE database from {sde_url}...')
+
+        # Copy tables
+        imported = 0
+        skipped = 0
+
+        for sde_table, django_table in table_map.items():
+            if self._table_exists(django_table) and not options['force']:
+                self.stdout.write(self.style.WARNING(f'{sde_table} -> {django_table}: skipped (already exists)'))
+                skipped += 1
+                continue
+
+            self.stdout.write(f'{sde_table} -> {django_table}: importing...')
+
             try:
-                compressed_path = os.path.join(tmpdir, 'sde.sqlite.bz2')
-                urllib.request.urlretrieve(sde_url, compressed_path)
-
-                self.stdout.write('Decompressing (this may take a minute)...')
-                with bz2.open(compressed_path, 'rb') as compressed:
-                    with open(sde_path, 'wb') as decompressed:
-                        decompressed.write(compressed.read())
+                rows = self._copy_table(sde_path, sde_table, django_table)
+                self.stdout.write(self.style.SUCCESS(f'{sde_table} -> {django_table}: imported {rows:,} rows'))
+                imported += 1
             except Exception as e:
-                self.stdout.write(self.style.ERROR(f'Failed to download SDE: {e}'))
-                return
-
-            # Copy tables
-            imported = 0
-            skipped = 0
-
-            for sde_table, django_table in table_map.items():
-                if self._table_exists(django_table) and not options['force']:
-                    self.stdout.write(self.style.WARNING(f'{sde_table} -> {django_table}: skipped (already exists)'))
-                    skipped += 1
-                    continue
-
-                self.stdout.write(f'{sde_table} -> {django_table}: importing...')
-
-                try:
-                    rows = self._copy_table(sde_path, sde_table, django_table)
-                    self.stdout.write(self.style.SUCCESS(f'{sde_table} -> {django_table}: imported {rows:,} rows'))
-                    imported += 1
-                except Exception as e:
-                    import traceback
-                    self.stdout.write(self.style.ERROR(f'{sde_table}: failed - {e}'))
-                    self.stdout.write(traceback.format_exc())
+                import traceback
+                self.stdout.write(self.style.ERROR(f'{sde_table}: failed - {e}'))
+                self.stdout.write(traceback.format_exc())
 
         self.stdout.write(f'\nDone: {imported} imported, {skipped} skipped')
 

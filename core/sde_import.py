@@ -13,20 +13,34 @@ from django.db import connections
 
 def get_sde_db_path():
     """
-    Get the path where the SDE SQLite database should be stored.
-    For SQLite Django databases, stores alongside the DB file.
-    For PostgreSQL, stores in ~/data/evewire/.
+    Get the path to the SDE SQLite database.
+
+    Priority order:
+    1. Local eve-sde-converter output (for parallel development)
+    2. Shared cached SDE (~/data/evewire/sde.sqlite)
+    3. For SQLite Django databases, store alongside the DB file
     """
+    from pathlib import Path
+
+    # 1. Check for local converter output (parallel development)
+    local_converter = Path.home() / 'projects' / 'eve-sde-converter' / 'output' / 'sde.sqlite'
+    if local_converter.exists():
+        return local_converter
+
+    # 2. Check for shared cached SDE
+    shared_sde = Path.home() / 'data' / 'evewire' / 'sde.sqlite'
+    if shared_sde.exists():
+        return shared_sde
+
+    # 3. Fall back to default location based on database engine
     db_engine = settings.DATABASES['default']['ENGINE']
     db_name = settings.DATABASES['default']['NAME']
 
     if 'sqlite' in db_engine:
-        from pathlib import Path
         return Path(db_name).parent / f"{Path(db_name).stem}_sde.sqlite"
     else:
         # For PostgreSQL, store SDE in a data directory
-        from pathlib import Path
-        return Path.home() / 'data' / 'evewire' / 'sde.sqlite'
+        return shared_sde
 
 
 def table_exists(table_name: str, table_prefix: str = 'core_') -> bool:

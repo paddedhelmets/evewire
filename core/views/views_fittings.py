@@ -11,6 +11,7 @@ from django.views.decorators.http import require_http_methods
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.urls import reverse
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 
 logger = logging.getLogger('evewire')
@@ -41,6 +42,7 @@ def fittings_list(request: HttpRequest, character_id: int = None) -> HttpRespons
     search_query = request.GET.get('search', '')
     tag_filter = request.GET.get('tag', '')
     show_hidden = request.GET.get('show_hidden') == '1'
+    show_system = request.GET.get('show_system') == '1'  # Default is true (checked)
 
     # Build base queryset
     if show_hidden:
@@ -55,6 +57,19 @@ def fittings_list(request: HttpRequest, character_id: int = None) -> HttpRespons
     else:
         # Show user's fittings + global fittings (not ignored)
         fittings_qs = Fitting.objects.for_user(request.user).active()
+
+    # Filter out system fittings if show_system is false
+    if not show_system and not show_hidden:
+        # Get user's pinned fittings (including system ones they pinned)
+        pinned_ids = Fitting.objects.filter(
+            is_pinned=True,
+            owner=None,  # System/global fittings
+        ).values_list('id', flat=True)
+
+        # Exclude system/global fittings unless pinned
+        fittings_qs = fittings_qs.filter(
+            Q(owner__isnull=False) | Q(id__in=pinned_ids)
+        )
 
     # Apply ship type filter
     if ship_type_filter:
@@ -119,6 +134,7 @@ def fittings_list(request: HttpRequest, character_id: int = None) -> HttpRespons
         'all_tags': sorted(all_tags),
         'all_characters': all_characters,
         'show_hidden': show_hidden,
+        'show_system': show_system,
     })
 
 
@@ -1014,15 +1030,15 @@ def fitting_readiness_browser(request: HttpRequest, fitting_id: int) -> HttpResp
         location_path = []
         for path_asset in path_assets[:-1]:  # All except the ship itself
             if path_asset.location_type == 'item':
-                location_path.append(f"{path_asset.type_name}")
+                location_path.append(path_asset.type_name or f"Item {path_asset.type_id}")
             else:
                 try:
                     if path_asset.location_type == 'station':
                         loc = Station.objects.get(id=path_asset.location_id)
-                        location_path.append(loc.name)
+                        location_path.append(loc.name or f"Station {path_asset.location_id}")
                     elif path_asset.location_type == 'solar_system':
                         loc = SolarSystem.objects.get(id=path_asset.location_id)
-                        location_path.append(loc.name)
+                        location_path.append(loc.name or f"System {path_asset.location_id}")
                     else:
                         location_path.append(f"{path_asset.location_type.title()} {path_asset.location_id}")
                 except:
@@ -1063,17 +1079,23 @@ def fitting_readiness_browser(request: HttpRequest, fitting_id: int) -> HttpResp
     # Sort location keys for display
     def sort_key(char_loc_tuple):
         char, loc_path = char_loc_tuple
-        loc_str = " → ".join(loc_path)
+        # Handle None values in location path
+        safe_path = [str(p) if p is not None else "Unknown" for p in loc_path]
+        loc_str = " → ".join(safe_path)
         return (char.character_name, loc_str)
 
     # Flatten for template rendering
     all_ships = []
     for char, locations in sorted(location_trees.items(), key=lambda x: x[0].character_name):
         for location_path, ships in sorted(locations.items()):
+            # For fitting matches, show only the ROOT location (hangar/station),
+            # not the full path with intermediate ship containers
+            # location_path is ordered from immediate parent to root
+            root_location = location_path[-1] if location_path else "Unknown"
             all_ships.append({
                 'character': char,
-                'location_path': list(location_path),
-                'location_string': " → ".join(location_path),
+                'location_path': list(location_path),  # Full path for debugging
+                'location_string': root_location,  # Just root for display
                 'ships': ships,
             })
 

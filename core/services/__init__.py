@@ -474,6 +474,50 @@ class ESIClient:
             max_backoff=60.0,
         )
 
+    @classmethod
+    def post_public(cls, endpoint: str, data=None) -> ESIResponse:
+        """Make an unauthenticated POST request to ESI with rate limit awareness and retry logic."""
+        url = f'{cls.BASE_URL}{endpoint}?datasource={cls.DEFAULT_DATASOURCE}'
+        headers = cls._get_headers()
+        headers['Content-Type'] = 'application/json'
+
+        def _make_request():
+            """Inner function to make the actual request (used by retry logic)."""
+            import json
+            response = requests.post(url, json=data, headers=headers, timeout=30)
+
+            # Check for rate limit error (420) - handle specially
+            if response.status_code == 420:
+                reset_time = response.headers.get('X-Esi-Error-Limit-Reset', '')
+                logger.warning(f'ESI rate limit hit (420) on {endpoint}, handling...')
+                ESIRateLimiter.handle_rate_limit(reset_time)
+                # Retry immediately after waiting for reset
+                response = requests.post(url, json=data, headers=headers, timeout=30)
+
+            response.raise_for_status()
+
+            meta = ESIMeta(response)
+            response_data = response.json()
+
+            # Check rate limit and add backoff if needed
+            ESIRateLimiter.check_and_wait(meta.remaining_error_limit)
+
+            return ESIResponse(response_data, meta)
+
+        return retry_with_exponential_backoff(
+            _make_request,
+            max_retries=3,
+            initial_backoff=1.0,
+            max_backoff=60.0,
+        )
+
+        return retry_with_exponential_backoff(
+            _make_request,
+            max_retries=3,
+            initial_backoff=1.0,
+            max_backoff=60.0,
+        )
+
     # Character endpoints
 
     @classmethod
@@ -667,6 +711,17 @@ class ESIClient:
     def get_fw_factions(cls) -> ESIResponse:
         """Get faction warfare factions overview."""
         return cls.get_public('/fw/wars/')
+
+    @classmethod
+    def post_universe_names(cls, ids: list[int]) -> ESIResponse:
+        """
+        Post a list of entity IDs to get their names.
+
+        ESI endpoint: POST /universe/names/
+        Returns a list of {"id": int, "name": str} objects.
+        Max 1000 IDs per request.
+        """
+        return cls.post_public('/universe/names/', data=ids)
 
 
 class AuthService:
