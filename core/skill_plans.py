@@ -838,7 +838,12 @@ def order_skills_by_prerequisites(skills: Set[tuple[int, int]]) -> list[tuple[in
     return sorted_order
 
 
-def calculate_fitting_plan_progress(character, primary_skills: Set[tuple[int, int]], all_skills: Set[tuple[int, int]]) -> dict:
+def calculate_fitting_plan_progress(
+    character,
+    primary_skills: Set[tuple[int, int]],
+    all_skills: Set[tuple[int, int]],
+    skill_rank_map: Optional[dict] = None
+) -> dict:
     """
     Calculate character progress against a set of skills.
 
@@ -846,9 +851,10 @@ def calculate_fitting_plan_progress(character, primary_skills: Set[tuple[int, in
     Returns progress metrics similar to SkillPlan.get_pilot_progress().
 
     Args:
-        character: Character object
+        character: Character object (should have skills prefetched)
         primary_skills: Set of (skill_id, level) tuples for primary goals (from fitting)
         all_skills: Set of (skill_id, level) tuples including all prerequisites
+        skill_rank_map: Optional pre-fetched dict of {skill_id: TypeAttribute} for rank lookups
 
     Returns:
         Dict with progress metrics:
@@ -865,21 +871,32 @@ def calculate_fitting_plan_progress(character, primary_skills: Set[tuple[int, in
     from core.eve.models import TypeAttribute
 
     # Get character's skills as a dict for quick lookup
+    # If skills were prefetched, this uses the cached data
     char_skills = {
         cs.skill_id: cs
-        for cs in CharacterSkill.objects.filter(character=character)
+        for cs in character.skills.all()
     }
+
+    # If no rank map provided, fetch it (legacy behavior)
+    if skill_rank_map is None:
+        skill_rank_map = {
+            ta.type_id: ta
+            for ta in TypeAttribute.objects.filter(
+                type_id__in={sid for sid, _ in all_skills},
+                attribute_id=275
+            )
+        }
 
     # Calculate SP for each skill level
     def get_sp_for_level(skill_id: int, level: int) -> int:
         """Get total SP needed for a skill level."""
         import math
 
-        # Get skill rank
-        try:
-            rank_attr = TypeAttribute.objects.get(type_id=skill_id, attribute_id=275)
+        # Get skill rank from map
+        rank_attr = skill_rank_map.get(skill_id)
+        if rank_attr:
             rank = rank_attr.value_int if rank_attr.value_int else int(rank_attr.value_float or 1)
-        except TypeAttribute.DoesNotExist:
+        else:
             rank = 1
 
         # SP formula: 2^((2.5 * level) - 2) * 32 * rank

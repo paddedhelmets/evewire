@@ -300,7 +300,7 @@ def fitting_skill_plans(request: HttpRequest, fitting_id: int) -> HttpResponse:
         order_skills_by_prerequisites,
         calculate_fitting_plan_progress,
     )
-    from core.eve.models import ItemType
+    from core.eve.models import ItemType, TypeAttribute
 
     try:
         fitting = Fitting.objects.get(id=fitting_id)
@@ -323,36 +323,66 @@ def fitting_skill_plans(request: HttpRequest, fitting_id: int) -> HttpResponse:
     # Step 3: Order by prerequisites
     ordered_skills = order_skills_by_prerequisites(all_skills)
 
-    # Step 4: Calculate pilot progress
-    characters = Character.objects.filter(user=request.user).order_by('character_name')
+    # Step 4: Pre-fetch all skill data in bulk to avoid N+1 queries
+    all_skill_ids = {skill_id for skill_id, _ in all_skills}
+
+    # Bulk fetch all ItemType records for skill names
+    item_types = {
+        it.id: it
+        for it in ItemType.objects.filter(id__in=all_skill_ids)
+    }
+
+    # Bulk fetch all skill rank attributes (attribute_id 275 = Training time multiplier)
+    rank_attrs = {
+        ta.type_id: ta
+        for ta in TypeAttribute.objects.filter(
+            type_id__in=all_skill_ids,
+            attribute_id=275
+        )
+    }
+
+    # Build SP lookup function using pre-fetched data
+    def get_sp_for_level(skill_id: int, level: int) -> int:
+        """Get total SP needed for a skill level (using pre-fetched data)."""
+        import math
+
+        rank_attr = rank_attrs.get(skill_id)
+        if rank_attr:
+            rank = rank_attr.value_int if rank_attr.value_int else int(rank_attr.value_float or 1)
+        else:
+            rank = 1
+
+        return int(math.pow(2, (2.5 * level) - 2) * 32 * rank)
+
+    # Step 5: Calculate pilot progress with pre-fetched character skills
+    characters = Character.objects.filter(
+        user=request.user
+    ).prefetch_related(
+        'skills'  # Prefetch all character skills
+    ).order_by('character_name')
+
     pilot_progress = []
 
     for character in characters:
-        progress = calculate_fitting_plan_progress(character, primary_skills, all_skills)
+        progress = calculate_fitting_plan_progress(
+            character, primary_skills, all_skills,
+            skill_rank_map=rank_attrs  # Pass pre-fetched rank data
+        )
         pilot_progress.append({
             'character': character,
             'progress': progress,
         })
 
-    # Step 5: Find overlapping plans (user's + global)
-    # Get all plans the user can see
-    user_plans = SkillPlan.objects.filter(owner=request.user)
-    global_plans = SkillPlan.objects.filter(owner__isnull=True, is_active=True)
+    # Step 6: Find overlapping plans (user's + global)
+    # Get all plans with prefetched entries
+    user_plans = SkillPlan.objects.filter(
+        owner=request.user
+    ).prefetch_related('entries')
+    global_plans = SkillPlan.objects.filter(
+        owner__isnull=True,
+        is_active=True
+    ).prefetch_related('entries')
     all_plans = list(user_plans) + list(global_plans)
-
-    # Calculate total SP for the fitting's skill set
-    def get_sp_for_level(skill_id: int, level: int) -> int:
-        """Get total SP needed for a skill level."""
-        import math
-        from core.eve.models import TypeAttribute
-
-        try:
-            rank_attr = TypeAttribute.objects.get(type_id=skill_id, attribute_id=275)
-            rank = rank_attr.value_int if rank_attr.value_int else int(rank_attr.value_float or 1)
-        except TypeAttribute.DoesNotExist:
-            rank = 1
-
-        return int(math.pow(2, (2.5 * level) - 2) * 32 * rank)
 
     # Calculate total SP needed for fitting
     fitting_total_sp = sum(get_sp_for_level(sid, lvl) for sid, lvl in all_skills)
@@ -360,7 +390,7 @@ def fitting_skill_plans(request: HttpRequest, fitting_id: int) -> HttpResponse:
     # Calculate overlap for each plan
     plan_overlaps = []
     for plan in all_plans:
-        # Get all skill IDs and levels from this plan
+        # Get all skill IDs and levels from this plan (using prefetched entries)
         plan_skills = set(
             (entry.skill_id, entry.level)
             for entry in plan.entries.all()
@@ -391,14 +421,11 @@ def fitting_skill_plans(request: HttpRequest, fitting_id: int) -> HttpResponse:
     # Sort by SP coverage percent (highest first)
     plan_overlaps.sort(key=lambda x: x['sp_coverage_percent'], reverse=True)
 
-    # Build skill list for template (similar to skill_plan_detail entries)
+    # Build skill list for template (using pre-fetched ItemType data)
     skill_list = []
     for skill_id, level in ordered_skills:
-        try:
-            skill_type = ItemType.objects.get(id=skill_id)
-            skill_name = skill_type.name
-        except ItemType.DoesNotExist:
-            skill_name = f"Skill {skill_id}"
+        skill_type = item_types.get(skill_id)
+        skill_name = skill_type.name if skill_type else f"Skill {skill_id}"
 
         # Determine if this is a primary skill (from fitting) or prerequisite
         is_prerequisite = (skill_id, level) not in primary_skills
