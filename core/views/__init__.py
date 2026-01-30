@@ -455,9 +455,12 @@ def character_overview(request: HttpRequest, character_id: int) -> HttpResponse:
 @login_required
 def character_skills_page(request: HttpRequest, character_id: int) -> HttpResponse:
     """Character skills page with expandable skill groups."""
+    import logging
     from core.models import Character
     from core.eve.models import ItemType, ItemGroup
     from collections import defaultdict
+
+    logger = logging.getLogger('evewire')
 
     try:
         character = Character.objects.get(id=character_id, user=request.user)
@@ -466,30 +469,41 @@ def character_skills_page(request: HttpRequest, character_id: int) -> HttpRespon
             'message': 'Character not found',
         }, status=404)
 
-    # Build skill groups with type info
-    skill_groups = defaultdict(list)
-    skill_data = {}
+    # Get all skills with their item types in one query
+    skills = list(character.skills.select_related().all())
+    skill_ids = [s.skill_id for s in skills]
 
-    for skill in character.skills.select_related().all():
-        skill_data[skill.skill_id] = skill
-        try:
-            item_type = ItemType.objects.get(id=skill.skill_id)
-            group = ItemGroup.objects.filter(id=item_type.group_id).first()
-            group_name = group.name if group else 'Unknown'
-            rank = item_type.rank or 0
-            skill_groups[group_name].append({
-                'skill': skill,
-                'type': item_type,
-                'rank': rank,
-            })
-        except ItemType.DoesNotExist:
-            pass
+    # Bulk fetch all ItemTypes
+    item_types = ItemType.objects.filter(id__in=skill_ids)
+    item_types_list = list(item_types)
+
+    # Get unique group IDs and bulk fetch ItemGroups
+    group_ids = set(it.group_id for it in item_types_list if it.group_id)
+    item_groups = ItemGroup.objects.filter(id__in=group_ids)
+    item_groups_dict = {g.id: g for g in list(item_groups)}
+
+    # Build a lookup dict for item types
+    item_types_dict = {it.id: it for it in item_types_list}
+
+    # Build skill groups
+    skill_groups = defaultdict(list)
+
+    for skill in skills:
+        item_type = item_types_dict.get(skill.skill_id)
+        if item_type and item_type.group_id:
+            group = item_groups_dict.get(item_type.group_id)
+            if group:
+                skill_groups[group.name].append({
+                    'skill': skill,
+                    'type': item_type,
+                    'rank': getattr(item_type, 'rank', 0) or 0,
+                })
 
     # Sort groups and skills within groups
     sorted_groups = []
     for group_name in sorted(skill_groups.keys()):
-        skills = sorted(skill_groups[group_name], key=lambda x: x['type'].name)
-        sorted_groups.append({'name': group_name, 'skills': skills})
+        skills_list = sorted(skill_groups[group_name], key=lambda x: x['type'].name)
+        sorted_groups.append({'name': group_name, 'skills': skills_list})
 
     return render(request, 'core/character_skills.html', {
         'character': character,

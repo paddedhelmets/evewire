@@ -660,16 +660,27 @@ def skills_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
             return 0
         return int(math.pow(2, (2.5 * level) - 2) * 32 * rank)
 
+    # BULK FETCH: Get all ItemGroups for skill types (eliminates N+1 queries)
+    skill_type_ids = list(all_skill_types.values_list('id', flat=True))
+    group_ids = set(all_skill_types.values_list('group_id', flat=True))
+    all_groups = {g.id: g for g in ItemGroup.objects.filter(id__in=group_ids)}
+
+    # BULK FETCH: Get all TypeAttributes for skills (rank, primary, secondary)
+    all_type_attrs = list(TypeAttribute.objects.filter(
+        type_id__in=skill_type_ids,
+        attribute_id__in=[275, 180, 181]
+    ))
+    # Build lookup: (type_id, attribute_id) -> TypeAttribute
+    attrs_lookup = {}
+    for attr in all_type_attrs:
+        attrs_lookup[(attr.type_id, attr.attribute_id)] = attr
+
     # Build comprehensive skill list
     skills_with_groups = []
     groups_seen = set()
 
     for skill_type in all_skill_types:
-        group = None
-        try:
-            group = ItemGroup.objects.get(id=skill_type.group_id)
-        except ItemGroup.DoesNotExist:
-            pass
+        group = all_groups.get(skill_type.group_id)
 
         if group:
             groups_seen.add(group.id)
@@ -695,27 +706,18 @@ def skills_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
             status = 'not_injected'
             skill_obj = None
 
-        # Get skill rank (attribute 275)
-        rank_attr = TypeAttribute.objects.filter(
-            type_id=skill_type.id,
-            attribute_id=275
-        ).first()
+        # Get skill rank (attribute 275) from pre-fetched data
         rank = 1
+        rank_attr = attrs_lookup.get((skill_type.id, 275))
         if rank_attr:
             if rank_attr.value_int is not None:
                 rank = int(rank_attr.value_int)
             elif rank_attr.value_float is not None:
                 rank = int(rank_attr.value_float)
 
-        # Get primary/secondary attributes
-        primary_attr = TypeAttribute.objects.filter(
-            type_id=skill_type.id,
-            attribute_id=180
-        ).first()
-        secondary_attr = TypeAttribute.objects.filter(
-            type_id=skill_type.id,
-            attribute_id=181
-        ).first()
+        # Get primary/secondary attributes from pre-fetched data
+        primary_attr = attrs_lookup.get((skill_type.id, 180))
+        secondary_attr = attrs_lookup.get((skill_type.id, 181))
 
         primary_name = ATTRIBUTE_NAMES.get(int(primary_attr.value_int) if primary_attr and primary_attr.value_int else None, 'intelligence')
         secondary_name = ATTRIBUTE_NAMES.get(int(secondary_attr.value_int) if secondary_attr and secondary_attr.value_int else None, 'memory')
@@ -724,13 +726,19 @@ def skills_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
         sp_for_level = calculate_sp_for_level(rank, level)
         sp_for_next = calculate_sp_for_level(rank, level + 1) if level < 5 else sp_for_level
 
+        # For non-injected skills, show level 1 requirement
+        # EVE formula: Level 1 = 250 * rank (e.g., rank 1 = 250 SP, rank 8 = 2000 SP)
+        if status == 'not_injected':
+            sp_for_next = 250 * rank
+
         # Calculate training time to next level (if not maxed)
+        # TEMPORARILY DISABLED: causing N+1 queries
         training_time = None
-        if level < 5 and status != 'not_injected':
-            try:
-                training_time = calculate_training_time(character, skill_type.id, level + 1)
-            except Exception:
-                training_time = None
+        # if level < 5 and status != 'not_injected':
+        #     try:
+        #         training_time = calculate_training_time(character, skill_type.id, level + 1)
+        #     except Exception:
+        #         training_time = None
 
         skill_data = {
             'skill_id': skill_type.id,

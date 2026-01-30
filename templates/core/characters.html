@@ -25,7 +25,7 @@
                 {% for character in characters %}
                 <tr style="border-bottom: 1px solid var(--table-border);">
                     <td style="padding: 0.75rem;">
-                        <strong>{{ character.character_name }}</strong>
+                        <strong><a href="{% url 'core:character_detail' character.id %}" style="color: inherit;">{{ character.character_name }}</a></strong>
                         <br><small style="color: var(--text-secondary);">ID: {{ character.id }}</small>
                     </td>
                     <td style="padding: 0.75rem;">

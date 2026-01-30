@@ -54,7 +54,12 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'oauth2_provider.middleware.OAuth2TokenMiddleware',
+    'core.middleware.PerformanceMonitoringMiddleware',  # Performance monitoring (DEBUG only)
 ]
+
+# Performance monitoring thresholds (only active when DEBUG=True)
+SLOW_REQUEST_THRESHOLD = 0.5  # Log requests taking longer than 500ms
+EXCESSIVE_QUERIES_THRESHOLD = 30  # Log requests executing more than 30 SQL queries
 
 ROOT_URLCONF = 'evewire.urls'
 
@@ -205,6 +210,7 @@ LOGGING = {
     'loggers': {
         'django': {'handlers': ['console'], 'level': config('DJANGO_LOG_LEVEL', default='INFO'), 'propagate': False},
         'evewire': {'handlers': ['console', 'file'], 'level': 'DEBUG', 'propagate': False},
+        'evewire.performance': {'handlers': ['console', 'file'], 'level': 'WARNING', 'propagate': False},
     },
 }
 

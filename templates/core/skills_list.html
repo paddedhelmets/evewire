@@ -79,7 +79,7 @@
                     </span>
                 </td>
             </tr>
-            <tbody id="group-{{ group.grouper|slugify }}" class="group-content">
+            <tbody id="group-{{ group.grouper|slugify }}" class="group-content" style="display: none;">
             {% for skill in group.list %}
             <tr style="border-bottom: 1px solid var(--table-border, #eee);
                 {% if skill.status == 'not_injected' %}opacity: 0.6;{% endif %}">
