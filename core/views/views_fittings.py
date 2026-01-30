@@ -453,7 +453,7 @@ def fitting_skill_plans(request: HttpRequest, fitting_id: int) -> HttpResponse:
 def fitting_adopt_plan(request: HttpRequest, fitting_id: int) -> HttpResponse:
     """Adopt the fitting's skill plan as a real SkillPlan."""
     from core.doctrines.models import Fitting
-    from core.character.models import SkillPlan
+    from core.character.models import SkillPlan, SkillPlanEntry
     from core.skill_plans import (
         extract_fitting_skills,
         expand_prerequisites,
