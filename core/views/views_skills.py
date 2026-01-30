@@ -57,6 +57,7 @@ def skill_plan_detail(request: HttpRequest, plan_id: int) -> HttpResponse:
     from core.character.models import SkillPlan
     from core.models import Character
     from core.skill_plans import calculate_training_time
+    from core.eve.models import TypeAttribute
 
     try:
         plan = SkillPlan.objects.get(id=plan_id)
@@ -65,27 +66,83 @@ def skill_plan_detail(request: HttpRequest, plan_id: int) -> HttpResponse:
             'message': 'Skill plan not found',
         }, status=404)
 
-    # Get all user's characters
-    characters = Character.objects.filter(user=request.user).order_by('character_name')
+    # Pre-fetch all skill rank attributes for the plan (attribute_id 275 = rank)
+    all_skill_ids = set(plan.entries.values_list('skill_id', flat=True))
+    rank_attrs = {
+        ta.type_id: ta
+        for ta in TypeAttribute.objects.filter(
+            type_id__in=all_skill_ids,
+            attribute_id=275
+        )
+    }
+
+    # Pre-fetch all skill primary/secondary attributes (attribute_id 180/181)
+    # Primary attribute (180) and Secondary attribute (181)
+    skill_attr_ids = {sid: {} for sid in all_skill_ids}
+    for ta in TypeAttribute.objects.filter(
+        type_id__in=all_skill_ids,
+        attribute_id__in=[180, 181]
+    ):
+        skill_attr_ids[ta.type_id][ta.attribute_id] = ta
+
+    # Build skill attributes map: {skill_id: (primary_attr_name, secondary_attr_name)}
+    ATTRIBUTE_MAP = {
+        164: 'intelligence',
+        165: 'perception',
+        166: 'willpower',
+        167: 'charisma',
+        168: 'memory',
+    }
+    skill_attributes_map = {}
+    for skill_id in all_skill_ids:
+        attrs = skill_attr_ids.get(skill_id, {})
+        # Primary attribute
+        primary_attr = 'intelligence'
+        if 180 in attrs and attrs[180].value_int:
+            primary_attr_id = int(attrs[180].value_int)
+            primary_attr = ATTRIBUTE_MAP.get(primary_attr_id, 'intelligence')
+        # Secondary attribute
+        secondary_attr = 'memory'
+        if 181 in attrs and attrs[181].value_int:
+            secondary_attr_id = int(attrs[181].value_int)
+            secondary_attr = ATTRIBUTE_MAP.get(secondary_attr_id, 'memory')
+        skill_attributes_map[skill_id] = (primary_attr, secondary_attr)
+
+    # Get all user's characters with prefetched skills
+    characters = Character.objects.filter(
+        user=request.user
+    ).prefetch_related(
+        'skills'
+    ).order_by('character_name')
+
+    # Get primary entries once (not per character)
+    primary_entries = list(plan.entries.filter(is_prerequisite=False))
 
     # Calculate progress for each character
     pilot_progress = []
     for char in characters:
-        progress = plan.get_progress_for_character(char)
+        progress = plan.get_progress_for_character(char, skill_rank_map=rank_attrs)
         percent_complete = progress['percent_complete']
 
         # Calculate remaining training time (primary entries only)
         character_skills = {s.skill_id: s for s in char.skills.all()}
         total_training_seconds = 0
 
-        for entry in plan.entries.filter(is_prerequisite=False):
+        for entry in primary_entries:
             target_level = entry.level or entry.recommended_level
             if target_level:
                 skill = character_skills.get(entry.skill_id)
                 current_level = skill.skill_level if skill else 0
                 if current_level < target_level:
                     try:
-                        training_time = calculate_training_time(char, entry.skill_id, target_level)
+                        training_time = calculate_training_time(
+                            char,
+                            entry.skill_id,
+                            target_level,
+                            character_skills=character_skills,
+                            skill_rank_map=rank_attrs,
+                            skill_attributes_map=skill_attributes_map,
+                        )
                         total_training_seconds += training_time['total_seconds']
                     except Exception:
                         pass
@@ -134,7 +191,7 @@ def skill_plan_detail(request: HttpRequest, plan_id: int) -> HttpResponse:
         skills_by_group_dict[group_name] = sorted(skills_by_group_dict[group_name], key=lambda s: s.name)
 
     # Count primary entries only (excluding prerequisites)
-    primary_entry_count = plan.entries.filter(is_prerequisite=False).count()
+    primary_entry_count = len(primary_entries)
 
     return render(request, 'core/skill_plan_detail.html', {
         'plan': plan,

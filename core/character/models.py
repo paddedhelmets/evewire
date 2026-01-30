@@ -892,7 +892,7 @@ class SkillPlan(models.Model):
 
         return SkillPlanEntry.objects.filter(id__in=entry_ids)
 
-    def get_progress_for_character(self, character):
+    def get_progress_for_character(self, character, skill_rank_map: Optional[dict] = None):
         """
         Calculate progress for a character against this plan.
 
@@ -901,6 +901,10 @@ class SkillPlan(models.Model):
         Each level entry is counted separately - importing "Amarr Battleship 1",
         "Amarr Battleship 2", "Amarr Battleship 3" creates 3 entries, and the
         SP required for all three levels is summed.
+
+        Args:
+            character: Character to calculate progress for (should have skills prefetched)
+            skill_rank_map: Optional pre-fetched dict of {skill_id: TypeAttribute} for rank lookups
 
         Returns dict with:
         - Primary entries (user-added goals):
@@ -932,6 +936,17 @@ class SkillPlan(models.Model):
 
         entries = self.get_all_entries()
         character_skills = {s.skill_id: s for s in character.skills.all()}
+
+        # Bulk fetch skill ranks if not provided
+        if skill_rank_map is None:
+            skill_ids = {e.skill_id for e in entries if e.level}
+            skill_rank_map = {
+                ta.type_id: ta
+                for ta in TypeAttribute.objects.filter(
+                    type_id__in=skill_ids,
+                    attribute_id=275
+                )
+            }
 
         # SP calculation constants
         SP_multiplier = 32 ** 0.5
@@ -966,16 +981,16 @@ class SkillPlan(models.Model):
 
             skill = character_skills.get(entry.skill_id)
 
-            # Get skill rank for SP calculation (from TypeAttribute attribute_id 275)
-            try:
-                rank_attr = TypeAttribute.objects.get(type_id=entry.skill_id, attribute_id=275)
+            # Get skill rank from pre-fetched map
+            rank_attr = skill_rank_map.get(entry.skill_id)
+            if rank_attr:
                 if rank_attr.value_int is not None:
                     rank = rank_attr.value_int
                 elif rank_attr.value_float is not None:
                     rank = int(rank_attr.value_float)
                 else:
                     rank = 1
-            except TypeAttribute.DoesNotExist:
+            else:
                 rank = 1
 
             target_sp = sp_for_level(entry.level, rank)

@@ -308,13 +308,28 @@ class SkillPlanImporter:
         return plan
 
 
-def calculate_training_time(character, skill_id: int, target_level: int) -> Dict[str, Any]:
+def calculate_training_time(
+    character,
+    skill_id: int,
+    target_level: int,
+    character_skills: Optional[Dict] = None,
+    skill_rank_map: Optional[Dict] = None,
+    skill_attributes_map: Optional[Dict] = None,
+) -> Dict[str, Any]:
     """
     Calculate training time for a skill to reach target level.
 
     Uses EVE Online skill training formula:
     - SP per minute = primary_attribute + (secondary_attribute / 2)
     - SP needed for level L = 2^((2.5 * L) - 2) * 32 * rank
+
+    Args:
+        character: Character to calculate for
+        skill_id: Skill to calculate training time for
+        target_level: Target level to reach
+        character_skills: Optional pre-fetched dict of {skill_id: CharacterSkill}
+        skill_rank_map: Optional pre-fetched dict of {skill_id: TypeAttribute} for rank (attr 275)
+        skill_attributes_map: Optional pre-fetched dict of {skill_id: (primary_attr, secondary_attr)}
 
     Returns dict with:
     - total_seconds: estimated training time in seconds
@@ -327,17 +342,22 @@ def calculate_training_time(character, skill_id: int, target_level: int) -> Dict
     from core.eve.models import ItemType
     import math
 
-    # Get current skill status
-    try:
-        char_skill = CharacterSkill.objects.get(
-            character=character,
-            skill_id=skill_id
-        )
-        current_level = char_skill.skill_level
-        current_sp = char_skill.skillpoints_in_skill
-    except CharacterSkill.DoesNotExist:
-        current_level = 0
-        current_sp = 0
+    # Get current skill status from pre-fetched data or query
+    if character_skills is not None:
+        char_skill = character_skills.get(skill_id)
+        current_level = char_skill.skill_level if char_skill else 0
+        current_sp = char_skill.skillpoints_in_skill if char_skill else 0
+    else:
+        try:
+            char_skill = CharacterSkill.objects.get(
+                character=character,
+                skill_id=skill_id
+            )
+            current_level = char_skill.skill_level
+            current_sp = char_skill.skillpoints_in_skill
+        except CharacterSkill.DoesNotExist:
+            current_level = 0
+            current_sp = 0
 
     # Get character attributes
     try:
@@ -346,11 +366,20 @@ def calculate_training_time(character, skill_id: int, target_level: int) -> Dict
         # Default attributes if not synced
         attrs = None
 
-    # Get skill rank from SDE (TypeAttribute table)
-    skill_rank = _get_skill_rank(skill_id)
+    # Get skill rank from pre-fetched map or query
+    if skill_rank_map is not None:
+        rank_attr = skill_rank_map.get(skill_id)
+        skill_rank = _get_skill_rank_from_attr(rank_attr) if rank_attr else 1
+    else:
+        skill_rank = _get_skill_rank(skill_id)
 
-    # Get skill primary/secondary attributes from SDE
-    primary_attr_name, secondary_attr_name = _get_skill_attributes(skill_id)
+    # Get skill primary/secondary attributes from pre-fetched map or query
+    if skill_attributes_map is not None:
+        primary_attr_name, secondary_attr_name = skill_attributes_map.get(
+            skill_id, ('intelligence', 'memory')
+        )
+    else:
+        primary_attr_name, secondary_attr_name = _get_skill_attributes(skill_id)
 
     # Calculate SP per minute
     if attrs:
@@ -390,18 +419,42 @@ def calculate_training_time(character, skill_id: int, target_level: int) -> Dict
     }
 
 
-def _get_skill_rank(skill_id: int) -> int:
+def _get_skill_rank_from_attr(rank_attr) -> int:
+    """
+    Extract rank from a TypeAttribute object.
+
+    Helper function to extract rank from a pre-fetched TypeAttribute.
+    """
+    if rank_attr:
+        if rank_attr.value_int is not None:
+            return rank_attr.value_int
+        if rank_attr.value_float is not None:
+            return int(rank_attr.value_float)
+    return 1
+
+
+def _get_skill_rank(skill_id: int, skill_rank_map: Optional[Dict] = None) -> int:
     """
     Get the rank (multiplier) for a skill.
 
     Rank determines how many SP are needed to train the skill.
     Most skills have rank 1, but some have higher ranks.
 
+    Args:
+        skill_id: Skill type ID
+        skill_rank_map: Optional pre-fetched dict of {skill_id: TypeAttribute}
+
     Looks up from SDE TypeAttribute table:
     - Attribute ID 275 = Training time multiplier (skill rank)
     """
     from core.eve.models import TypeAttribute
 
+    # Check pre-fetched map first
+    if skill_rank_map is not None:
+        rank_attr = skill_rank_map.get(skill_id)
+        return _get_skill_rank_from_attr(rank_attr)
+
+    # Legacy behavior: query database
     try:
         rank_attr = TypeAttribute.objects.get(
             type_id=skill_id,
@@ -420,9 +473,13 @@ def _get_skill_rank(skill_id: int) -> int:
     return 1
 
 
-def _get_skill_attributes(skill_id: int) -> tuple[str, str]:
+def _get_skill_attributes(skill_id: int, skill_attributes_map: Optional[Dict] = None) -> tuple[str, str]:
     """
     Get the primary and secondary attributes for a skill.
+
+    Args:
+        skill_id: Skill type ID
+        skill_attributes_map: Optional pre-fetched dict of {skill_id: (primary_attr, secondary_attr)}
 
     Returns tuple of (primary_attribute_name, secondary_attribute_name).
 
@@ -447,6 +504,10 @@ def _get_skill_attributes(skill_id: int) -> tuple[str, str]:
         167: 'charisma',
         168: 'memory',
     }
+
+    # Check pre-fetched map first
+    if skill_attributes_map is not None:
+        return skill_attributes_map.get(skill_id, ('intelligence', 'memory'))
 
     # Get primary attribute
     primary_attr = 'intelligence'  # default

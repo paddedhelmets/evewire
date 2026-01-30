@@ -485,20 +485,21 @@ def fitting_adopt_plan(request: HttpRequest, fitting_id: int) -> HttpResponse:
         display_order=max_order + 1,
     )
 
-    # Add all skills as entries
-    max_entry_order = 0
-    for skill_id, level in sorted(all_skills):
+    # Bulk create all skill entries (much faster than individual creates)
+    entries_to_create = []
+    for display_order, (skill_id, level) in enumerate(sorted(all_skills), start=1):
         # Determine if this is a primary skill or prerequisite
         is_prereq = (skill_id, level) not in primary_skills
 
-        SkillPlanEntry.objects.create(
+        entries_to_create.append(SkillPlanEntry(
             skill_plan=plan,
             skill_id=skill_id,
             level=level,
             is_prerequisite=is_prereq,
-            display_order=max_entry_order + 1,
-        )
-        max_entry_order += 1
+            display_order=display_order,
+        ))
+
+    SkillPlanEntry.objects.bulk_create(entries_to_create, batch_size=500)
 
     # Run prerequisite expansion (idempotent, ensures consistency)
     plan.ensure_prerequisites()
