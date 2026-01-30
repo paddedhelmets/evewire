@@ -5,6 +5,7 @@ These models store cached ESI data for characters, including skills, assets,
 wallet, and market orders.
 """
 
+from typing import Optional, Dict
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
