@@ -124,6 +124,10 @@ urlpatterns = [
     path('industry/jobs/export/', views.industry_jobs_export, name='industry_jobs_export'),
     path('character/<int:character_id>/industry/jobs/export/', views.industry_jobs_export, name='character_industry_jobs_export'),
 
+    # Mining Ledger
+    path('mining/', views.mining_ledger, name='mining_ledger'),
+    path('character/<int:character_id>/mining/', views.mining_ledger, name='character_mining_ledger'),
+
     # Fittings
     path('fittings/', views.fittings_list, name='fittings_list'),
     path('fittings/<int:fitting_id>/', views.fitting_detail, name='fitting_detail'),

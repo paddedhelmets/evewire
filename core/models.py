@@ -244,6 +244,7 @@ class EveScope(models.TextChoices):
     ASSETS_READ = 'esi-assets.read_assets.v1', 'Read Assets'
     ORDERS_READ = 'esi-markets.read_character_orders.v1', 'Read Market Orders'
     INDUSTRY_JOBS_READ = 'esi-industry.read_character_jobs.v1', 'Read Industry Jobs'
+    MINING_READ = 'esi-industry.read_character_mining.v1', 'Read Mining Ledger'
     UNIVERSE_READ_STRUCTURES = 'esi-universe.read_structures.v1', 'Read Structure Info'
     LOCATION_READ = 'esi-location.read_location.v1', 'Read Location'
 
@@ -259,6 +260,7 @@ class EveScope(models.TextChoices):
             cls.ASSETS_READ.value,
             cls.ORDERS_READ.value,
             cls.INDUSTRY_JOBS_READ.value,
+            cls.MINING_READ.value,  # Mining ledger
             cls.UNIVERSE_READ_STRUCTURES.value,  # Required for structure names
             cls.LOCATION_READ.value,  # Character location
         ]

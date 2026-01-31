@@ -285,6 +285,15 @@ def _sync_character_metadata(character_id: int, **kwargs) -> bool:
         __sync_orders_history(character)
         __sync_industry_jobs(character)
 
+        # Mining ledger might fail with 401 if scope not granted
+        try:
+            __sync_mining_ledger(character)
+        except HTTPError as e:
+            if e.response is not None and e.response.status_code == 401:
+                logger.warning(f'Mining ledger not available for character {character_id} (missing scope)')
+            else:
+                raise
+
         # Contracts might fail with 401 if scope not granted
         try:
             __sync_contracts(character)

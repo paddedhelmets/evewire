@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% load evewire %}
+
+{% block title %}Mining Ledger - evewire{% endblock %}
+
+{% block content %}
+<style>
+.summary-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+.summary-card {
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    padding: 1.5rem;
+    box-shadow: var(--card-shadow);
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    border-left: 4px solid var(--btn-primary);
+}
+.summary-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+.summary-card-title {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+.summary-card-value {
+    font-size: 2rem;
+    font-weight: bold;
+    margin-bottom: 0.25rem;
+}
+.summary-card-sub {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+.pilot-breakdown {
+    display: none;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+.pilot-breakdown.show {
+    display: block;
+}
+.pilot-row {
+    display: grid;
+    grid-template-columns: 3fr 1fr;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--table-border);
+}
+.pilot-row:last-child {
+    border-bottom: none;
+}
+.pilot-name {
+    font-weight: 500;
+}
+.pilot-value {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+.ore-list {
+    margin-top: 0.5rem;
+    padding-left: 1rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+.ore-list li {
+    padding: 0.25rem 0;
+}
+</style>
+
+<div style="max-width: 1400px; margin: 0 auto;">
+    <h1 style="margin-bottom: 1.5rem;">Mining Ledger</h1>
+
+    <!-- Summary Cards -->
+    <div class="summary-cards">
+        {% for stat in pilot_stats %}
+        <div class="summary-card" onclick="toggleBreakdown('{{ stat.character.id }}')">
+            <div class="summary-card-title">{{ stat.character.character_name }}</div>
+            <div class="summary-card-value">{{ stat.total_volume|intcomma }}</div>
+            <div class="summary-card-sub">m3 (last 30 days)</div>
+            <div class="pilot-breakdown" id="{{ stat.character.id }}-breakdown">
+                <div style="font-weight: 500; margin-bottom: 0.5rem;">Top Ore Types:</div>
+                <ul class="ore-list">
+                    {% for ore in stat.top_ores %}
+                    <li>{{ ore.type_id }}: {{ ore.volume|intcomma }} m3</li>
+                    {% empty %}
+                    <li>No mining data</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Mining Ledger Table -->
+    <div class="card">
+        <h2 style="margin-bottom: 1rem;">Mining Entries ({{ entries.paginator.count }} total)</h2>
+
+        <!-- Filters -->
+        <form method="get" style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end; margin-bottom: 1rem; padding: 1rem; background: var(--bg-primary); border-radius: 4px;">
+            <div>
+                <label for="date_from" style="display: block; margin-bottom: 0.25rem; font-size: 0.9rem;">From:</label>
+                <input type="date" name="date_from" id="date_from" value="{{ date_from }}" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
+            </div>
+            <div>
+                <label for="date_to" style="display: block; margin-bottom: 0.25rem; font-size: 0.9rem;">To:</label>
+                <input type="date" name="date_to" id="date_to" value="{{ date_to }}" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
+            </div>
+            <div>
+                <label for="character" style="display: block; margin-bottom: 0.25rem; font-size: 0.9rem;">Pilot:</label>
+                <select name="character" id="character" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
+                    <option value="">All Pilots</option>
+                    {% for char in characters %}
+                    <option value="{{ char.id }}" {% if character_filter == char.id|stringformat:"s" %}selected{% endif %}>{{ char.character_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="ore" style="display: block; margin-bottom: 0.25rem; font-size: 0.9rem;">Ore Type:</label>
+                <select name="ore" id="ore" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
+                    <option value="">All Ore Types</option>
+                    {% for type_id, name in sorted_ores %}
+                    <option value="{{ type_id }}" {% if ore_filter == type_id|stringformat:"s" %}selected{% endif %}>{{ name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn">Apply Filters</button>
+            {% if date_from or date_to or character_filter or ore_filter %}
+            <a href="{% url 'core:mining_ledger' %}" class="btn" style="background: var(--text-secondary);">Clear</a>
+            {% endif %}
+        </form>
+
+        {% if entries %}
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 2px solid var(--border-color);">
+                    <th style="padding: 0.75rem; text-align: left;">Date</th>
+                    <th style="padding: 0.75rem; text-align: left;">Pilot</th>
+                    <th style="padding: 0.75rem; text-align: left;">Ore Type</th>
+                    <th style="padding: 0.75rem; text-align: left;">System</th>
+                    <th style="padding: 0.75rem; text-align: right;">Quantity (m3)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in entries %}
+                <tr style="border-bottom: 1px solid var(--table-border);">
+                    <td style="padding: 0.75rem;">{{ entry.date|date:"M d, Y" }}</td>
+                    <td style="padding: 0.75rem;">{{ entry.character.character_name }}</td>
+                    <td style="padding: 0.75rem;">{{ entry.ore_name }}</td>
+                    <td style="padding: 0.75rem;">{{ entry.system_name }}</td>
+                    <td style="padding: 0.75rem; text-align: right; font-variant-numeric: tabular-nums;">{{ entry.quantity|intcomma }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- Pagination -->
+        {% if entries.has_other_pages %}
+        <div style="margin-top: 1.5rem; display: flex; justify-content: center; gap: 0.5rem; align-items: center;">
+            {% if entries.has_previous %}
+            <a href="?page={{ entries.previous_page_number }}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}{% if character_filter %}&character={{ character_filter }}{% endif %}{% if ore_filter %}&ore={{ ore_filter }}{% endif %}" class="btn">&laquo; Previous</a>
+            {% endif %}
+
+            <span style="font-size: 0.9rem;">
+                Page {{ entries.number }} of {{ entries.paginator.num_pages }}
+            </span>
+
+            {% if entries.has_next %}
+            <a href="?page={{ entries.next_page_number }}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}{% if character_filter %}&character={{ character_filter }}{% endif %}{% if ore_filter %}&ore={{ ore_filter }}{% endif %}" class="btn">Next &raquo;</a>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% else %}
+        <p style="color: var(--text-secondary);">No mining ledger data found. Make sure your characters have the <code>esi-industry.read_character_mining.v1</code> scope and have re-authenticated.</p>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function toggleBreakdown(id) {
+    const breakdown = document.getElementById(id + '-breakdown');
+    breakdown.classList.toggle('show');
+}
+</script>
+{% endblock %}

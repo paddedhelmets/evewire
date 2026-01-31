@@ -1079,3 +1079,122 @@ def contracts_list(request: HttpRequest, character_id: int = None) -> HttpRespon
         'characters': characters,
     })
 
+
+# Mining Ledger Views
+
+@login_required
+def mining_ledger(request: HttpRequest, character_id: int = None) -> HttpResponse:
+    """Multi-pilot mining ledger view with aggregate stats and ledger table."""
+    from core.models import Character
+    from core.character.models import MiningLedgerEntry
+    from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+    from django.db.models import Sum, Q
+    from datetime import datetime, timedelta
+
+    # Get all characters for this user
+    characters = request.user.characters.all()
+
+    # Get filter parameters
+    date_from = request.GET.get('date_from', '')
+    date_to = request.GET.get('date_to', '')
+    character_filter = request.GET.get('character')
+    ore_filter = request.GET.get('ore')
+    group_by = request.GET.get('group_by', 'date')  # date, ore, system, character
+
+    # Build queryset across all pilots
+    entries_qs = MiningLedgerEntry.objects.filter(character__user=request.user)
+
+    # Apply character filter if selected
+    if character_filter:
+        entries_qs = entries_qs.filter(character_id=character_filter)
+
+    # Apply ore type filter
+    if ore_filter:
+        entries_qs = entries_qs.filter(type_id=ore_filter)
+
+    # Apply date range filter
+    if date_from:
+        try:
+            date_from_dt = datetime.strptime(date_from, '%Y-%m-%d').date()
+            entries_qs = entries_qs.filter(date__gte=date_from_dt)
+        except ValueError:
+            pass
+
+    if date_to:
+        try:
+            date_to_dt = datetime.strptime(date_to, '%Y-%m-%d').date()
+            entries_qs = entries_qs.filter(date__lte=date_to_dt)
+        except ValueError:
+            pass
+
+    # Default to last 30 days if no filter
+    if not date_from and not date_to:
+        thirty_days_ago = timezone.now().date() - timedelta(days=30)
+        entries_qs = entries_qs.filter(date__gte=thirty_days_ago)
+
+    # Order by date (newest first)
+    entries_qs = entries_qs.select_related('character').order_by('-date', '-quantity')
+
+    # Pagination
+    paginator = Paginator(entries_qs, 50)
+    page = request.GET.get('page', 1)
+    try:
+        entries = paginator.page(page)
+    except PageNotAnInteger:
+        entries = paginator.page(1)
+    except EmptyPage:
+        entries = paginator.page(paginator.num_pages)
+
+    # Build per-pilot stats (last 30 days)
+    thirty_days_ago = timezone.now().date() - timedelta(days=30)
+    pilot_stats = []
+    for char in characters:
+        pilot_entries = MiningLedgerEntry.objects.filter(
+            character=char,
+            date__gte=thirty_days_ago
+        )
+
+        total_volume = pilot_entries.aggregate(total=Sum('quantity'))['total'] or 0
+
+        # Get top ore types for this pilot
+        top_ores = pilot_entries.values('type_id').annotate(
+            volume=Sum('quantity')
+        ).order_by('-volume')[:5]
+
+        pilot_stats.append({
+            'character': char,
+            'total_volume': total_volume,
+            'top_ores': list(top_ores),
+        })
+
+    # Get distinct ore types for filter dropdown
+    from core.eve.models import ItemType
+    all_ore_types = MiningLedgerEntry.objects.filter(
+        character__user=request.user
+    ).values_list('type_id', flat=True).distinct()
+
+    # Get ore names for display
+    ore_names = {}
+    for type_id in all_ore_types:
+        try:
+            item = ItemType.objects.get(id=type_id)
+            ore_names[type_id] = item.name
+        except ItemType.DoesNotExist:
+            ore_names[type_id] = f"Ore {type_id}"
+
+    # Sort ore names for dropdown
+    sorted_ores = sorted(ore_names.items(), key=lambda x: x[1])
+
+    return render(request, 'core/mining_ledger.html', {
+        'entries': entries,
+        'date_from': date_from,
+        'date_to': date_to,
+        'character_filter': character_filter,
+        'ore_filter': ore_filter,
+        'group_by': group_by,
+        'pilot_stats': pilot_stats,
+        'characters': characters,
+        'ore_names': dict(sorted_ores),
+        'sorted_ores': sorted_ores,
+    })
+

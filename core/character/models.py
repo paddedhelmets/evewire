@@ -1866,3 +1866,90 @@ class ContractItem(models.Model):
             return float(self.quantity) * price
         except ItemType.DoesNotExist:
             return 0.0
+
+
+class MiningLedgerEntry(models.Model):
+    """
+    A mining ledger entry for a character.
+
+    From ESI: GET /characters/{character_id}/mining/
+
+    ESI returns 90 days of aggregated mining data, grouped by
+    date, solar_system_id, and type_id. Quantities are aggregated.
+
+    Response format:
+    [
+        {"date": "2017-09-21", "solar_system_id": 30002537, "type_id": 1227, "quantity": 5092},
+        ...
+    ]
+
+    The quantity represents the total volume (m3) of ore mined.
+    """
+
+    character = models.ForeignKey(
+        'core.Character',
+        on_delete=models.CASCADE,
+        related_name='mining_entries'
+    )
+
+    # ESI mining ledger fields
+    date = models.DateField(db_index=True)
+    solar_system_id = models.IntegerField(db_index=True)  # FK to SolarSystem
+    type_id = models.IntegerField(db_index=True)  # FK to ItemType (ore type)
+    quantity = models.IntegerField(default=0)  # Volume in m3
+
+    # Cache metadata
+    synced_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = _('mining ledger entry')
+        verbose_name_plural = _('mining ledger entries')
+        ordering = ['-date', '-quantity']
+        unique_together = [['character', 'date', 'solar_system_id', 'type_id']]
+        db_table = 'core_miningledgerentry'
+
+    def __str__(self) -> str:
+        return f"{self.character.name}: {self.date} {self.ore_name} x{self.quantity} m3 in {self.system_name}"
+
+    @property
+    def ore_name(self) -> str:
+        """Get the ore type name from ItemType."""
+        from core.eve.models import ItemType
+        try:
+            return ItemType.objects.get(id=self.type_id).name
+        except ItemType.DoesNotExist:
+            return f"Ore {self.type_id}"
+
+    @property
+    def system_name(self) -> str:
+        """Get the solar system name from SolarSystem."""
+        from core.eve.models import SolarSystem
+        try:
+            return SolarSystem.objects.get(id=self.solar_system_id).name
+        except SolarSystem.DoesNotExist:
+            return f"System {self.solar_system_id}"
+
+    @property
+    def volume_m3(self) -> int:
+        """Get the mined volume in cubic meters."""
+        return self.quantity
+
+    @property
+    def estimated_units(self) -> int:
+        """
+        Estimate the number of ore units based on volume.
+
+        This requires getting the ore type's volume from ItemType.
+        Volume varies by ore type (e.g., Veldspar is 0.1 m3, Arkonor is 16 m3).
+        """
+        from core.eve.models import ItemType
+        try:
+            ore_type = ItemType.objects.get(id=self.type_id)
+            # Volume is stored as 'packagedVolume' in SDE
+            # For ores, this is the volume per unit
+            volume = float(ore_type.packaged_volume or ore_type.volume or 1.0)
+            if volume > 0:
+                return int(self.quantity / volume)
+            return self.quantity
+        except ItemType.DoesNotExist:
+            return self.quantity

@@ -875,6 +875,25 @@ class ESIClient:
         """Get items in a specific contract."""
         return cls.get(f'/characters/{character.id}/contracts/{contract_id}/items/', character)
 
+    @classmethod
+    def get_mining_ledger(cls, character) -> ESIResponse:
+        """
+        Get character mining ledger.
+
+        ESI Endpoint: GET /characters/{character_id}/mining/
+        Scope: esi-industry.read_character_mining.v1
+
+        Returns 90 days of aggregated mining data, grouped by
+        date, solar_system_id, and type_id. Quantities are aggregated.
+
+        Response format:
+        [
+            {"date": "2017-09-21", "solar_system_id": 30002537, "type_id": 1227, "quantity": 5092},
+            ...
+        ]
+        """
+        return cls.get(f'/characters/{character.id}/mining/', character)
+
     # Public reference endpoints
 
     @classmethod
@@ -2583,6 +2602,57 @@ def __sync_contract_items(character, contract) -> None:
             contract=contract,
             item_id__in=items_to_delete
         ).delete()
+
+
+def __sync_mining_ledger(character) -> None:
+    """
+    Sync character mining ledger from ESI.
+
+    ESI returns 90 days of aggregated mining data, grouped by
+    date, solar_system_id, and type_id. Quantities are aggregated.
+
+    This replaces existing ledger entries for the character each sync
+    since ESI provides the full 90-day history.
+    """
+    from core.character.models import MiningLedgerEntry
+
+    response = ESIClient.get_mining_ledger(character)
+    ledger_data = response.data
+
+    if not ledger_data:
+        # No mining data - clear existing entries
+        MiningLedgerEntry.objects.filter(character=character).delete()
+        return
+
+    # Delete all existing entries for this character
+    # ESI provides full 90-day history, so we replace rather than merge
+    MiningLedgerEntry.objects.filter(character=character).delete()
+
+    # Create new entries in bulk
+    entries = []
+    for entry_data in ledger_data:
+        # Parse date string (format: "2017-09-21")
+        mining_date = entry_data.get('date')
+        if mining_date:
+            from datetime import datetime
+            try:
+                mining_date = datetime.strptime(mining_date, '%Y-%m-%d').date()
+            except ValueError:
+                logger.warning(f'Invalid date format in mining ledger: {mining_date}')
+                continue
+
+        entries.append(MiningLedgerEntry(
+            character=character,
+            date=mining_date,
+            solar_system_id=entry_data.get('solar_system_id'),
+            type_id=entry_data.get('type_id'),
+            quantity=entry_data.get('quantity', 0),
+        ))
+
+    # Bulk create all entries
+    MiningLedgerEntry.objects.bulk_create(entries, batch_size=500)
+
+    logger.info(f'Synced {len(entries)} mining ledger entries for character {character.id}')
 
 
 def sync_character_location(character_id: int) -> bool:
