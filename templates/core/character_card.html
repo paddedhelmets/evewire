@@ -30,7 +30,10 @@
         <div class="progress-bar-container">
             <div class="progress" style="width: {{ training.progress_percent }}%"></div>
         </div>
-        <div class="time-remaining">{{ training.time_remaining }} remaining</div>
+        <div class="training-details">
+            <span class="time-remaining">{{ training.time_remaining }} remaining</span>
+            <span class="sp-per-hour">@ {{ training.sp_per_hour|commas }} SP/hr</span>
+        </div>
     </div>
     {% endif %}
 </div>
@@ -128,9 +131,19 @@
     transition: width 0.3s ease;
 }
 
-.time-remaining {
+.training-details {
+    display: flex;
+    justify-content: space-between;
     font-size: 0.8rem;
     color: var(--text-secondary);
+}
+
+.time-remaining {
+    text-align: left;
+}
+
+.sp-per-hour {
+    text-align: right;
 }
 
 [data-theme="dark"] .progress-bar-container .progress {

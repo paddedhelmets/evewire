@@ -229,12 +229,12 @@ class SkillQueueItem(models.Model):
         primary_attr = TypeAttribute.objects.filter(
             type_id=self.skill_id,
             attribute_id=PRIMARY_ATTR_ID
-        ).values_list('value_float', flat=True).first()
+        ).values_list('value_int', flat=True).first()
 
         secondary_attr = TypeAttribute.objects.filter(
             type_id=self.skill_id,
             attribute_id=SECONDARY_ATTR_ID
-        ).values_list('value_float', flat=True).first()
+        ).values_list('value_int', flat=True).first()
 
         if not primary_attr or not secondary_attr:
             return 0
