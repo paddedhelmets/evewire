@@ -1658,6 +1658,9 @@ class Contract(models.Model):
     - alliance: Alliance contract
     """
 
+    # Surrogate primary key - contract_id alone is not unique across characters
+    id = models.BigAutoField(primary_key=True)
+
     character = models.ForeignKey(
         'core.Character',
         on_delete=models.CASCADE,
@@ -1665,7 +1668,7 @@ class Contract(models.Model):
     )
 
     # ESI contract fields
-    contract_id = models.BigIntegerField(primary_key=True)
+    contract_id = models.BigIntegerField(db_index=True)  # Not unique - same contract can appear for multiple characters
     type = models.CharField(max_length=20)  # item_exchange, auction, courier, loan
     status = models.CharField(max_length=25, db_index=True)  # outstanding, in_progress, finished, etc.
     title = models.CharField(max_length=255, blank=True)
@@ -1697,6 +1700,7 @@ class Contract(models.Model):
         verbose_name = _('contract')
         verbose_name_plural = _('contracts')
         ordering = ['-date_issued']
+        unique_together = [['character', 'contract_id']]  # A character can only see a contract once
 
     def __str__(self) -> str:
         return f"{self.character.name}: {self.type} contract {self.contract_id} [{self.status}]"

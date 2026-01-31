@@ -2565,38 +2565,19 @@ def __sync_contracts(character) -> None:
 
         page += 1
 
-    # Get existing contracts for this character
-    existing_contracts = {
-        contract.contract_id: contract
-        for contract in Contract.objects.filter(character=character)
-    }
-    existing_contract_ids = set(existing_contracts.keys())
-    incoming_contract_ids = {contract['contract_id'] for contract in all_contracts_data}
-
-    # Track seen contract IDs
+    # Track seen contract IDs for deletion of old contracts
     seen_contract_ids = set()
 
-    # Process incoming contracts
+    # Process incoming contracts using update_or_create for race-condition safety
     for contract_data in all_contracts_data:
         contract_id = contract_data['contract_id']
         seen_contract_ids.add(contract_id)
         new_status = contract_data.get('status', 'unknown')
 
-        # Check if this is an existing contract with status change
-        if contract_id in existing_contracts:
-            existing_contract = existing_contracts[contract_id]
-            old_status = existing_contract.status
-
-            # Log status change
-            if old_status != new_status:
-                logger.info(
-                    f'Contract {contract_id} status change: '
-                    f'{old_status} -> {new_status} '
-                    f'(character: {character.id})'
-                )
-
-            # Update contract data
-            for field, value in {
+        contract, created = Contract.objects.update_or_create(
+            character=character,
+            contract_id=contract_id,
+            defaults={
                 'type': contract_data.get('type'),
                 'status': new_status,
                 'title': contract_data.get('title', ''),
@@ -2616,46 +2597,28 @@ def __sync_contracts(character) -> None:
                 'collateral': contract_data.get('collateral'),
                 'buyout': contract_data.get('buyout'),
                 'volume': contract_data.get('volume'),
-            }.items():
-                setattr(existing_contract, field, value)
+            }
+        )
 
-            existing_contract.save()
+        # Log status changes for existing contracts
+        if not created:
+            old_status = contract.status  # This is the status from the DB before update
+            if old_status != new_status:
+                logger.info(
+                    f'Contract {contract_id} status change: '
+                    f'{old_status} -> {new_status} '
+                    f'(character: {character.id})'
+                )
 
-            # Sync contract items for active contracts
-            if existing_contract.is_active:
-                _sync_contract_items(character, existing_contract)
-        else:
-            # Create new contract
-            new_contract = Contract.objects.create(
-                character=character,
-                contract_id=contract_id,
-                type=contract_data.get('type'),
-                status=new_status,
-                title=contract_data.get('title', ''),
-                for_corporation=contract_data.get('for_corporation', False),
-                availability=contract_data.get('availability'),
-                date_issued=contract_data.get('date_issued'),
-                date_expired=contract_data.get('date_expired'),
-                date_accepted=contract_data.get('date_accepted'),
-                date_completed=contract_data.get('date_completed'),
-                issuer_id=contract_data.get('issuer_id'),
-                issuer_corporation_id=contract_data.get('issuer_corporation_id'),
-                assignee_id=contract_data.get('assignee_id'),
-                acceptor_id=contract_data.get('acceptor_id'),
-                days_to_complete=contract_data.get('days_to_complete'),
-                price=contract_data.get('price'),
-                reward=contract_data.get('reward'),
-                collateral=contract_data.get('collateral'),
-                buyout=contract_data.get('buyout'),
-                volume=contract_data.get('volume'),
-            )
-
-            # Sync contract items for active contracts
-            if new_contract.is_active:
-                _sync_contract_items(character, new_contract)
+        # Sync contract items for active contracts
+        if contract.is_active:
+            _sync_contract_items(character, contract)
 
     # Delete contracts that are no longer returned
     # (ESI retains completed contracts for ~30 days, after which they're gone)
+    existing_contract_ids = set(
+        Contract.objects.filter(character=character).values_list('contract_id', flat=True)
+    )
     contracts_to_delete = existing_contract_ids - seen_contract_ids
     if contracts_to_delete:
         Contract.objects.filter(
