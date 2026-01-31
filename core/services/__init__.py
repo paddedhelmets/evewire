@@ -14,6 +14,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
 from django.db import transaction
+from django_q.tasks import async_task
 
 logger = logging.getLogger('evewire')
 
@@ -1442,29 +1443,29 @@ def sync_character_full(character_id: int) -> bool:
     except Exception as e:
         logger.warning(f'Failed to fetch basic info for {character.id}: {e}')
 
-    # Queue lightweight sync tasks with HIGHER priority (run first)
+    # Queue lightweight sync tasks first
     group_id = f'sync_character_{character_id}'
 
-    async_task('core.services._sync_skills', character_id, group=group_id, priority=1)
-    async_task('core.services._sync_skill_queue', character_id, group=group_id, priority=1)
-    async_task('core.services._sync_attributes', character_id, group=group_id, priority=1)
-    async_task('core.services._sync_implants', character_id, group=group_id, priority=1)
-    async_task('core.services._sync_location', character_id, group=group_id, priority=1)
-    async_task('core.services._sync_wallet_balance', character_id, group=group_id, priority=1)
-    async_task('core.services._sync_orders', character_id, group=group_id, priority=1)
-    async_task('core.services._sync_orders_history', character_id, group=group_id, priority=1)
-    async_task('core.services._sync_industry_jobs', character_id, group=group_id, priority=1)
-    async_task('core.services._sync_contracts', character_id, group=group_id, priority=1)
+    async_task('core.services._sync_skills', character_id, group=group_id)
+    async_task('core.services._sync_skill_queue', character_id, group=group_id)
+    async_task('core.services._sync_attributes', character_id, group=group_id)
+    async_task('core.services._sync_implants', character_id, group=group_id)
+    async_task('core.services._sync_location', character_id, group=group_id)
+    async_task('core.services._sync_wallet_balance', character_id, group=group_id)
+    async_task('core.services._sync_orders', character_id, group=group_id)
+    async_task('core.services._sync_orders_history', character_id, group=group_id)
+    async_task('core.services._sync_industry_jobs', character_id, group=group_id)
+    async_task('core.services._sync_contracts', character_id, group=group_id)
 
-    # Queue heavy sync tasks with LOWER priority (run last)
-    async_task('core.services._sync_assets', character_id, priority=0)
-    async_task('core.services._sync_wallet_journal_full', character_id, priority=0)
-    async_task('core.services._sync_wallet_transactions_full', character_id, priority=0)
+    # Queue heavy sync tasks last (assets and wallet journal take longest)
+    async_task('core.services._sync_assets', character_id)
+    async_task('core.services._sync_wallet_journal_full', character_id)
+    async_task('core.services._sync_wallet_transactions_full', character_id)
 
-    # Queue finalizer at higher priority to run quickly after light tasks
-    async_task('core.services._finalize_sync', character_id, group=group_id, priority=1)
+    # Queue finalizer
+    async_task('core.services._finalize_sync', character_id, group=group_id)
 
-    logger.info(f'Queued full sync (lightweight first, heavy last) for character {character.id}')
+    logger.info(f'Queued full sync for character {character.id}')
     return True
 
 
