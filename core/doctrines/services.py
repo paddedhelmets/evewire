@@ -507,7 +507,7 @@ class LocationCapacity:
 
         # Calculate used volume from children
         used_volume = 0.0
-        for child in asset.get_children():
+        for child in asset.children.all():
             try:
                 child_type = ItemType.objects.get(id=child.type_id)
                 volume = float(child_type.volume or 0)

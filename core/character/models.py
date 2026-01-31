@@ -10,7 +10,7 @@ from typing import Optional, Dict
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from mptt.models import MPTTModel, TreeForeignKey
+from django.db import models
 from django.core.exceptions import ObjectDoesNotExist
 
 
@@ -411,14 +411,15 @@ class CharacterImplant(models.Model):
             return 0
 
 
-class CharacterAsset(MPTTModel):
+class CharacterAsset(models.Model):
     """
     An asset owned by a character.
 
     From ESI: GET /characters/{character_id}/assets/
 
     Assets form a hierarchical tree (e.g., ship in hangar, modules in ship).
-    Uses django-mptt for efficient tree queries.
+    Hierarchy is stored via parent field; location_id/location_type from ESI
+    provides the full location context.
 
     Item fields from swagger spec:
     - is_blueprint_copy: boolean
@@ -447,17 +448,15 @@ class CharacterAsset(MPTTModel):
     is_singleton = models.BooleanField(default=False)
     is_blueprint_copy = models.BooleanField(default=False)
 
-    # Tree structure (MPTT fields are auto-added)
-    parent = TreeForeignKey(
+    # Parent relationship for nested items (modules in ship, items in container, etc.)
+    # Only set when location_id points to another character asset
+    parent = models.ForeignKey(
         'self',
         on_delete=models.CASCADE,
         null=True,
         blank=True,
         related_name='children'
     )
-
-    # Separate MPTT tree per character to avoid rebuild contention
-    tree_id = models.PositiveIntegerField(default=0)
 
     # Cache metadata
     synced_at = models.DateTimeField(auto_now_add=True)
@@ -469,9 +468,6 @@ class CharacterAsset(MPTTModel):
         verbose_name = _('character asset')
         verbose_name_plural = _('character assets')
         ordering = ['character', 'location_id', 'location_flag']
-
-    class MPTTMeta:
-        tree_id_field = 'tree_id'
 
     def __str__(self) -> str:
         return f"{self.character.name}: {self.type_name} x{self.quantity}"
@@ -495,9 +491,14 @@ class CharacterAsset(MPTTModel):
     @property
     def total_quantity(self) -> int:
         """Get total quantity including all children."""
-        if self.is_leaf_node():
+        # Check if this asset has any children
+        if not self.children.exists():
             return self.quantity
-        return sum(child.quantity for child in self.get_descendants())
+        # Sum all descendant quantities recursively
+        total = self.quantity
+        for child in self.children.all():
+            total += child.total_quantity
+        return total
 
     @property
     def location_name(self) -> str:

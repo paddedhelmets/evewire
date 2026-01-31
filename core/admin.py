@@ -4,7 +4,7 @@ Django admin configuration for evewire.
 
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from mptt.admin import MPTTModelAdmin
+# MPTT no longer needed for assets
 from .models import User, Character, AuditLog
 from .eve.models import ItemType, SolarSystem, Station, Region, Faction, Corporation, Alliance
 from .character.models import CharacterSkill, SkillQueueItem, CharacterAsset, WalletJournalEntry, WalletTransaction, MarketOrder
@@ -170,7 +170,7 @@ class SkillQueueItemAdmin(admin.ModelAdmin):
 
 
 @admin.register(CharacterAsset)
-class CharacterAssetAdmin(MPTTModelAdmin):
+class CharacterAssetAdmin(admin.ModelAdmin):
     """Admin interface for CharacterAsset model."""
 
     list_display = ['character', 'item_id', 'type_name', 'quantity', 'location_flag', 'location_name']

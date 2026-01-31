@@ -1180,13 +1180,19 @@ def fitting_readiness_browser(request: HttpRequest, fitting_id: int) -> HttpResp
             stations = {}
             solar_systems = {}
             structures = {}
+
+            # Helper function to find root location asset
+            def get_root_location(asset):
+                """Walk parent chain to find the root location asset."""
+                current = asset
+                # Walk up parent chain until we find an asset not inside another item
+                while current.parent and current.location_type == 'item':
+                    current = current.parent
+                return current
+
             for asset in owned_assets:
-                # Get root location safely - handle corrupted MPTT trees
-                try:
-                    root = asset.get_root()
-                except:
-                    # Fallback: get the highest-level ancestor
-                    root = asset.get_ancestors(ascending=True).first() or asset
+                # Get root location by walking parent chain
+                root = get_root_location(asset)
 
                 # Cache the location for display
                 if root.location_type == 'station':
