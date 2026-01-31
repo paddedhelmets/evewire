@@ -1081,6 +1081,7 @@ class AuthService:
             existing_character.corporation_id = corporation_id
             existing_character.last_sync_status = SyncStatus.PENDING
             existing_character.last_sync_error = ''
+            existing_character.needs_reauth = False  # Clear re-auth flag
             existing_character.save()
             character = existing_character
             user = existing_character.user
@@ -1104,6 +1105,7 @@ class AuthService:
                 existing_character.token_expires = timezone.now() + timedelta(seconds=expires_in)
                 existing_character.character_name = character_name
                 existing_character.corporation_id = corporation_id
+                existing_character.needs_reauth = False  # Clear re-auth flag
                 existing_character.save()
                 character = existing_character
 
@@ -1138,6 +1140,7 @@ class AuthService:
                 existing_character.token_expires = timezone.now() + timedelta(seconds=expires_in)
                 existing_character.character_name = character_name
                 existing_character.corporation_id = corporation_id
+                existing_character.needs_reauth = False  # Clear re-auth flag
                 existing_character.save()
                 character = existing_character
                 created = False
@@ -2596,7 +2599,7 @@ def __sync_contracts(character) -> None:
     character.save(update_fields=['contracts_synced_at'])
 
 
-def __sync_contract_items(character, contract) -> None:
+def _sync_contract_items(character, contract) -> None:
     """
     Sync items for a specific contract from ESI.
 
@@ -2627,10 +2630,15 @@ def __sync_contract_items(character, contract) -> None:
         for item in ContractItem.objects.filter(contract=contract)
     }
     existing_item_ids = set(existing_items.keys())
-    incoming_item_ids = {item['item_id'] for item in items_data}
+    incoming_item_ids = {item['item_id'] for item in items_data if 'item_id' in item}
 
     # Process incoming items
     for item_data in items_data:
+        # Skip items without item_id (some contract types may not have this field)
+        if 'item_id' not in item_data:
+            logger.warning(f"Contract item missing item_id: contract_id={contract.contract_id}, item_data={item_data}")
+            continue
+
         item_id = item_data['item_id']
 
         if item_id in existing_items:

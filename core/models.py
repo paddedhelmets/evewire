@@ -330,6 +330,10 @@ class Character(models.Model):
     contracts_synced_at = models.DateTimeField(null=True, blank=True)
 
     # Sync status
+    needs_reauth = models.BooleanField(
+        default=False,
+        help_text=_('User must re-authenticate via SSO to restore sync functionality')
+    )
     last_sync_status = models.CharField(
         max_length=20,
         choices=SyncStatus.choices,

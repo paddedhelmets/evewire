@@ -220,6 +220,8 @@ def refresh_stale_characters() -> dict:
 
     Adds random jitter (0-30 seconds) to each task to prevent thundering herd
     when multiple characters are queued simultaneously.
+
+    Excludes characters with needs_reauth=True (revoked/invalid tokens).
     """
     from core.models import Character
     from django.utils import timezone
@@ -227,8 +229,11 @@ def refresh_stale_characters() -> dict:
     stale_cutoff = timezone.now() - timezone.timedelta(minutes=10)
 
     # Characters that haven't synced in 10 minutes, or never synced
+    # Exclude characters needing re-auth (revoked/invalid tokens)
     stale_characters = list(Character.objects.filter(
         models.Q(last_sync__lt=stale_cutoff) | models.Q(last_sync__isnull=True)
+    ).exclude(
+        needs_reauth=True
     ))
 
     queued = 0
@@ -317,7 +322,23 @@ def _sync_character_metadata(character_id: int, **kwargs) -> bool:
             character = Character.objects.get(id=character_id)
             character.last_sync_status = 'failed'
             character.last_sync_error = str(e)[:500]
-            character.save(update_fields=['last_sync_status', 'last_sync_error'])
+
+            # Detect token-related errors and mark for re-auth
+            error_msg = str(e).lower()
+            token_error_patterns = [
+                'no access token available',
+                'invalid_token',
+                'expired_token',
+                'refresh token',
+                'token expired',
+                'invalid grant',
+                'authorization required',
+            ]
+            if any(pattern in error_msg for pattern in token_error_patterns):
+                character.needs_reauth = True
+                logger.warning(f'Character {character_id} marked for re-auth due to token error: {e}')
+
+            character.save(update_fields=['last_sync_status', 'last_sync_error', 'needs_reauth'])
         except:
             pass
         return False
@@ -331,6 +352,8 @@ def refresh_stale_assets() -> dict:
     Interval: 1 hour
 
     Adds random jitter (0-60 seconds) to spread out asset fetches.
+
+    Excludes characters with needs_reauth=True (revoked/invalid tokens).
     """
     from core.models import Character
     from django.utils import timezone
@@ -338,8 +361,11 @@ def refresh_stale_assets() -> dict:
     stale_cutoff = timezone.now() - timezone.timedelta(hours=1)
 
     # Characters that haven't had assets synced in 1 hour, or never synced
+    # Exclude characters needing re-auth (revoked/invalid tokens)
     stale_characters = list(Character.objects.filter(
         models.Q(assets_synced_at__lt=stale_cutoff) | models.Q(assets_synced_at__isnull=True)
+    ).exclude(
+        needs_reauth=True
     ))
 
     queued = 0
@@ -370,6 +396,27 @@ def _sync_character_assets(character_id: int, **kwargs) -> bool:
 
     except Exception as e:
         logger.error(f'Failed to sync assets for character {character_id}: {e}')
+        # Check for token-related errors
+        error_msg = str(e).lower()
+        token_error_patterns = [
+            'no access token available',
+            'invalid_token',
+            'expired_token',
+            'refresh token',
+            'token expired',
+            'invalid grant',
+            'authorization required',
+        ]
+        if any(pattern in error_msg for pattern in token_error_patterns):
+            try:
+                character = Character.objects.get(id=character_id)
+                character.needs_reauth = True
+                character.last_sync_status = 'failed'
+                character.last_sync_error = str(e)[:500]
+                character.save(update_fields=['needs_reauth', 'last_sync_status', 'last_sync_error'])
+                logger.warning(f'Character {character_id} marked for re-auth due to token error')
+            except:
+                pass
         return False
 
 
@@ -383,6 +430,8 @@ def refresh_stale_skills() -> dict:
     Interval: 30 minutes (check frequency)
 
     Adds random jitter (0-20 seconds) to spread out skill fetches.
+
+    Excludes characters with needs_reauth=True (revoked/invalid tokens).
     """
     from core.models import Character
     from core.character.models import SkillQueueItem
@@ -391,7 +440,7 @@ def refresh_stale_skills() -> dict:
     soon_cutoff = timezone.now() + timezone.timedelta(hours=2)
     queued = 0
 
-    for character in Character.objects.all():
+    for character in Character.objects.exclude(needs_reauth=True):
         # Check if any skill in queue finishes within 2 hours
         finishing_soon = SkillQueueItem.objects.filter(
             character=character,
@@ -431,6 +480,27 @@ def _sync_character_skills(character_id: int, **kwargs) -> bool:
 
     except Exception as e:
         logger.error(f'Failed to sync skills for character {character_id}: {e}')
+        # Check for token-related errors
+        error_msg = str(e).lower()
+        token_error_patterns = [
+            'no access token available',
+            'invalid_token',
+            'expired_token',
+            'refresh token',
+            'token expired',
+            'invalid grant',
+            'authorization required',
+        ]
+        if any(pattern in error_msg for pattern in token_error_patterns):
+            try:
+                character = Character.objects.get(id=character_id)
+                character.needs_reauth = True
+                character.last_sync_status = 'failed'
+                character.last_sync_error = str(e)[:500]
+                character.save(update_fields=['needs_reauth', 'last_sync_status', 'last_sync_error'])
+                logger.warning(f'Character {character_id} marked for re-auth due to token error')
+            except:
+                pass
         return False
 
 
