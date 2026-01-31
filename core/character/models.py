@@ -1464,7 +1464,7 @@ class IndustryJob(models.Model):
 
     # Location
     station_id = models.BigIntegerField(db_index=True)
-    solar_system_id = models.IntegerField(db_index=True)
+    solar_system_id = models.IntegerField(null=True, blank=True, db_index=True)  # Can be null for jobs in deleted structures
 
     # Timing
     start_date = models.DateTimeField(db_index=True)

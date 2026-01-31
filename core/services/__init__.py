@@ -2298,6 +2298,45 @@ def __sync_industry_jobs(character) -> None:
 
         page += 1
 
+    # Fetch solar_system_id for structure-based jobs
+    # ESI doesn't include solar_system_id in industry jobs response for structures
+    # We need to resolve them by calling universe/structures/{station_id}
+    structure_system_map = {}  # station_id -> solar_system_id
+    STRUCTURE_ID_THRESHOLD = 2**31  # ~2.1 billion, station IDs vs structure IDs
+
+    # Collect unique structure station_ids from jobs
+    structure_station_ids = set()
+    for job in all_jobs_data:
+        station_id = job.get('station_id')
+        if station_id and station_id > STRUCTURE_ID_THRESHOLD:
+            structure_station_ids.add(station_id)
+
+    if structure_station_ids:
+        # Get access token for structure fetch
+        from core.services import TokenManager
+        from core.esi_client import fetch_structure_info
+        token = TokenManager.get_access_token_for_character(character)
+
+        if token:
+            for station_id in structure_station_ids:
+                # Check if we already have this structure in DB
+                from core.eve.models import Structure
+                try:
+                    structure = Structure.objects.filter(structure_id=station_id).first()
+                    if structure and structure.solar_system_id:
+                        structure_system_map[station_id] = structure.solar_system_id
+                        continue
+                except:
+                    pass
+
+                # Fetch from ESI
+                result = fetch_structure_info(station_id, character_token=token)
+                if result and result.get('status') == 200:
+                    structure_system_map[station_id] = result['data']['solar_system_id']
+                    logger.debug(f'Resolved structure {station_id} -> system {structure_system_map[station_id]}')
+                else:
+                    logger.warning(f'Failed to fetch structure {station_id} for industry job')
+
     # Get existing jobs for this character
     existing_jobs = {
         job.job_id: job
@@ -2313,6 +2352,12 @@ def __sync_industry_jobs(character) -> None:
     for job_data in all_jobs_data:
         job_id = job_data['job_id']
         seen_job_ids.add(job_id)
+
+        # Resolve solar_system_id - ESI doesn't include it for structure-based jobs
+        station_id = job_data.get('station_id')
+        solar_system_id = job_data.get('solar_system_id')
+        if not solar_system_id and station_id in structure_system_map:
+            solar_system_id = structure_system_map[station_id]
 
         # Handle status - ESI may return strings or numbers
         raw_status = job_data.get('status', 999)
@@ -2351,7 +2396,7 @@ def __sync_industry_jobs(character) -> None:
                 'blueprint_location_id': job_data.get('blueprint_location_id'),
                 'product_type_id': job_data.get('product_type_id'),
                 'station_id': job_data.get('station_id'),
-                'solar_system_id': job_data.get('solar_system_id'),
+                'solar_system_id': solar_system_id,
                 'start_date': job_data.get('start_date'),
                 'end_date': job_data.get('end_date'),
                 'pause_date': job_data.get('pause_date'),
@@ -2378,7 +2423,7 @@ def __sync_industry_jobs(character) -> None:
                 blueprint_location_id=job_data.get('blueprint_location_id'),
                 product_type_id=job_data.get('product_type_id'),
                 station_id=job_data.get('station_id'),
-                solar_system_id=job_data.get('solar_system_id'),
+                solar_system_id=solar_system_id,
                 start_date=job_data.get('start_date'),
                 end_date=job_data.get('end_date'),
                 pause_date=job_data.get('pause_date'),
