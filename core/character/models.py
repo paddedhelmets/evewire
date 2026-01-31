@@ -219,22 +219,47 @@ class SkillQueueItem(models.Model):
         PERCEPTION_ATTR_ID = 167
         WILLPOWER_ATTR_ID = 168
 
+        # Mapping of attribute_id -> which value field to use in dgmTypeAttributes
+        # This is not provided by SDE, so we maintain it manually based on analysis
+        # True = use value_int, False = use value_float
+        ATTRIBUTE_VALUE_FIELD_MAP = {
+            # Skill training attributes (store attribute IDs as ints)
+            PRIMARY_ATTR_ID: True,
+            SECONDARY_ATTR_ID: True,
+        }
+
         try:
             # Get the character's attributes
             attrs = self.character.attributes
         except CharacterAttributes.DoesNotExist:
             return 0
 
-        # Get primary and secondary attribute IDs for this skill
-        primary_attr = TypeAttribute.objects.filter(
-            type_id=self.skill_id,
-            attribute_id=PRIMARY_ATTR_ID
-        ).values_list('value_int', flat=True).first()
+        # Determine which field to use for primary/secondary attributes
+        use_int_for_primary = ATTRIBUTE_VALUE_FIELD_MAP.get(PRIMARY_ATTR_ID, True)
+        use_int_for_secondary = ATTRIBUTE_VALUE_FIELD_MAP.get(SECONDARY_ATTR_ID, True)
 
-        secondary_attr = TypeAttribute.objects.filter(
-            type_id=self.skill_id,
-            attribute_id=SECONDARY_ATTR_ID
-        ).values_list('value_int', flat=True).first()
+        # Get primary and secondary attribute IDs for this skill
+        if use_int_for_primary:
+            primary_attr = TypeAttribute.objects.filter(
+                type_id=self.skill_id,
+                attribute_id=PRIMARY_ATTR_ID
+            ).values_list('value_int', flat=True).first()
+        else:
+            primary_attr = TypeAttribute.objects.filter(
+                type_id=self.skill_id,
+                attribute_id=PRIMARY_ATTR_ID
+            ).values_list('value_float', flat=True).first()
+
+        if use_int_for_secondary:
+            secondary_attr = TypeAttribute.objects.filter(
+                type_id=self.skill_id,
+                attribute_id=SECONDARY_ATTR_ID
+            ).values_list('value_int', flat=True).first()
+        else:
+            secondary_attr = TypeAttribute.objects.filter(
+                type_id=self.skill_id,
+                attribute_id=SECONDARY_ATTR_ID
+            ).values_list('value_float', flat=True).first()
 
         if not primary_attr or not secondary_attr:
             return 0
