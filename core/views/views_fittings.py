@@ -713,20 +713,16 @@ def shopping_list_detail(request: HttpRequest, list_id: int) -> HttpResponse:
                     'type_id': type_id,
                     'name': item_type.name,
                     'quantity': quantity,
-                    'base_price': float(item_type.base_price or 0),
-                    'total_value': float(item_type.base_price or 0) * quantity,
                 })
             except ItemType.DoesNotExist:
                 items_to_buy.append({
                     'type_id': type_id,
                     'name': f'Unknown Type {type_id}',
                     'quantity': quantity,
-                    'base_price': 0,
-                    'total_value': 0,
                 })
 
-    # Sort by total value descending
-    items_to_buy.sort(key=lambda x: x['total_value'], reverse=True)
+    # Sort by name
+    items_to_buy.sort(key=lambda x: x['name'])
 
     return render(request, 'core/shopping_list_detail.html', {
         'shopping_list': shopping_list,

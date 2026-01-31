@@ -42,12 +42,18 @@ def assets_export(request: HttpRequest, character_id: int = None) -> HttpRespons
             }, status=404)
 
     # Get all assets for this character
-    assets_qs = CharacterAsset.objects.filter(character=character).select_related('type')
+    assets_qs = CharacterAsset.objects.filter(character=character)
 
     # Apply filters from query string
     location_type = request.GET.get('location_type', '')
     if location_type:
         assets_qs = assets_qs.filter(location_type=location_type)
+
+    # Fetch all unique ItemTypes for these assets
+    from core.eve.models import ItemType
+    type_ids = set(assets_qs.values_list('type_id', flat=True))
+    item_types = ItemType.objects.filter(id__in=type_ids)
+    item_type_map = {it.id: it.name for it in item_types}
 
     # Create CSV response
     response = HttpResponse(content_type='text/csv')
@@ -68,21 +74,11 @@ def assets_export(request: HttpRequest, character_id: int = None) -> HttpRespons
         'Location Flag',
         'Is Singleton',
         'Is Blueprint Copy',
-        'Estimated Value (ISK)',
     ])
 
     # Write data rows
     for asset in assets_qs:
-        item_type = asset.type
-        item_name = item_type.name if item_type else f"Type {asset.type_id}"
-
-        # Calculate estimated value
-        if item_type and item_type.sell_price:
-            value = float(item_type.sell_price) * asset.quantity
-        elif item_type and item_type.base_price:
-            value = float(item_type.base_price) * asset.quantity
-        else:
-            value = 0.0
+        item_name = item_type_map.get(asset.type_id, f"Type {asset.type_id}")
 
         writer.writerow([
             asset.item_id,
@@ -94,7 +90,6 @@ def assets_export(request: HttpRequest, character_id: int = None) -> HttpRespons
             asset.location_flag,
             'Yes' if asset.is_singleton else 'No',
             'Yes' if asset.is_blueprint_copy else 'No',
-            f'{value:.2f}',
         ])
 
     return response
