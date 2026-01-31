@@ -37,7 +37,7 @@
         </div>
         <button type="submit" class="btn">Apply Filters</button>
         {% if buy_sell_filter or character_filter or date_from or date_to %}
-        <a href="{% url 'core:wallet_transactions' %}" class="btn" style="background: var(--text-secondary);">Clear</a>
+        <a href="{% url 'core:market_transactions' %}" class="btn" style="background: var(--text-secondary);">Clear</a>
         {% endif %}
     </form>
 </div>

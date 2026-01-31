@@ -1184,7 +1184,13 @@ def fitting_readiness_browser(request: HttpRequest, fitting_id: int) -> HttpResp
             solar_systems = {}
             structures = {}
             for asset in owned_assets:
-                root = asset.get_root()
+                # Get root location safely - handle corrupted MPTT trees
+                try:
+                    root = asset.get_root()
+                except:
+                    # Fallback: get the highest-level ancestor
+                    root = asset.get_ancestors(ascending=True).first() or asset
+
                 # Cache the location for display
                 if root.location_type == 'station':
                     if root.location_id not in stations:

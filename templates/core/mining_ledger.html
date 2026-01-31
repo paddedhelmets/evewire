@@ -83,13 +83,13 @@
         {% for stat in pilot_stats %}
         <div class="summary-card" onclick="toggleBreakdown('{{ stat.character.id }}')">
             <div class="summary-card-title">{{ stat.character.character_name }}</div>
-            <div class="summary-card-value">{{ stat.total_volume|intcomma }}</div>
+            <div class="summary-card-value">{{ stat.total_volume|commas }}</div>
             <div class="summary-card-sub">m3 (last 30 days)</div>
             <div class="pilot-breakdown" id="{{ stat.character.id }}-breakdown">
                 <div style="font-weight: 500; margin-bottom: 0.5rem;">Top Ore Types:</div>
                 <ul class="ore-list">
                     {% for ore in stat.top_ores %}
-                    <li>{{ ore.type_id }}: {{ ore.volume|intcomma }} m3</li>
+                    <li>{{ ore.type_id }}: {{ ore.volume|commas }} m3</li>
                     {% empty %}
                     <li>No mining data</li>
                     {% endfor %}
@@ -155,7 +155,7 @@
                     <td style="padding: 0.75rem;">{{ entry.character.character_name }}</td>
                     <td style="padding: 0.75rem;">{{ entry.ore_name }}</td>
                     <td style="padding: 0.75rem;">{{ entry.system_name }}</td>
-                    <td style="padding: 0.75rem; text-align: right; font-variant-numeric: tabular-nums;">{{ entry.quantity|intcomma }}</td>
+                    <td style="padding: 0.75rem; text-align: right; font-variant-numeric: tabular-nums;">{{ entry.quantity|commas }}</td>
                 </tr>
                 {% endfor %}
             </tbody>

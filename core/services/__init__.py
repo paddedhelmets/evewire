@@ -2004,6 +2004,9 @@ def __sync_assets(character) -> None:
             except CharacterAsset.DoesNotExist:
                 pass
 
+    # Rebuild MPTT tree to fix tree_id/level/lft/rght fields
+    CharacterAsset.objects.rebuild()
+
     # Queue structure refresh jobs for any unknown structure location_ids
     # This handles citadels/structures that are corp-owned but contain character assets
     _queue_structure_refreshes(character, assets_by_id)
