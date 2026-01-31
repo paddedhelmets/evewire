@@ -254,7 +254,7 @@ def _sync_character_metadata(character_id: int, **kwargs) -> bool:
     from core.services import (
         ESIClient, __sync_location, __sync_wallet_balance, __sync_orders,
         __sync_orders_history, __sync_industry_jobs, __sync_contracts,
-        update_character_corporation_info
+        __sync_mining_ledger, update_character_corporation_info
     )
     from requests.exceptions import HTTPError
 

@@ -2310,7 +2310,21 @@ def __sync_industry_jobs(character) -> None:
     for job_data in all_jobs_data:
         job_id = job_data['job_id']
         seen_job_ids.add(job_id)
-        new_status = job_data.get('status', 999)
+
+        # Handle status - ESI may return strings or numbers
+        raw_status = job_data.get('status', 999)
+        status_map = {
+            'active': 1,
+            'paused': 2,
+            'cancelled': 102,
+            'delivered': 104,
+            'failed': 105,
+            'unknown': 999,
+        }
+        if isinstance(raw_status, str):
+            new_status = status_map.get(raw_status.lower(), 999)
+        else:
+            new_status = raw_status if raw_status is not None else 999
 
         # Check if this is an existing job with status change
         if job_id in existing_jobs:
