@@ -296,7 +296,13 @@ def assets_summary(request: HttpRequest, character_id: int = None) -> HttpRespon
     assets_qs = CharacterAsset.objects.filter(
         character=character,
         parent=None
-    ).select_related('type')
+    )
+
+    # Fetch all unique ItemTypes for these assets to avoid N+1 queries
+    from core.eve.models import ItemType
+    type_ids = set(assets_qs.values_list('type_id', flat=True))
+    item_types = ItemType.objects.filter(id__in=type_ids)
+    item_type_map = {it.id: it for it in item_types}
 
     # Aggregate by location
     location_data = defaultdict(lambda: {
@@ -308,7 +314,7 @@ def assets_summary(request: HttpRequest, character_id: int = None) -> HttpRespon
 
     for asset in assets_qs:
         key = (asset.location_type, asset.location_id)
-        item_type = asset.type
+        item_type = item_type_map.get(asset.type_id)
 
         # Count each asset item (including quantity)
         quantity = asset.quantity
