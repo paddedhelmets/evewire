@@ -456,6 +456,9 @@ class CharacterAsset(MPTTModel):
         related_name='children'
     )
 
+    # Separate MPTT tree per character to avoid rebuild contention
+    tree_id = models.PositiveIntegerField(default=0)
+
     # Cache metadata
     synced_at = models.DateTimeField(auto_now_add=True)
 
@@ -466,6 +469,9 @@ class CharacterAsset(MPTTModel):
         verbose_name = _('character asset')
         verbose_name_plural = _('character assets')
         ordering = ['character', 'location_id', 'location_flag']
+
+    class MPTTMeta:
+        tree_id_field = 'tree_id'
 
     def __str__(self) -> str:
         return f"{self.character.name}: {self.type_name} x{self.quantity}"

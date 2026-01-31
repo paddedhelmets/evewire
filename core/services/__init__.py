@@ -2057,6 +2057,7 @@ def __sync_assets(character) -> None:
             location_flag=item_data.get('location_flag', ''),
             is_singleton=item_data.get('is_singleton', False),
             is_blueprint_copy=item_data.get('is_blueprint_copy', False),
+            tree_id=character.id,  # Each character gets their own tree
         )
 
     # Second pass: set parent relationships
@@ -2077,8 +2078,8 @@ def __sync_assets(character) -> None:
             except CharacterAsset.DoesNotExist:
                 pass
 
-    # Rebuild MPTT tree to fix tree_id/level/lft/rght fields
-    CharacterAsset.objects.rebuild()
+    # Rebuild MPTT tree for this character only (using tree_id)
+    CharacterAsset.objects.rebuild(tree_id=character.id)
 
     # Queue structure refresh jobs for any unknown structure location_ids
     # This handles citadels/structures that are corp-owned but contain character assets
