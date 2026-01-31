@@ -175,7 +175,7 @@ class SkillQueueItem(models.Model):
 
     @property
     def time_remaining(self):
-        """Get remaining time as formatted string (e.g., '12h45m')."""
+        """Get remaining time as formatted string (e.g., '54d17h', '12h45m', '30m')."""
         from django.utils import timezone
 
         if not self.finish_date:
@@ -187,10 +187,13 @@ class SkillQueueItem(models.Model):
             return "0m"
 
         total_seconds = int(remaining.total_seconds())
-        hours = total_seconds // 3600
+        days = total_seconds // 86400
+        hours = (total_seconds % 86400) // 3600
         minutes = (total_seconds % 3600) // 60
 
-        if hours > 0:
+        if days > 0:
+            return f"{days}d{hours}h"
+        elif hours > 0:
             return f"{hours}h{minutes}m"
         else:
             return f"{minutes}m"

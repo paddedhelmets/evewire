@@ -4,22 +4,19 @@
 <div class="char-card">
     <a href="{{ char_url }}" style="text-decoration: none; color: inherit;">
         <div class="char-card-main">
-            <!-- Left column: Name & Location -->
-            <div class="char-card-left">
+            <!-- Character info: Name, Corp, Location, SP -->
+            <div class="char-card-info">
                 <div class="char-name">
                     {{ char.character_name }}
                     {% if corporation_ticker %}
-                    <span style="color: var(--text-secondary); font-size: 0.9em;">[{{ corporation_ticker }}]</span>
+                    <span class="corp-ticker">[{{ corporation_ticker }}]</span>
                     {% endif %}
                 </div>
                 <div class="char-location">{{ char.location_name|default:"Unknown" }}</div>
             </div>
 
-            <!-- Right column: Wallet & SP -->
-            <div class="char-card-right">
-                <div class="char-wallet isk">{{ char.wallet_balance|floatformat:0|commas|default:"—" }} ISK</div>
-                <div class="char-sp sp">{{ char.total_sp|commas|default:"—" }} SP</div>
-            </div>
+            <!-- Wallet -->
+            <div class="char-wallet isk">{{ char.wallet_balance|floatformat:0|commas|default:"—" }}</div>
         </div>
     </a>
 
@@ -33,10 +30,7 @@
         <div class="progress-bar-container">
             <div class="progress" style="width: {{ training.progress_percent }}%"></div>
         </div>
-        <div class="training-details">
-            <span class="time-remaining">{{ training.time_remaining }} remaining</span>
-            <span class="sp-per-hour">@ {{ training.sp_per_hour|commas|default:"—" }} SP/hr</span>
-        </div>
+        <div class="time-remaining">{{ training.time_remaining }} remaining</div>
     </div>
     {% endif %}
 </div>
@@ -62,30 +56,31 @@
     align-items: center;
 }
 
-.char-card-left {
-    text-align: left;
-}
-
-.char-card-right {
-    text-align: right;
+.char-card-info {
+    flex: 1;
 }
 
 .char-name {
     font-size: 0.95rem;
-    font-weight: 400;
+    font-weight: 500;
     margin-bottom: 0.25rem;
 }
 
-.char-wallet,
-.char-sp {
-    font-size: 0.95rem;
-    font-weight: 400;
+.corp-ticker {
+    color: var(--text-secondary);
+    font-size: 0.85em;
+    margin-left: 0.3rem;
 }
 
 .char-location {
     font-size: 0.85rem;
     color: var(--text-secondary);
-    margin-bottom: 0.25rem;
+}
+
+.char-wallet {
+    font-size: 0.95rem;
+    font-weight: 600;
+    white-space: nowrap;
 }
 
 .isk { color: #2e7d32; }
@@ -133,19 +128,9 @@
     transition: width 0.3s ease;
 }
 
-.training-details {
-    display: flex;
-    justify-content: space-between;
+.time-remaining {
     font-size: 0.8rem;
     color: var(--text-secondary);
-}
-
-.time-remaining {
-    text-align: left;
-}
-
-.sp-per-hour {
-    text-align: right;
 }
 
 [data-theme="dark"] .progress-bar-container .progress {
