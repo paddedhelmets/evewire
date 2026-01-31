@@ -1130,6 +1130,12 @@ class AuthService:
                 # Fetch corporation/alliance names from ESI
                 update_character_corporation_info(character)
 
+                # Queue initial sync for new character
+                if char_created:
+                    from django_q.tasks import async_task
+                    async_task('core.services.sync_character_full', character.id)
+                    logger.info(f'Queued initial full sync for new character {character_id}')
+
         else:
             # Not logged in - this is initial login
             if existing_character:
@@ -1187,6 +1193,12 @@ class AuthService:
 
                 # Fetch corporation/alliance names from ESI
                 update_character_corporation_info(character)
+
+                # Queue initial sync for new character
+                if char_created:
+                    from django_q.tasks import async_task
+                    async_task('core.services.sync_character_full', character.id)
+                    logger.info(f'Queued initial full sync for new character {character_id} (new user)')
 
                 # Update user's first character fields for backward compatibility
                 user.eve_character_id = character_id
@@ -1395,6 +1407,64 @@ def sync_character_wallet_journal(character_id: int) -> bool:
     async_task('core.services._sync_wallet_transactions_full', character_id, group=group_id)
 
     logger.info(f'Queued wallet journal sync for character {character.id}')
+    return True
+
+
+def sync_character_full(character_id: int) -> bool:
+    """Sync all character data from ESI with prioritized task queue.
+
+    Queues lightweight tasks (skills, location, wallet balance, orders, etc.) at
+    higher priority to run first, then heavy tasks (assets, wallet journal) at
+    lower priority to run last.
+
+    Args:
+        character_id: Character ID to sync
+    """
+    from core.models import Character, SyncStatus
+
+    try:
+        character = Character.objects.get(id=character_id)
+    except Character.DoesNotExist:
+        logger.error(f'Character {character_id} not found for full sync')
+        return False
+
+    # Set status to in_progress
+    character.last_sync_status = SyncStatus.PENDING
+    character.last_sync_error = ''
+    character.save(update_fields=['last_sync_status', 'last_sync_error'])
+
+    # Update basic info immediately (corporation can change)
+    try:
+        char_info_response = ESIClient.get_character_info(character.id)
+        char_info = char_info_response.data
+        character.corporation_id = char_info.get('corporation_id')
+        character.save(update_fields=['corporation_id'])
+    except Exception as e:
+        logger.warning(f'Failed to fetch basic info for {character.id}: {e}')
+
+    # Queue lightweight sync tasks with HIGHER priority (run first)
+    group_id = f'sync_character_{character_id}'
+
+    async_task('core.services._sync_skills', character_id, group=group_id, priority=1)
+    async_task('core.services._sync_skill_queue', character_id, group=group_id, priority=1)
+    async_task('core.services._sync_attributes', character_id, group=group_id, priority=1)
+    async_task('core.services._sync_implants', character_id, group=group_id, priority=1)
+    async_task('core.services._sync_location', character_id, group=group_id, priority=1)
+    async_task('core.services._sync_wallet_balance', character_id, group=group_id, priority=1)
+    async_task('core.services._sync_orders', character_id, group=group_id, priority=1)
+    async_task('core.services._sync_orders_history', character_id, group=group_id, priority=1)
+    async_task('core.services._sync_industry_jobs', character_id, group=group_id, priority=1)
+    async_task('core.services._sync_contracts', character_id, group=group_id, priority=1)
+
+    # Queue heavy sync tasks with LOWER priority (run last)
+    async_task('core.services._sync_assets', character_id, priority=0)
+    async_task('core.services._sync_wallet_journal_full', character_id, priority=0)
+    async_task('core.services._sync_wallet_transactions_full', character_id, priority=0)
+
+    # Queue finalizer at higher priority to run quickly after light tasks
+    async_task('core.services._finalize_sync', character_id, group=group_id, priority=1)
+
+    logger.info(f'Queued full sync (lightweight first, heavy last) for character {character.id}')
     return True
 
 
