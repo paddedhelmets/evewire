@@ -309,7 +309,6 @@ def assets_summary(request: HttpRequest, character_id: int = None) -> HttpRespon
         'total_items': 0,
         'total_quantity': 0,
         'total_volume': Decimal('0.0'),
-        'total_value': Decimal('0.0'),
     })
 
     for asset in assets_qs:
@@ -324,11 +323,6 @@ def assets_summary(request: HttpRequest, character_id: int = None) -> HttpRespon
         # Calculate volume (item volume * quantity)
         if item_type and item_type.volume:
             location_data[key]['total_volume'] += Decimal(str(item_type.volume)) * quantity
-
-        # Calculate value (use sell_price if available, otherwise base_price)
-        price = item_type.sell_price if item_type and item_type.sell_price else (item_type.base_price if item_type else None)
-        if price:
-            location_data[key]['total_value'] += price * quantity
 
     # Build location list with names
     locations = []
@@ -357,19 +351,16 @@ def assets_summary(request: HttpRequest, character_id: int = None) -> HttpRespon
             'location_name': loc_name,
             'total_items': data['total_items'],
             'total_volume': data['total_volume'],
-            'total_value': data['total_value'],
         })
 
     # Calculate overall totals
     total_items = sum(loc['total_items'] for loc in locations)
-    total_value = sum(loc['total_value'] for loc in locations)
     total_volume = sum(loc['total_volume'] for loc in locations)
 
     return render(request, 'core/assets_summary.html', {
         'character': character,
         'locations': locations,
         'total_items': total_items,
-        'total_value': total_value,
         'total_volume': total_volume,
     })
 

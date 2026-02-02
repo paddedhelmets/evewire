@@ -111,10 +111,6 @@
                 <div class="value">{{ total_items|commas }}</div>
             </div>
             <div class="total-card">
-                <div class="label">Total Value</div>
-                <div class="value">{{ total_value|commas }}</div>
-            </div>
-            <div class="total-card">
                 <div class="label">Total Volume</div>
                 <div class="value">{{ total_volume|floatformat:2 }} m³</div>
             </div>
@@ -130,7 +126,6 @@
                     <th>Location</th>
                     <th class="numeric">Items</th>
                     <th class="numeric">Volume (m³)</th>
-                    <th class="numeric">Value (ISK)</th>
                 </tr>
             </thead>
             <tbody>
@@ -142,7 +137,6 @@
                     </td>
                     <td class="numeric">{{ loc.total_items|commas }}</td>
                     <td class="numeric">{{ loc.total_volume|floatformat:2 }}</td>
-                    <td class="numeric">{{ loc.total_value|floatformat:2|commas }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
