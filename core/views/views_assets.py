@@ -17,6 +17,87 @@ from core.views import get_users_character
 
 
 logger = logging.getLogger(__name__)
+
+
+def build_filtered_asset_set(search_query: str, characters: list) -> set:
+    """
+    Build a set of asset IDs that should be visible when searching.
+
+    Includes:
+    - All assets matching the search query (base set)
+    - All ancestors (parents) of matching assets (to show the path)
+    - All descendants (children) of matching assets (if they're containers)
+
+    Args:
+        search_query: The search term to match against item type names
+        characters: List of Character objects to search within
+
+    Returns:
+        Set of asset item_ids that should be visible
+    """
+    from core.character.models import CharacterAsset
+    from core.eve.models import ItemType
+
+    matching_type_ids = set(ItemType.objects.filter(
+        name__icontains=search_query
+    ).values_list('id', flat=True))
+
+    if not matching_type_ids:
+        return set()
+
+    # Find all assets matching the search query
+    matching_assets = CharacterAsset.objects.filter(
+        character__in=characters,
+        type_id__in=matching_type_ids
+    )
+
+    filtered_set = set()
+    seen = set()  # To avoid cycles in parent traversal
+
+    def add_ancestors(asset):
+        """Walk up the parent chain and add all ancestors."""
+        current = asset
+        while current is not None and current.parent_id not in seen:
+            if current.parent_id is None:
+                break
+            seen.add(current.parent_id)
+            filtered_set.add(current.parent_id)
+            # Fetch the parent asset
+            try:
+                current = CharacterAsset.objects.get(item_id=current.parent_id)
+            except CharacterAsset.DoesNotExist:
+                break
+
+    def add_descendants(asset):
+        """Walk down the child tree and add all descendants."""
+        to_process = [asset.item_id]
+        visited = set()
+        while to_process:
+            current_id = to_process.pop()
+            if current_id in visited:
+                continue
+            visited.add(current_id)
+            # Get children of this asset
+            children = CharacterAsset.objects.filter(parent_id=current_id)
+            for child in children:
+                filtered_set.add(child.item_id)
+                to_process.append(child.item_id)
+
+    # Build the filtered set
+    for asset in matching_assets:
+        # Add the matching asset itself
+        filtered_set.add(asset.item_id)
+
+        # Add all ancestors (to show path from location)
+        add_ancestors(asset)
+
+        # Add all descendants (if this is a container, show its contents)
+        add_descendants(asset)
+
+    logger.info(f"Search '{search_query}': filtered_set contains {len(filtered_set)} assets")
+    return filtered_set
+
+
 # Asset Views
 
 @login_required
@@ -66,11 +147,21 @@ def assets_list(request: HttpRequest, character_id: int = None) -> HttpResponse:
     if pilot_filter_ints:
         characters = [c for c in characters if c.id in pilot_filter_ints]
 
+    # Build filtered asset set if searching
+    filtered_asset_ids = None
+    if search_query:
+        filtered_asset_ids = build_filtered_asset_set(search_query, characters)
+        logger.info(f"Search '{search_query}': found {len(filtered_asset_ids)} assets in filtered set")
+
     # Build query for root-level assets (parent=None)
     assets_query = CharacterAsset.objects.filter(
         character__in=characters,
         parent=None
     )
+
+    # Apply search filter if specified
+    if filtered_asset_ids is not None:
+        assets_query = assets_query.filter(item_id__in=filtered_asset_ids)
 
     # Apply location filter if specified
     if location_filter:
@@ -406,28 +497,36 @@ def fitted_ships(request: HttpRequest, character_id: int = None) -> HttpResponse
     from core.doctrines.services import AssetFitExtractor
     from core.eve.models import ItemType
 
-    # Get character
+    # Get character(s)
     if character_id:
         try:
             character = Character.objects.get(id=character_id, user=request.user)
+            characters = [character]
+            is_account_wide = False
         except Character.DoesNotExist:
             return render(request, 'core/error.html', {
                 'message': 'Character not found',
             }, status=404)
     else:
-        character = get_users_character(request.user)
-        if not character:
-            return render(request, 'core/error.html', {
-                'message': 'Character not found',
-            }, status=404)
+        # Account-wide view - show ships from all characters
+        characters = list(request.user.characters.all())
+        is_account_wide = True
+        character = None
 
-    # Extract fitted ships
+    # Extract fitted ships from all characters
+    # Also track which character each ship belongs to (by asset_id)
     extractor = AssetFitExtractor()
-    ships = extractor.extract_ships(character)
+    all_ships = []
+    ship_to_character = {}  # asset_id -> (char_id, char_name)
+    for char in characters:
+        ships = extractor.extract_ships(char)
+        all_ships.extend(ships)
+        for ship in ships:
+            ship_to_character[ship.asset_id] = (char.id, char.character_name)
 
-    # Enrich with item names and location details
+    # Enrich with item names, location details, and character info
     enriched_ships = []
-    for ship in ships:
+    for ship in all_ships:
         # Get module names
         high_module_names = []
         for type_id in ship.high_slots:
@@ -472,12 +571,17 @@ def fitted_ships(request: HttpRequest, character_id: int = None) -> HttpResponse
             except SolarSystem.DoesNotExist:
                 pass
 
+        # Get character info for this ship
+        char_id, char_name = ship_to_character.get(ship.asset_id, (None, 'Unknown'))
+
         enriched_ships.append({
             'asset_id': ship.asset_id,
             'ship_name': ship.ship_name,
             'ship_type_id': ship.ship_type_id,
             'location_name': location_name,
             'location_type': ship.location_type,
+            'character_id': char_id,
+            'character_name': char_name,
             'high_slots': ship.high_slots,
             'high_slot_names': high_module_names,
             'high_slot_count': len(ship.high_slots),
@@ -499,7 +603,9 @@ def fitted_ships(request: HttpRequest, character_id: int = None) -> HttpResponse
 
     return render(request, 'core/fitted_ships.html', {
         'character': character,
+        'characters': characters if is_account_wide else [character],
         'ships': enriched_ships,
-        'total_ships': len(ships),
+        'total_ships': len(all_ships),
+        'is_account_wide': is_account_wide,
     })
 

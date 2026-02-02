@@ -138,7 +138,13 @@
     <div class="ships-header">
         <div>
             <h2>Fitted Ships</h2>
-            <p class="ships-count">Character: <strong>{{ character.name }}</strong></p>
+            <p class="ships-count">
+                {% if character %}
+                    Character: <strong>{{ character.character_name }}</strong>
+                {% else %}
+                    <strong>All Characters</strong> ({{ characters|length }} pilots)
+                {% endif %}
+            </p>
         </div>
         <div style="display: flex; gap: 0.5rem; align-items: center;">
             <a href="{% url 'core:assets_list' %}" class="btn" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">List</a>
@@ -157,7 +163,13 @@
             <div class="ship-header">
                 <div>
                     <div class="ship-name">{{ ship.ship_name }}</div>
-                    <div class="ship-location">{{ ship.location_name }}</div>
+                    <div class="ship-location">
+                        {{ ship.location_name }}
+                        {% if is_account_wide %}
+                            <span style="color: var(--text-secondary); margin-left: 0.5rem;">|</span>
+                            <a href="/characters/{{ ship.character_id }}/" style="color: var(--link-color); font-size: 0.85rem; margin-left: 0.5rem;">{{ ship.character_name }}</a>
+                        {% endif %}
+                    </div>
                 </div>
                 <button class="expand-btn" onclick="toggleDetails({{ ship.asset_id }})">
                     <span id="btn-{{ ship.asset_id }}">Show Details ▼</span>

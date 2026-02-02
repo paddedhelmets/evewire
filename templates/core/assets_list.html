@@ -476,6 +476,10 @@
 const loadedLocations = new Set();
 const loadedChildren = new Set();
 
+// Search query from URL (if any)
+const urlParams = new URLSearchParams(window.location.search);
+const SEARCH_QUERY = urlParams.get('search') || '';
+
 /**
  * Toggle location expansion and load assets if needed
  */
@@ -517,10 +521,9 @@ async function toggleLocation(locationId, locationType, headerElement) {
             pilots.forEach(p => params.append('pilot_filter', p));
         }
 
-        // Add search filter
-        const search = urlParams.get('search');
-        if (search) {
-            params.append('search', search);
+        // Add search query
+        if (SEARCH_QUERY) {
+            params.append('search', SEARCH_QUERY);
         }
 
         if (params.toString()) {
@@ -687,6 +690,11 @@ async function lazyLoadChildren(event, element) {
         const pilots = urlParams.getAll('pilots');
         if (pilots.length > 0) {
             pilots.forEach(p => params.append('pilot_filter', p));
+        }
+
+        // Add search query
+        if (SEARCH_QUERY) {
+            params.append('search', SEARCH_QUERY);
         }
 
         if (params.toString()) {

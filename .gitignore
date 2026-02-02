@@ -5,6 +5,8 @@ reference/
 state.json
 .runtime/
 *.log
+logs/*.log*
+logs/gunicorn-*.log
 
 # IDE
 .idea/

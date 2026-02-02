@@ -5,6 +5,29 @@
 
 {% block content %}
 <style>
+.grand-total-bar {
+    background: var(--btn-primary);
+    color: white;
+    border-radius: 8px;
+    padding: 1rem 1.5rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: var(--card-shadow);
+}
+.grand-total-label {
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+.grand-total-value {
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+.grand-total-breakdown {
+    font-size: 0.85rem;
+    opacity: 0.8;
+}
 .balance-cards {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -61,6 +84,19 @@
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
         <h1 style="margin: 0;">Wallet Journal</h1>
         <a href="{% url 'core:market_transactions' %}" class="btn">Market Transactions</a>
+    </div>
+
+    <!-- Grand Total -->
+    <div class="grand-total-bar">
+        <div>
+            <div class="grand-total-label">Total Wealth Across All Pilots</div>
+            <div class="grand-total-breakdown">
+                In (30d): {{ grand_total_income|isk_format }} |
+                Out (30d): {{ grand_total_expense|isk_format }} |
+                Net: {% if grand_total_net > 0 %}+{% endif %}{{ grand_total_net|isk_format }}
+            </div>
+        </div>
+        <div class="grand-total-value">{{ grand_total_balance|isk_format }} ISK</div>
     </div>
 
     <!-- Per-Pilot Balance Cards -->

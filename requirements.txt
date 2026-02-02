@@ -25,3 +25,6 @@ gunicorn>=21.0,<24.0
 # Redis (optional broker for django-q2, but needed to avoid import errors)
 redis>=5.0,<6.0
 psycopg[binary]>=3.0
+
+# Markdown (for rendering fitting descriptions)
+markdown>=3.0,<4.0

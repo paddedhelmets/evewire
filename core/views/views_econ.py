@@ -78,6 +78,10 @@ def wallet_journal(request: HttpRequest, character_id: int = None) -> HttpRespon
 
     # Build per-pilot balance stats
     pilot_stats = []
+    grand_total_balance = 0.0
+    grand_total_income = 0.0
+    grand_total_expense = 0.0
+
     for char in characters:
         # Get current wallet balance from latest entry or character model
         latest_entry = WalletJournalEntry.objects.filter(
@@ -100,13 +104,20 @@ def wallet_journal(request: HttpRequest, character_id: int = None) -> HttpRespon
             amount__lt=0
         ).aggregate(total=Sum('amount'))['total'] or 0)
 
+        net_30d = float(recent_income) - float(recent_expense)
+
         pilot_stats.append({
             'character': char,
             'balance': current_balance,
             'recent_income': float(recent_income),
             'recent_expense': float(recent_expense),
-            'net_30d': float(recent_income) - float(recent_expense),
+            'net_30d': net_30d,
         })
+
+        # Accumulate grand totals
+        grand_total_balance += current_balance
+        grand_total_income += float(recent_income)
+        grand_total_expense += float(recent_expense)
 
     # Get distinct ref_types for filter dropdown (across all user's entries)
     all_ref_types = WalletJournalEntry.objects.filter(
@@ -122,6 +133,10 @@ def wallet_journal(request: HttpRequest, character_id: int = None) -> HttpRespon
         'character_filter': character_filter,
         'characters': characters,
         'pilot_stats': pilot_stats,
+        'grand_total_balance': grand_total_balance,
+        'grand_total_income': grand_total_income,
+        'grand_total_expense': grand_total_expense,
+        'grand_total_net': grand_total_income - grand_total_expense,
     })
 
 

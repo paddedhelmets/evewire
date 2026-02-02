@@ -215,7 +215,7 @@ def api_location_assets(request, location_id: int, location_type: str) -> JsonRe
 
     Query parameters:
     - pilot_filter: Comma-separated character IDs for account-wide view (optional)
-    - search: Search query to filter assets at this location (optional)
+    - search: Search query to filter assets by item type name (optional)
 
     Returns:
     {
@@ -288,17 +288,13 @@ def api_location_assets(request, location_id: int, location_type: str) -> JsonRe
             parent=None
         )
 
+    # Annotate with child counts
     assets_query = assets_query.annotate(
         child_count=Count('children')
     ).select_related('character')
 
-    # Apply search filter if provided
-    if search_query:
-        assets_query = assets_query.filter(
-            type_id__in=ItemType.objects.filter(
-                name__icontains=search_query
-            ).values_list('id', flat=True)
-        )
+    # Note: Search filtering is handled by the main view using build_filtered_asset_set
+    # The API returns all assets for the location without additional filtering
 
     # Get the assets
     assets = list(assets_query)
@@ -428,6 +424,9 @@ def api_asset_children(request, asset_id: int) -> JsonResponse:
         # Single character filter
         character_id = int(request.GET.get('character_id'))
         children_query = children_query.filter(character_id=character_id)
+
+    # Note: Search filtering is handled by the main view using build_filtered_asset_set
+    # The API returns all children without additional filtering
 
     # Annotate with child counts
     children_query = children_query.annotate(
@@ -609,7 +608,6 @@ def api_asset_children(request, asset_id: int) -> JsonResponse:
             'child_count': child.child_count,
             'character_id': child.character_id,
             'character_name': child.character.character_name,
-            'level': child.level,  # MPTT level for indentation
         }
         filtered_children.append(child_data)
 
@@ -818,7 +816,6 @@ def api_asset_tree(request, character_id: int = None) -> JsonResponse:
                 'child_count': asset.child_count,
                 'character_id': asset.character_id,
                 'character_name': asset.character.character_name,
-                'level': asset.level,
                 'location_id': asset.location_id,
                 'location_type': asset.location_type,
             }
