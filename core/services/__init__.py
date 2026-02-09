@@ -2657,24 +2657,19 @@ def _sync_contract_items(character, contract) -> None:
 
     # Get existing items for this contract
     existing_items = {
-        item.item_id: item
+        item.record_id: item
         for item in ContractItem.objects.filter(contract=contract)
     }
-    existing_item_ids = set(existing_items.keys())
-    incoming_item_ids = {item['item_id'] for item in items_data if 'item_id' in item}
+    existing_record_ids = set(existing_items.keys())
+    incoming_record_ids = {item['record_id'] for item in items_data}
 
     # Process incoming items
     for item_data in items_data:
-        # Skip items without item_id (some contract types may not have this field)
-        if 'item_id' not in item_data:
-            logger.warning(f"Contract item missing item_id: contract_id={contract.contract_id}, item_data={item_data}")
-            continue
+        record_id = item_data['record_id']
 
-        item_id = item_data['item_id']
-
-        if item_id in existing_items:
+        if record_id in existing_items:
             # Update existing item
-            existing_item = existing_items[item_id]
+            existing_item = existing_items[record_id]
             for field, value in {
                 'type_id': item_data['type_id'],
                 'quantity': item_data.get('quantity', 1),
@@ -2688,7 +2683,7 @@ def _sync_contract_items(character, contract) -> None:
             # Create new item
             ContractItem.objects.create(
                 contract=contract,
-                item_id=item_id,
+                record_id=record_id,
                 type_id=item_data['type_id'],
                 quantity=item_data.get('quantity', 1),
                 is_included=item_data.get('is_included', True),
@@ -2697,11 +2692,11 @@ def _sync_contract_items(character, contract) -> None:
             )
 
     # Delete items no longer in contract
-    items_to_delete = existing_item_ids - incoming_item_ids
+    items_to_delete = existing_record_ids - incoming_record_ids
     if items_to_delete:
         ContractItem.objects.filter(
             contract=contract,
-            item_id__in=items_to_delete
+            record_id__in=items_to_delete
         ).delete()
 
 

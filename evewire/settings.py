@@ -209,6 +209,8 @@ LOGGING = {
     },
     'loggers': {
         'django': {'handlers': ['console'], 'level': config('DJANGO_LOG_LEVEL', default='INFO'), 'propagate': False},
+        # Log Django exceptions/500s to file even when DEBUG=True
+        'django.request': {'handlers': ['console', 'file'], 'level': 'ERROR', 'propagate': False},
         'evewire': {'handlers': ['console', 'file'], 'level': 'DEBUG', 'propagate': False},
         'evewire.performance': {'handlers': ['console', 'file'], 'level': 'WARNING', 'propagate': False},
     },

@@ -285,61 +285,139 @@ def user_profile(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def dashboard(request: HttpRequest) -> HttpResponse:
-    """Main dashboard showing user's characters with aggregated stats."""
+    """Main dashboard showing summary panels for all character activity."""
     from core.models import Character
+    from core.character.models import MarketOrder, WalletTransaction, WalletJournalEntry, Contract, IndustryJob
     from django.contrib import messages
-    from django.db.models import Sum, Q
+    from django.db.models import Sum, Count, Q, Avg, F, ExpressionWrapper, FloatField
+    from django.db.models.functions import Coalesce
 
     # Get all characters for this user
     characters = request.user.characters.select_related().all()
+    character_ids = list(characters.values_list('id', flat=True))
 
     # Redirect to characters list if user has no characters
     if not characters.exists():
         messages.info(request, 'Please add a character to get started.')
         return redirect('core:characters')
 
-    # Calculate aggregated stats
-    total_wallet = characters.aggregate(
-        total=Sum('wallet_balance')
-    )['total'] or 0
+    now = timezone.now()
+    thirty_days_ago = now - timedelta(days=30)
+    ninety_days_ago = now - timedelta(days=90)
 
-    total_sp = characters.aggregate(
-        total=Sum('total_sp')
-    )['total'] or 0
+    # === WALLET SUMMARY ===
+    wallet_summary = characters.aggregate(
+        total_isk=Sum('wallet_balance')
+    )
+    wallet_summary['total_isk'] = wallet_summary['total_isk'] or 0
 
-    # Count characters with active skill queues (training in progress)
-    active_skill_queues = sum(
-        1 for char in characters if char.skill_queue.filter(finish_date__gt=timezone.now()).exists()
+    # === MARKET ORDERS SUMMARY ===
+    # Get all active orders for user's characters
+    active_orders = MarketOrder.objects.filter(
+        character_id__in=character_ids,
+        state='open'
+    ).aggregate(
+        buy_count=Count('order_id', filter=Q(is_buy_order=True)),
+        sell_count=Count('order_id', filter=Q(is_buy_order=False)),
+        buy_total=Sum(F('price') * F('volume_remain'), filter=Q(is_buy_order=True), output_field=FloatField()),
+        sell_total=Sum(F('price') * F('volume_remain'), filter=Q(is_buy_order=False), output_field=FloatField()),
+        buy_escrow=Sum('escrow', filter=Q(is_buy_order=True)),
     )
 
-    # Count total active market orders
-    total_orders = sum(
-        char.market_orders.count() for char in characters
+    # === CONTRACTS SUMMARY ===
+    # Active contracts (outstanding, not completed/finished)
+    active_contracts = Contract.objects.filter(
+        character_id__in=character_ids,
+        status__in=['outstanding', 'in_progress']
+    ).aggregate(
+        total_count=Count('id'),
+        assigned_to_me=Count('id', filter=Q(assignee_id__in=character_ids)),
+        issued_by_me=Count('id', filter=Q(issuer_id__in=character_ids)),
+        collateral_total=Sum('collateral', filter=Q(status='outstanding')),
+        reward_total=Sum('reward', filter=Q(status='outstanding')),
     )
 
-    # Calculate aggregated industry slots
-    total_manufacturing_slots = sum(char.manufacturing_slots for char in characters)
-    total_active_manufacturing = sum(char.active_manufacturing_jobs for char in characters)
-    total_science_slots = sum(char.science_slots for char in characters)
-    total_active_science = sum(char.active_research_jobs for char in characters)
-    total_reaction_slots = sum(char.reaction_slots for char in characters)
-    total_active_reactions = sum(char.active_reaction_jobs for char in characters)
+    # === TRADE SUMMARY (Wallet Transactions) ===
+    # 30-day transactions
+    trade_30d = WalletTransaction.objects.filter(
+        character_id__in=character_ids,
+        date__gte=thirty_days_ago
+    ).aggregate(
+        buy_count=Count('transaction_id', filter=Q(is_buy=True)),
+        sell_count=Count('transaction_id', filter=Q(is_buy=False)),
+        buy_total=Sum(F('unit_price') * F('quantity'), filter=Q(is_buy=True), output_field=FloatField()),
+        sell_total=Sum(F('unit_price') * F('quantity'), filter=Q(is_buy=False), output_field=FloatField()),
+    )
+
+    # 90-day transactions
+    trade_90d = WalletTransaction.objects.filter(
+        character_id__in=character_ids,
+        date__gte=ninety_days_ago
+    ).aggregate(
+        buy_count=Count('transaction_id', filter=Q(is_buy=True)),
+        sell_count=Count('transaction_id', filter=Q(is_buy=False)),
+        buy_total=Sum(F('unit_price') * F('quantity'), filter=Q(is_buy=True), output_field=FloatField()),
+        sell_total=Sum(F('unit_price') * F('quantity'), filter=Q(is_buy=False), output_field=FloatField()),
+    )
+
+    # === WALLET JOURNAL SUMMARY (income/expenses) ===
+    journal_30d = WalletJournalEntry.objects.filter(
+        character_id__in=character_ids,
+        date__gte=thirty_days_ago
+    ).aggregate(
+        income=Sum('amount', filter=Q(amount__gt=0)),
+        expenses=Sum('amount', filter=Q(amount__lt=0)),
+    )
+
+    # === INDUSTRY JOBS SUMMARY ===
+    # Activity IDs: 1=manufacturing, 3=te_research, 4=me_research, 5=copying, 8=invention
+    # Status: 1=active, 2=paused
+    active_jobs = IndustryJob.objects.filter(
+        character_id__in=character_ids,
+        status__in=[1, 2]  # active, paused
+    ).aggregate(
+        total_count=Count('job_id'),
+        manufacturing=Count('job_id', filter=Q(activity_id=1)),
+        invention=Count('job_id', filter=Q(activity_id__in=[5, 8])),  # copying, invention
+        reaction=Count('job_id', filter=Q(activity_id=9)),
+        research=Count('job_id', filter=Q(activity_id__in=[3, 4])),  # te_research, me_research
+    )
+
+    # Industry slots utilization (from Character model)
+    industry_slots = {
+        'manufacturing': {
+            'slots': sum(char.manufacturing_slots for char in characters),
+            'active': sum(char.active_manufacturing_jobs for char in characters),
+        },
+        'science': {
+            'slots': sum(char.science_slots for char in characters),
+            'active': sum(char.active_research_jobs for char in characters),
+        },
+        'reaction': {
+            'slots': sum(char.reaction_slots for char in characters),
+            'active': sum(char.active_reaction_jobs for char in characters),
+        },
+    }
 
     # Calculate utilization percentages
-    manufacturing_utilization = (total_active_manufacturing / total_manufacturing_slots * 100) if total_manufacturing_slots > 0 else 0
-    science_utilization = (total_active_science / total_science_slots * 100) if total_science_slots > 0 else 0
-    reaction_utilization = (total_active_reactions / total_reaction_slots * 100) if total_reaction_slots > 0 else 0
+    for job_type in industry_slots.values():
+        if job_type['slots'] > 0:
+            job_type['utilization'] = round(job_type['active'] / job_type['slots'] * 100, 1)
+        else:
+            job_type['utilization'] = 0
 
-    # Build character data with skill queue info and corporation ticker
-    from core.eve.models import Corporation
-
-    characters_data = []
+    # === SKILL TRAINING SUMMARY ===
+    characters_with_queue = []
     for char in characters:
-        # Get first skill in queue (actively training or next up)
-        current_skill = char.skill_queue.order_by('queue_position').first()
-        queue_count = char.skill_queue.count()
+        current_skill = char.skill_queue.filter(finish_date__gt=now).order_by('queue_position').first()
+        if current_skill:
+            characters_with_queue.append(char.id)
 
-        # Fetch corporation ticker
+    # === CHARACTER QUICK LIST ===
+    from core.eve.models import Corporation
+    character_list = []
+    for char in characters[:12]:  # Show first 12 characters
+        current_skill = char.skill_queue.filter(finish_date__gt=now).order_by('queue_position').first()
         corp_ticker = None
         if char.corporation_id:
             try:
@@ -348,26 +426,35 @@ def dashboard(request: HttpRequest) -> HttpResponse:
             except Corporation.DoesNotExist:
                 pass
 
-        characters_data.append({
-            'character': char,
-            'corporation_ticker': corp_ticker,
+        character_list.append({
+            'id': char.id,
+            'name': char.character_name,
+            'ticker': corp_ticker,
+            'wallet': char.wallet_balance,
+            'sp': char.total_sp,
             'training': current_skill,
-            'queue_count': queue_count,
-            'orders_count': char.market_orders.count(),
+            'orders': char.market_orders.filter(state='open').count(),
         })
 
+    # Calculate profit/loss (simple: sells - buys, not accounting for costs)
+    profit_30d = (trade_30d['sell_total'] or 0) - (trade_30d['buy_total'] or 0)
+    profit_90d = (trade_90d['sell_total'] or 0) - (trade_90d['buy_total'] or 0)
+
     return render(request, 'core/dashboard.html', {
-        'characters': characters_data,
-        'total_wallet': total_wallet,
-        'total_sp': total_sp,
-        'active_skill_queues': active_skill_queues,
-        'total_orders': total_orders,
-        'characters_count': characters.count(),
-        'industry_slots': {
-            'manufacturing': {'slots': total_manufacturing_slots, 'active': total_active_manufacturing, 'utilization': manufacturing_utilization},
-            'science': {'slots': total_science_slots, 'active': total_active_science, 'utilization': science_utilization},
-            'reactions': {'slots': total_reaction_slots, 'active': total_active_reactions, 'utilization': reaction_utilization},
-        },
+        'wallet': wallet_summary,
+        'orders': active_orders,
+        'contracts': active_contracts,
+        'trade_30d': trade_30d,
+        'trade_90d': trade_90d,
+        'journal_30d': journal_30d,
+        'industry': active_jobs,
+        'industry_slots': industry_slots,
+        'skill_queues': len(characters_with_queue),
+        'character_list': character_list,
+        'total_characters': characters.count(),
+        'profit_30d': profit_30d,
+        'profit_90d': profit_90d,
+        'more_characters': characters.count() - 12,
     })
 
     # Queue location sync for all characters (fast endpoint, can be called frequently)
@@ -427,7 +514,7 @@ def character_detail(request: HttpRequest, character_id: int) -> HttpResponse:
 def character_overview(request: HttpRequest, character_id: int) -> HttpResponse:
     """Character overview page with quick stats grid."""
     from core.models import Character
-    from core.character.models import CharacterSkill, SkillQueueEntry
+    from core.character.models import CharacterSkill, SkillQueueItem
 
     try:
         character = Character.objects.get(id=character_id, user=request.user)
@@ -516,7 +603,7 @@ def character_skills_page(request: HttpRequest, character_id: int) -> HttpRespon
 def character_queue_page(request: HttpRequest, character_id: int) -> HttpResponse:
     """Character training queue page with progress visualization."""
     from core.models import Character
-    from core.character.models import SkillQueueEntry
+    from core.character.models import SkillQueueItem
 
     try:
         character = Character.objects.get(id=character_id, user=request.user)

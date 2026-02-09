@@ -1867,7 +1867,7 @@ class ContractItem(models.Model):
     )
 
     # ESI item fields
-    item_id = models.BigIntegerField(db_index=True)
+    record_id = models.BigIntegerField(db_index=True)
     type_id = models.IntegerField(db_index=True)  # FK to ItemType
     quantity = models.IntegerField(default=1)
     is_included = models.BooleanField(default=True)
@@ -1880,7 +1880,7 @@ class ContractItem(models.Model):
     class Meta:
         verbose_name = _('contract item')
         verbose_name_plural = _('contract items')
-        unique_together = [['contract', 'item_id']]
+        unique_together = [['contract', 'record_id']]
         ordering = ['contract', 'type_id']
 
     def __str__(self) -> str:

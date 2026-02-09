@@ -5,230 +5,395 @@
 
 {% block extra_head %}
 <style>
-    .char-card-grid {
+    .dashboard-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-        gap: 1rem;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.25rem;
+        margin-bottom: 1.5rem;
     }
 
-    .char-card {
+    .panel {
         background: var(--bg-secondary);
-        border-radius: 8px;
-        padding: 1rem;
+        border-radius: 10px;
+        padding: 1.25rem;
         box-shadow: var(--card-shadow);
         border: 1px solid var(--border-color);
-        transition: box-shadow 0.2s, transform 0.2s;
     }
 
-    .char-card:hover {
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        transform: translateY(-2px);
-    }
-
-    .char-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: start;
-        margin-bottom: 0.75rem;
-    }
-
-    .char-header h3 {
-        margin: 0;
-        font-size: 1.1rem;
+    .panel-title {
+        font-size: 0.85rem;
         font-weight: 600;
-    }
-
-    .char-header .corp-name {
-        font-size: 0.85rem;
-        color: var(--text-secondary);
-        margin: 0.25rem 0 0 0;
-    }
-
-    .char-header .char-link {
-        font-size: 0.85rem;
-        color: var(--link-color);
-    }
-
-    .char-stats {
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 0.75rem;
-        padding-bottom: 0.75rem;
-        border-bottom: 1px solid var(--border-color);
-    }
-
-    .char-stat {
-        text-align: center;
-        flex: 1;
-    }
-
-    .char-stat-label {
-        font-size: 0.75rem;
         color: var(--text-secondary);
         text-transform: uppercase;
         letter-spacing: 0.5px;
+        margin: 0 0 1rem 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
     }
 
-    .char-stat-value {
-        font-size: 1rem;
-        font-weight: 600;
+    .panel-title a {
+        font-size: 0.75rem;
+        color: var(--link-color);
+        text-transform: none;
+        letter-spacing: normal;
+    }
+
+    .metric {
+        margin-bottom: 1rem;
+    }
+
+    .metric:last-child {
+        margin-bottom: 0;
+    }
+
+    .metric-label {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+        margin-bottom: 0.25rem;
+    }
+
+    .metric-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+    }
+
+    .metric-value.isk { color: #f9a825; }
+    .metric-value.positive { color: #4caf50; }
+    .metric-value.negative { color: #f44336; }
+    .metric-value.neutral { color: var(--text-primary); }
+
+    .metric-sub {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
         margin-top: 0.25rem;
     }
 
-    .isk { color: #f9a825; }
-    .sp { color: #1976d2; }
-
-    .char-training {
-        margin-bottom: 0.5rem;
+    .metric-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid var(--border-color);
     }
 
-    .char-training .skill-name {
-        font-weight: 600;
-        font-size: 0.95rem;
-        display: block;
+    .metric-row:last-child {
+        border-bottom: none;
     }
 
-    .char-training .skill-target {
+    .metric-row-label {
         font-size: 0.85rem;
         color: var(--text-secondary);
-        display: block;
-        margin: 0.1rem 0;
     }
 
-    .char-training .skill-rate {
-        font-size: 0.8rem;
-        color: var(--text-secondary);
-        display: block;
+    .metric-row-value {
+        font-size: 1rem;
+        font-weight: 600;
     }
 
-    .progress-bar-container {
+    .progress-bar {
         background: var(--border-color);
-        height: 6px;
-        border-radius: 3px;
+        height: 8px;
+        border-radius: 4px;
         overflow: hidden;
-        margin: 0.5rem 0;
+        margin-top: 0.5rem;
     }
 
-    .progress-bar-container .progress {
+    .progress-bar-fill {
         background: linear-gradient(90deg, var(--gradient-start), var(--gradient-end));
         height: 100%;
         transition: width 0.3s ease;
     }
 
-    .time-remaining {
-        font-size: 0.8rem;
-        color: var(--text-secondary);
-        display: block;
+    .progress-bar-fill.high { background: linear-gradient(90deg, #4caf50, #8bc34a); }
+    .progress-bar-fill.medium { background: linear-gradient(90deg, #ff9800, #ffc107); }
+    .progress-bar-fill.low { background: linear-gradient(90deg, #2196f3, #03a9f4); }
+
+    .char-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
     }
 
-    .char-alerts {
+    .char-list-item {
         display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        margin-top: 0.5rem;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid var(--border-color);
     }
 
-    .alert {
-        font-size: 0.75rem;
-        padding: 0.2rem 0.5rem;
-        border-radius: 3px;
+    .char-list-item:last-child {
+        border-bottom: none;
+    }
+
+    .char-list-name {
+        font-size: 0.9rem;
         font-weight: 500;
     }
 
-    .alert.alert-empty {
-        background: #ffebee;
-        color: #c62828;
-    }
-
-    .alert.alert-warning {
-        background: #fff8e1;
-        color: #f57c00;
-    }
-
-    .summary-bar {
-        background: var(--bg-secondary);
-        padding: 1rem;
-        border-radius: 8px;
-        margin-bottom: 1.5rem;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 2rem;
-        box-shadow: var(--card-shadow);
-    }
-
-    .summary-item {
-        display: flex;
-        flex-direction: column;
-    }
-
-    .summary-label {
+    .char-list-corp {
         font-size: 0.75rem;
         color: var(--text-secondary);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
     }
 
-    .summary-value {
-        font-size: 1.5rem;
-        font-weight: 700;
-        margin-top: 0.25rem;
+    .char-list-stats {
+        text-align: right;
+        font-size: 0.8rem;
     }
 
-    .summary-value.isk { color: #f9a825; }
-    .summary-value.sp { color: #1976d2; }
-    .summary-value.char { color: var(--text-primary); }
+    .char-list-stats span {
+        margin-left: 0.5rem;
+    }
 
-    [data-theme="dark"] .progress-bar-container .progress {
+    .hero-panel {
+        grid-column: 1 / -1;
+        background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+        color: white;
+        padding: 2rem;
+    }
+
+    .hero-panel .metric-value {
+        color: white;
+    }
+
+    .hero-panel .metric-label,
+    .hero-panel .metric-sub {
+        color: rgba(255,255,255,0.85);
+    }
+
+    .hero-subtitle {
+        font-size: 0.8rem;
+        color: rgba(255,255,255,0.8);
+        margin-top: 0.5rem;
+    }
+
+    [data-theme="dark"] .progress-bar-fill {
         background: linear-gradient(90deg, var(--gradient-alt-start), var(--gradient-alt-end));
     }
 
-    [data-theme="dark"] .alert.alert-empty {
-        background: #5c2b2b;
-        color: #ef5350;
+    .empty-state {
+        text-align: center;
+        padding: 2rem;
+        color: var(--text-secondary);
     }
 
-    [data-theme="dark"] .alert.alert-warning {
-        background: #5c4a1a;
-        color: #ffa726;
+    .empty-state a {
+        color: var(--link-color);
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<!-- Summary Bar -->
-<div class="summary-bar">
-    <div class="summary-item">
-        <span class="summary-label">Characters</span>
-        <span class="summary-value char">{{ characters_count }}</span>
-    </div>
-    <div class="summary-item">
-        <span class="summary-label">Total ISK</span>
-        <span class="summary-value isk">{{ total_wallet|floatformat:0|commas }}</span>
-    </div>
-    <div class="summary-item">
-        <span class="summary-label">Total SP</span>
-        <span class="summary-value sp">{{ total_sp|commas }}</span>
-    </div>
-    <div class="summary-item">
-        <span class="summary-label">Active Queues</span>
-        <span class="summary-value char">{{ active_skill_queues }}</span>
-    </div>
-    <div class="summary-item">
-        <span class="summary-label">Active Orders</span>
-        <span class="summary-value char">{{ total_orders }}</span>
+<!-- Hero: Total Wallet -->
+<div class="dashboard-grid">
+    <div class="panel hero-panel">
+        <div class="metric">
+            <div class="metric-label">Total ISK Balance Across All Characters</div>
+            <div class="metric-value">{{ wallet.total_isk|floatformat:0|commas }}</div>
+            <div class="hero-subtitle">{{ total_characters }} character{{ total_characters|pluralize }}</div>
+        </div>
     </div>
 </div>
 
-<!-- Character Card Grid -->
-<div class="char-card-grid">
-    {% for char_data in characters %}
-    {% with char=char_data.character corporation_ticker=char_data.corporation_ticker training=char_data.training %}
-        {% include "core/character_card.html" %}
-    {% endwith %}
-    {% endfor %}
+<!-- Top Row: Key Metrics -->
+<div class="dashboard-grid">
+    <!-- Market Orders -->
+    <div class="panel">
+        <h2 class="panel-title">
+            Market Orders
+            <a href="{% url 'core:market_orders' %}">View All &rarr;</a>
+        </h2>
+        <div class="metric-row">
+            <span class="metric-row-label">Buy Orders</span>
+            <span class="metric-row-value">{{ orders.buy_count|default:0 }}</span>
+        </div>
+        <div class="metric-row">
+            <span class="metric-row-label">Sell Orders</span>
+            <span class="metric-row-value">{{ orders.sell_count|default:0 }}</span>
+        </div>
+        <div class="metric-row">
+            <span class="metric-row-label">Total Active</span>
+            <span class="metric-row-value neutral">{{ orders.buy_count|default:0|add:orders.sell_count|default:0 }}</span>
+        </div>
+        {% if orders.buy_escrow %}
+        <div class="metric-sub">Buy Escrow: {{ orders.buy_escrow|floatformat:0|commas }} ISK</div>
+        {% endif %}
+    </div>
+
+    <!-- Contracts -->
+    <div class="panel">
+        <h2 class="panel-title">
+            Active Contracts
+            <a href="{% url 'core:contracts' %}">View All &rarr;</a>
+        </h2>
+        <div class="metric-row">
+            <span class="metric-row-label">Outstanding</span>
+            <span class="metric-row-value">{{ contracts.total_count|default:0 }}</span>
+        </div>
+        <div class="metric-row">
+            <span class="metric-row-label">Assigned to Me</span>
+            <span class="metric-row-value">{{ contracts.assigned_to_me|default:0 }}</span>
+        </div>
+        <div class="metric-row">
+            <span class="metric-row-label">Issued by Me</span>
+            <span class="metric-row-value">{{ contracts.issued_by_me|default:0 }}</span>
+        </div>
+        {% if contracts.reward_total %}
+        <div class="metric-sub">Rewards: {{ contracts.reward_total|floatformat:0|commas }} ISK</div>
+        {% endif %}
+    </div>
+
+    <!-- Industry Jobs -->
+    <div class="panel">
+        <h2 class="panel-title">
+            Industry Jobs
+        </h2>
+        <div class="metric-row">
+            <span class="metric-row-label">Active Jobs</span>
+            <span class="metric-row-value">{{ industry.total_count|default:0 }}</span>
+        </div>
+        <div class="metric-row">
+            <span class="metric-row-label">Manufacturing</span>
+            <span class="metric-row-value">{{ industry.manufacturing|default:0 }}</span>
+        </div>
+        <div class="metric-row">
+            <span class="metric-row-label">Invention/Copying</span>
+            <span class="metric-row-value">{{ industry.invention|default:0 }}</span>
+        </div>
+        <div class="metric-row">
+            <span class="metric-row-label">Reactions</span>
+            <span class="metric-row-value">{{ industry.reaction|default:0 }}</span>
+        </div>
+    </div>
 </div>
 
-<div style="margin-top: 2rem;">
-    <a href="{% url 'core:add_character' %}" class="btn">+ Add Character</a>
+<!-- Middle Row: Trading & Industry Utilization -->
+<div class="dashboard-grid">
+    <!-- 30-Day Trade Summary -->
+    <div class="panel">
+        <h2 class="panel-title">
+            Trading (30 Days)
+        </h2>
+        <div class="metric-row">
+            <span class="metric-row-label">Buy Transactions</span>
+            <span class="metric-row-value">{{ trade_30d.buy_count|default:0 }}</span>
+        </div>
+        <div class="metric-row">
+            <span class="metric-row-label">Sell Transactions</span>
+            <span class="metric-row-value">{{ trade_30d.sell_count|default:0 }}</span>
+        </div>
+        <div class="metric-row">
+            <span class="metric-row-label">Buy Volume</span>
+            <span class="metric-row-value isk">{{ trade_30d.buy_total|floatformat:0|default:0|commas }}</span>
+        </div>
+        <div class="metric-row">
+            <span class="metric-row-label">Sell Volume</span>
+            <span class="metric-row-value isk">{{ trade_30d.sell_total|floatformat:0|default:0|commas }}</span>
+        </div>
+        <div class="metric-row" style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
+            <span class="metric-row-label">Estimated P/L</span>
+            <span class="metric-row-value {% if profit_30d > 0 %}positive{% elif profit_30d < 0 %}negative{% else %}neutral{% endif %}">
+                {{ profit_30d|floatformat:0|commas }}
+            </span>
+        </div>
+    </div>
+
+    <!-- 90-Day Trade Summary -->
+    <div class="panel">
+        <h2 class="panel-title">
+            Trading (90 Days)
+        </h2>
+        <div class="metric-row">
+            <span class="metric-row-label">Buy Transactions</span>
+            <span class="metric-row-value">{{ trade_90d.buy_count|default:0 }}</span>
+        </div>
+        <div class="metric-row">
+            <span class="metric-row-label">Sell Transactions</span>
+            <span class="metric-row-value">{{ trade_90d.sell_count|default:0 }}</span>
+        </div>
+        <div class="metric-row">
+            <span class="metric-row-label">Buy Volume</span>
+            <span class="metric-row-value isk">{{ trade_90d.buy_total|floatformat:0|default:0|commas }}</span>
+        </div>
+        <div class="metric-row">
+            <span class="metric-row-label">Sell Volume</span>
+            <span class="metric-row-value isk">{{ trade_90d.sell_total|floatformat:0|default:0|commas }}</span>
+        </div>
+        <div class="metric-row" style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
+            <span class="metric-row-label">Estimated P/L</span>
+            <span class="metric-row-value {% if profit_90d > 0 %}positive{% elif profit_90d < 0 %}negative{% else %}neutral{% endif %}">
+                {{ profit_90d|floatformat:0|commas }}
+            </span>
+        </div>
+    </div>
+
+    <!-- Industry Utilization -->
+    <div class="panel">
+        <h2 class="panel-title">
+            Industry Utilization
+        </h2>
+        {% for slot_type, data in industry_slots.items %}
+        <div class="metric" style="margin-bottom: 1.25rem;">
+            <div class="metric-row-label" style="text-transform: capitalize;">{{ slot_type }}</div>
+            <div class="metric-sub">{{ data.active }} / {{ data.slots }} slots used</div>
+            <div class="progress-bar">
+                <div class="progress-bar-fill {% if data.utilization > 80 %}high{% elif data.utilization > 50 %}medium{% else %}low{% endif %}"
+                     style="width: {{ data.utilization }}%"></div>
+            </div>
+            <div class="metric-sub">{{ data.utilization }}%</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Bottom Row: Characters Overview -->
+<div class="panel">
+    <h2 class="panel-title">
+        Characters Overview
+        <a href="{% url 'core:characters' %}">View All &rarr;</a>
+    </h2>
+    {% if character_list %}
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;">
+        {% for char in character_list %}
+        <div class="char-list-item" style="border: none; padding: 0.75rem; background: var(--bg-tertiary); border-radius: 6px;">
+            <div style="display: flex; justify-content: space-between; align-items: start;">
+                <div>
+                    <a href="{% url 'core:character_detail' char.id %}" style="font-weight: 500; text-decoration: none; color: var(--text-primary);">
+                        {{ char.name }}
+                    </a>
+                    {% if char.ticker %}
+                    <div class="char-list-corp">{{ char.ticker }}</div>
+                    {% endif %}
+                </div>
+                <div class="char-list-stats">
+                    <span class="isk">{{ char.wallet|floatformat:0|commas }}</span>
+                    <span>{{ char.orders }} orders</span>
+                </div>
+            </div>
+            {% if char.training %}
+            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                Training: {{ char.training.skill.type.name }}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% if more_characters > 0 %}
+    <div style="text-align: center; margin-top: 1rem;">
+        <a href="{% url 'core:characters' %}" style="font-size: 0.85rem; color: var(--link-color);">
+            And {{ more_characters }} more character{{ more_characters|pluralize }} &rarr;
+        </a>
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="empty-state">
+        No characters yet. <a href="{% url 'core:add_character' %}">Add your first character</a> to get started.
+    </div>
+    {% endif %}
+</div>
+
+<div style="margin-top: 2rem; text-align: center;">
+    <a href="{% url 'core:add_character' %}" class="btn">+ Add Another Character</a>
 </div>
 {% endblock %}
